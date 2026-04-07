@@ -91,10 +91,8 @@ export default function SentEmailsPage() {
                     );
 
                     // --- Iterate email stages in order ---
-                    // stages_passed only contains stages where the column had a value (see leads-utils.ts)
-                    // So simply iterating covers the "stop at last filled email" rule automatically.
                     stages.forEach((stage: string) => {
-                        if (!stage.startsWith("Email_")) return; // only Email_N underscore stages
+                        if (!stage.startsWith("Email_")) return;
 
                         const rawContent = lead.stage_data?.[stage];
 
@@ -110,7 +108,6 @@ export default function SentEmailsPage() {
                             const lastLineDate = new Date(lastLine);
 
                             if (!isNaN(fullDate.getTime()) && trimmed.length < 50) {
-                                // Entire column is a timestamp
                                 rawDateValue = fullDate.toISOString();
                                 sentDate = format(fullDate, "MMM dd, yyyy • p");
                                 emailBody = "Email sent";
@@ -119,7 +116,6 @@ export default function SentEmailsPage() {
                                 lastLine.includes("-") &&
                                 lastLine.includes(":")
                             ) {
-                                // Last line is a timestamp; rest is body
                                 rawDateValue = lastLineDate.toISOString();
                                 sentDate = format(lastLineDate, "MMM dd, yyyy • p");
                                 emailBody = lines.slice(0, -1).join("\n").trim() || "Email sent";
@@ -128,27 +124,23 @@ export default function SentEmailsPage() {
                             }
                         }
 
-                        // Stage name IS the column name — show it directly as the label
-                        const displayStageType = stage; // e.g. "Email_1", "Email_2"
-
                         emails.push({
                             id: `${lead.id || `lead-${leadIndex}`}-${stage.replace(/\s+/g, "-")}-${Math.random()
                                 .toString(36)
                                 .substr(2, 9)}`,
                             recipient: lead.email || lead.name || `Lead ${leadIndex + 1}`,
-                            sender: fullSender,
-                            type: displayStageType,
+                            sender: lead.sender_email || "Unknown Sender",
+                            type: stage.replace("_", " "),
                             sentDate,
-                            subject: displayStageType,
+                            subject: stage.replace("_", " "),
                             content: emailBody,
-                            loop: lead.source_loop || "Intro",
+                            loop: "Sequence",
                             rawDate: rawDateValue,
                             hasReplied,
                         });
                     });
                 });
 
-                // Sort newest first
                 emails.sort(
                     (a, b) =>
                         new Date(b.rawDate || 0).getTime() - new Date(a.rawDate || 0).getTime()
@@ -161,7 +153,6 @@ export default function SentEmailsPage() {
         fetchData();
     }, [allLeads, loadingLeads]);
 
-    // Unique senders for filter dropdown
     const uniqueSenders = Array.from(new Set(sentEmails.map((e) => e.sender))).sort();
 
     const handleFilterChange = (key: string, value: string) => {
@@ -170,7 +161,6 @@ export default function SentEmailsPage() {
     };
 
     const filteredEmails = sentEmails.filter((email) => {
-        // Search
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
             if (
@@ -181,7 +171,6 @@ export default function SentEmailsPage() {
                 return false;
         }
 
-        // Date range
         if (dateRange?.from) {
             const ed = email.rawDate ? new Date(email.rawDate) : null;
             if (!ed || isNaN(ed.getTime())) return false;
@@ -192,24 +181,12 @@ export default function SentEmailsPage() {
             if (ed < from || ed > to) return false;
         }
 
-        // Campaign
-        if (filters.campaign !== "all") {
-            const loop = (email.loop || "").toLowerCase();
-            if (filters.campaign === "intro" && !loop.includes("intro")) return false;
-            if (filters.campaign === "nurture" && !loop.includes("nurture")) return false;
-            if (filters.campaign === "followup" && !loop.includes("follow")) return false;
-        }
-
-        // Sender
         if (filters.sender !== "all" && email.sender !== filters.sender) return false;
 
-        // Type
         if (filters.type !== "all") {
             const typeMap: Record<string, string> = {
                 email1: "email 1", email2: "email 2", email3: "email 3",
-                email4: "email 4", email5: "email 5", email6: "email 6",
-                email7: "email 7", email8: "email 8", email9: "email 9",
-                email10: "email 10",
+                email4: "email 4", email5: "email 5", email6: "email 6"
             };
             const expected = typeMap[filters.type];
             if (expected && !email.type.toLowerCase().includes(expected)) return false;
@@ -230,17 +207,16 @@ export default function SentEmailsPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900">Sent Emails</h1>
-                    <p className="text-slate-500">View and manage your sent email history.</p>
+                    <p className="text-slate-500">View your email outreach history</p>
                 </div>
             </div>
 
-            {/* Search & Filters */}
             <div className="bg-white p-4 rounded-xl border border-border shadow-sm space-y-4">
                 <div className="flex flex-col md:flex-row gap-4">
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <Input
-                            placeholder="Search recipients, subjects..."
+                            placeholder="Search recipients, content..."
                             className="pl-9 bg-slate-50 border-border"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
@@ -255,21 +231,9 @@ export default function SentEmailsPage() {
                 <div className="flex flex-wrap gap-2 items-center">
                     <Filter className="h-4 w-4 text-slate-400 mr-2" />
 
-                    <Select value={filters.campaign} onValueChange={(val) => handleFilterChange("campaign", val)}>
-                        <SelectTrigger className="w-[140px] h-9 text-xs">
-                            <SelectValue placeholder="Campaign" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Campaigns</SelectItem>
-                            <SelectItem value="intro">Intro Loop</SelectItem>
-                            <SelectItem value="followup">Follow Up</SelectItem>
-                            <SelectItem value="nurture">Nurture Loop</SelectItem>
-                        </SelectContent>
-                    </Select>
-
                     <Select value={filters.sender} onValueChange={(val) => handleFilterChange("sender", val)}>
-                        <SelectTrigger className="w-[160px] h-9 text-xs">
-                            <SelectValue placeholder="Sender" />
+                        <SelectTrigger className="w-[200px] h-9 text-xs">
+                            <SelectValue placeholder="All Senders" />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Senders</SelectItem>
@@ -283,19 +247,16 @@ export default function SentEmailsPage() {
 
                     <Select value={filters.type} onValueChange={(val) => handleFilterChange("type", val)}>
                         <SelectTrigger className="w-[140px] h-9 text-xs">
-                            <SelectValue placeholder="Email Type" />
+                            <SelectValue placeholder="Email Stage" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">All Types</SelectItem>
+                            <SelectItem value="all">All Stages</SelectItem>
                             <SelectItem value="email1">Email 1</SelectItem>
                             <SelectItem value="email2">Email 2</SelectItem>
                             <SelectItem value="email3">Email 3</SelectItem>
                             <SelectItem value="email4">Email 4</SelectItem>
                             <SelectItem value="email5">Email 5</SelectItem>
                             <SelectItem value="email6">Email 6</SelectItem>
-                            <SelectItem value="email7">Email 7</SelectItem>
-                            <SelectItem value="email8">Email 8</SelectItem>
-                            <SelectItem value="email9">Email 9</SelectItem>
                         </SelectContent>
                     </Select>
 

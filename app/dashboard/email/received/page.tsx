@@ -27,7 +27,6 @@ export default function ReceivedEmailsPage() {
     const { leads: allLeads, loadingLeads } = useData();
     const [replies, setReplies] = useState<any[]>([]);
     const loading = loadingLeads;
-    const [loopFilter, setLoopFilter] = useState("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [dateRange, setDateRange] = useState<any>(undefined);
     const [sortBy, setSortBy] = useState("newest");
@@ -106,14 +105,6 @@ export default function ReceivedEmailsPage() {
 
     const filteredReplies = useMemo(() => {
         let result = replies.filter((reply) => {
-            // Loop filter
-            if (loopFilter !== "all") {
-                const loop = (reply.loop || "").toLowerCase();
-                if (loopFilter === "intro" && !loop.includes("intro")) return false;
-                if (loopFilter === "followup" && !loop.includes("follow")) return false;
-                if (loopFilter === "nurture" && !loop.includes("nurture")) return false;
-            }
-
             // Search
             const q = searchQuery.toLowerCase();
             if (
@@ -144,7 +135,7 @@ export default function ReceivedEmailsPage() {
             const db = b.originalDate ? new Date(b.originalDate).getTime() : 0;
             return sortBy === "newest" ? db - da : da - db;
         });
-    }, [replies, loopFilter, searchQuery, dateRange, sortBy]);
+    }, [replies, searchQuery, dateRange, sortBy]);
 
     return (
         <div className="space-y-6 pb-10 max-w-5xl mx-auto relative min-h-[500px]">
@@ -194,18 +185,6 @@ export default function ReceivedEmailsPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2 items-center">
-                    <Select value={loopFilter} onValueChange={setLoopFilter}>
-                        <SelectTrigger className="w-[140px] h-9 text-xs">
-                            <SelectValue placeholder="All Loops" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Loops</SelectItem>
-                            <SelectItem value="intro">Intro Loop</SelectItem>
-                            <SelectItem value="followup">Follow Up</SelectItem>
-                            <SelectItem value="nurture">Nurture Loop</SelectItem>
-                        </SelectContent>
-                    </Select>
-
                     <Select value={sortBy} onValueChange={setSortBy}>
                         <SelectTrigger className="w-[140px] h-9 text-xs">
                             <SelectValue placeholder="Sort By" />
@@ -223,7 +202,6 @@ export default function ReceivedEmailsPage() {
                         onClick={() => {
                             setSearchQuery("");
                             setDateRange(undefined);
-                            setLoopFilter("all");
                             setSortBy("newest");
                         }}
                     >
@@ -270,14 +248,12 @@ function EmailReplyCard({ reply }: { reply: any }) {
                                 <h4 className="text-lg font-bold text-slate-900 truncate">
                                     {reply.senderName}
                                 </h4>
-                                {reply.loop && (
                                     <Badge
                                         variant="outline"
                                         className="text-purple-600 bg-purple-50 border-purple-100 text-[10px] uppercase font-bold"
                                     >
-                                        {reply.loop}
+                                        Sequence
                                     </Badge>
-                                )}
                                 {reply.repliedToStep && (
                                     <Badge
                                         variant="outline"

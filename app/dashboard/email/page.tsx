@@ -14,7 +14,6 @@ import { SPLoader } from "@/components/sp-loader";
 
 export default function EmailDashboardPage() {
     const router = useRouter();
-    const [selectedLoopMetric, setSelectedLoopMetric] = useState("intro");
     const [dateSubtitle, setDateSubtitle] = useState("all time");
 
     const { leads: allLeads, loadingLeads } = useData();
@@ -22,21 +21,11 @@ export default function EmailDashboardPage() {
     const loading = loadingLeads;
     const [data, setData] = useState({
         totalEmails: 0,
-        firstEmail: 0,
         responseRate: "0%",
         totalReplies: 0,
         totalUnsubscribed: 0,
-        introCounts: [0, 0, 0],       // Email 1-3
-        followUpCounts: [0, 0, 0],    // Email 4-6
-        nurtureCounts: [0, 0, 0, 0, 0, 0, 0, 0, 0], // Email 7-15
-        loopTotals: {
-            intro: 0,
-            followup: 0,
-            nurture: 0
-        }
+        emailCounts: [0, 0, 0, 0, 0, 0], // Email 1-6
     });
-
-
 
     useEffect(() => {
         const calculateStats = async () => {
@@ -57,48 +46,27 @@ export default function EmailDashboardPage() {
                     return leadDate >= from && leadDate <= to;
                 });
 
-                let totalEmails = 0;
+                let totalEmailsCount = 0;
                 let replyCount = 0;
                 let unsubscribedCount = 0;
-                let unsubsLeads: any[] = [];
 
-                const intro = [0, 0, 0];
-                const followUp = [0, 0, 0];
-                const nurture = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+                const counts = [0, 0, 0, 0, 0, 0];
 
                 filteredLeads.forEach((lead: any) => {
                     const stages = lead.stages_passed || [];
-                    const loop = (lead.source_loop || "").toLowerCase();
 
                     stages.forEach((stage: string) => {
                         const s = stage.toLowerCase().trim();
-                        // Stages are now "email_1", "email_2" etc. (underscore = actual column names)
                         if (!s.startsWith("email_")) return;
 
-                        totalEmails++;
-
-                        if (loop === "intro") {
-                            if (s === "email_1") intro[0]++;
-                            else if (s === "email_2") intro[1]++;
-                            else if (s === "email_3") intro[2]++;
-                        } else if (loop.includes("follow")) {
-                            if (s === "email_1") followUp[0]++;
-                            else if (s === "email_2") followUp[1]++;
-                            else if (s === "email_3") followUp[2]++;
-                        } else if (loop.includes("nurture")) {
-                            if (s === "email_1") nurture[0]++;
-                            else if (s === "email_2") nurture[1]++;
-                            else if (s === "email_3") nurture[2]++;
-                            else if (s === "email_4") nurture[3]++;
-                            else if (s === "email_5") nurture[4]++;
-                            else if (s === "email_6") nurture[5]++;
-                            else if (s === "email_7") nurture[6]++;
-                            else if (s === "email_8") nurture[7]++;
-                            else if (s === "email_9") nurture[8]++;
+                        const num = parseInt(s.split("_")[1]);
+                        if (num >= 1 && num <= 6) {
+                            counts[num - 1]++;
+                            totalEmailsCount++;
                         }
                     });
 
-                    if (lead.email_replied && lead.email_replied !== "No" && String(lead.email_replied).trim() !== "") {
+                    if (lead.replied && lead.replied !== "No" && String(lead.replied).trim() !== "") {
                         replyCount++;
                     }
 
@@ -107,21 +75,12 @@ export default function EmailDashboardPage() {
                     }
                 });
 
-
                 setData({
-                    totalEmails: totalEmails,
-                    firstEmail: intro[0],
+                    totalEmails: totalEmailsCount,
                     responseRate: filteredLeads.length > 0 ? ((replyCount / filteredLeads.length) * 100).toFixed(1) + "%" : "0%",
                     totalReplies: replyCount,
                     totalUnsubscribed: unsubscribedCount,
-                    introCounts: intro,
-                    followUpCounts: followUp,
-                    nurtureCounts: nurture,
-                    loopTotals: {
-                        intro: intro.reduce((a, b) => a + b, 0),
-                        followup: followUp.reduce((a, b) => a + b, 0),
-                        nurture: nurture.reduce((a, b) => a + b, 0)
-                    }
+                    emailCounts: counts,
                 });
 
             } catch (e) {
@@ -130,7 +89,7 @@ export default function EmailDashboardPage() {
         };
 
         calculateStats();
-    }, [dateRange, allLeads, loadingLeads]); // Recalculate when dateRange or context changes
+    }, [dateRange, allLeads, loadingLeads]);
 
     const handleDateUpdate = (range: any) => {
         setDateRange(range.range);
@@ -141,29 +100,21 @@ export default function EmailDashboardPage() {
         }
     };
 
-    // Derived Data for Metric Card
-    const loopMetricData = {
-        intro: { value: data.loopTotals.intro, label: "Intro Loop Emails", iconColor: "text-blue-600", bgColor: "bg-blue-50" },
-        followup: { value: data.loopTotals.followup, label: "Follow Up Loop Emails", iconColor: "text-amber-600", bgColor: "bg-amber-50" },
-        nurture: { value: data.loopTotals.nurture, label: "Nurture Loop Emails", iconColor: "text-purple-600", bgColor: "bg-purple-50" },
-    };
-    const currentMetric = loopMetricData[selectedLoopMetric as keyof typeof loopMetricData];
-
     return (
         <div className="space-y-8 pb-10 relative min-h-[500px]">
             {loading && <SPLoader />}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold">Email Marketing Center</h1>
-                    <p className="text-slate-500">Monitor your campaigns and inbox health</p>
+                    <h1 className="text-2xl font-bold">Email Outreach Center</h1>
+                    <p className="text-slate-500">Monitor your email sequence performance</p>
                 </div>
                 <DateRangePicker onUpdate={handleDateUpdate} />
             </div>
 
             {/* Top Metrics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <MetricCard
-                    title="Total Emails"
+                    title="Total Emails Sent"
                     subtitle={dateSubtitle}
                     value={data.totalEmails}
                     icon={<Mail className="h-6 w-6 text-indigo-600" />}
@@ -171,38 +122,12 @@ export default function EmailDashboardPage() {
                     onClick={() => router.push('/dashboard/email/sent')}
                 />
                 <MetricCard
-                    title="First Email (Intro)"
-                    subtitle={dateSubtitle}
-                    value={data.firstEmail}
-                    icon={<Send className="h-6 w-6 text-blue-600" />}
-                    bg="bg-blue-50"
+                    title="Response Rate"
+                    subtitle="Based on filtered leads"
+                    value={data.responseRate}
+                    icon={<BarChart2 className="h-6 w-6 text-emerald-600" />}
+                    bg="bg-emerald-50"
                 />
-
-                {/* Dynamic Loop Card */}
-                <Card className="border-border hover:shadow-md transition-all cursor-pointer bg-white">
-                    <CardContent className="p-6 flex flex-col justify-between h-full">
-                        <div className="flex items-center justify-between mb-2">
-                            <Select value={selectedLoopMetric} onValueChange={setSelectedLoopMetric}>
-                                <SelectTrigger className="w-[140px] h-8 text-xs font-medium border-border">
-                                    <SelectValue placeholder="Select Loop" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="intro">Intro Loop</SelectItem>
-                                    <SelectItem value="followup">Follow Up Loop</SelectItem>
-                                    <SelectItem value="nurture">Nurture Loop</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <div className={`p-2 rounded-xl ${currentMetric.bgColor}`}>
-                                <LayoutDashboard className={`h-5 w-5 ${currentMetric.iconColor}`} />
-                            </div>
-                        </div>
-                        <div>
-                            <h3 className="text-2xl font-bold text-slate-900">{currentMetric.value}</h3>
-                            <p className="text-xs text-slate-500">{currentMetric.label}</p>
-                        </div>
-                    </CardContent>
-                </Card>
-
                 <MetricCard
                     title="Total Replies"
                     subtitle="All time"
@@ -211,7 +136,6 @@ export default function EmailDashboardPage() {
                     bg="bg-sky-50"
                     onClick={() => router.push('/dashboard/email/received')}
                 />
-
                 <MetricCard
                     title="Unsubscribed"
                     subtitle="All time"
@@ -222,66 +146,24 @@ export default function EmailDashboardPage() {
                 />
             </div>
 
-            {/* Campaign Breakdown with Tabs */}
+            {/* Campaign Breakdown */}
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wider">Campaign Performance</h2>
+                    <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wider">Sequence Performance</h2>
                 </div>
 
-                <Tabs defaultValue="intro" className="w-full">
-                    <div className="flex justify-start mb-6">
-                        <TabsList className="bg-slate-100 p-1 rounded-lg">
-                            <TabsTrigger value="intro" className="data-[state=active]:bg-white data-[state=active]:shadow-sm px-4">Intro Loop</TabsTrigger>
-                            <TabsTrigger value="followup" className="data-[state=active]:bg-white data-[state=active]:shadow-sm px-4">Follow Up Loop</TabsTrigger>
-                            <TabsTrigger value="nurture" className="data-[state=active]:bg-white data-[state=active]:shadow-sm px-4">Nurture Loop</TabsTrigger>
-                        </TabsList>
-                    </div>
-
-                    <TabsContent value="intro" className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {["Email_1", "Email_2", "Email_3"].map((name, i) => (
-                                <BreakdownCard
-                                    key={name}
-                                    title={name}
-                                    count={data.introCounts[i]}
-                                    total={data.totalEmails}
-                                    color="#3b82f6"
-                                    trackColor="#eff6ff"
-                                />
-                            ))}
-                        </div>
-                    </TabsContent>
-
-                    <TabsContent value="followup" className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {["Email_1", "Email_2", "Email_3"].map((name, i) => (
-                                <BreakdownCard
-                                    key={name}
-                                    title={name}
-                                    count={data.followUpCounts[i]}
-                                    total={data.totalEmails}
-                                    color="#f59e0b"
-                                    trackColor="#fffbeb"
-                                />
-                            ))}
-                        </div>
-                    </TabsContent>
-
-                    <TabsContent value="nurture" className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {Array.from({ length: 9 }).map((_, i) => (
-                                <BreakdownCard
-                                    key={`nurture-${i}`}
-                                    title={`Email_${i + 1}`}
-                                    count={data.nurtureCounts[i]}
-                                    total={data.totalEmails}
-                                    color="#8b5cf6"
-                                    trackColor="#f3e8ff"
-                                />
-                            ))}
-                        </div>
-                    </TabsContent>
-                </Tabs>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[1, 2, 3, 4, 5, 6].map((num) => (
+                        <BreakdownCard
+                            key={`email-${num}`}
+                            title={`Email ${num}`}
+                            count={data.emailCounts[num - 1]}
+                            total={data.totalEmails}
+                            color={num <= 3 ? "#3b82f6" : "#8b5cf6"}
+                            trackColor={num <= 3 ? "#eff6ff" : "#f3e8ff"}
+                        />
+                    ))}
+                </div>
             </div>
         </div>
     );

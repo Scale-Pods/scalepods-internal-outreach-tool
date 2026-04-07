@@ -85,24 +85,16 @@ export async function GET() {
     };
 
     try {
-        const [nr_wf, followup, nurture] = await Promise.all([
-            fetchTable("nr_wf"),
-            fetchTable("followup"),
-            fetchTable("nurture")
-        ]);
+        const leads = await fetchTable("icp_tracker");
 
         return NextResponse.json({
-            nr_wf,
-            followup,
-            nurture
+            leads
         });
 
     } catch (error: any) {
-        console.error('Consolidated fetch error:', error);
+        console.error('Fetch error:', error);
         return NextResponse.json({
-            nr_wf: [],
-            followup: [],
-            nurture: [],
+            leads: [],
             error: error.message
         }, { status: 500 });
     }

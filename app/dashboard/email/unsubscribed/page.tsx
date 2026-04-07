@@ -18,7 +18,6 @@ export default function UnsubscribedPage() {
     // Filters
     const [searchTerm, setSearchTerm] = useState("");
     const [dateRange, setDateRange] = useState<any>(undefined);
-    const [sourceLoopFilter, setSourceLoopFilter] = useState("all");
     const [repliedFilter, setRepliedFilter] = useState("all");
 
     useEffect(() => {
@@ -45,11 +44,6 @@ export default function UnsubscribedPage() {
         const matchesSearch = l.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             l.email?.toLowerCase().includes(searchTerm.toLowerCase());
 
-        // Loop Filter
-        const matchesLoop = sourceLoopFilter === "all" ||
-            l.source_loop?.toLowerCase() === sourceLoopFilter.toLowerCase() ||
-            l.current_loop?.toLowerCase() === sourceLoopFilter.toLowerCase();
-
         // Replied Filter
         let matchesReplied = true;
         if (repliedFilter === "yes") {
@@ -72,7 +66,7 @@ export default function UnsubscribedPage() {
             matchesDate = leadDate >= from && leadDate <= to;
         }
 
-        return matchesSearch && matchesLoop && matchesReplied && matchesDate;
+        return matchesSearch && matchesReplied && matchesDate;
     });
 
     return (
@@ -103,18 +97,6 @@ export default function UnsubscribedPage() {
                             />
                         </div>
 
-                        <Select value={sourceLoopFilter} onValueChange={setSourceLoopFilter}>
-                            <SelectTrigger className="w-full sm:w-[140px]">
-                                <SelectValue placeholder="Source Loop" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Loops</SelectItem>
-                                <SelectItem value="intro">Intro</SelectItem>
-                                <SelectItem value="followup">Follow Up</SelectItem>
-                                <SelectItem value="nurture">Nurture</SelectItem>
-                            </SelectContent>
-                        </Select>
-
                         <Select value={repliedFilter} onValueChange={setRepliedFilter}>
                             <SelectTrigger className="w-full sm:w-[140px]">
                                 <SelectValue placeholder="Reply Status" />
@@ -137,10 +119,10 @@ export default function UnsubscribedPage() {
                                     <tr>
                                         <th className="py-4 px-6">Name</th>
                                         <th className="py-4 px-6">Email</th>
-                                        <th className="py-4 px-6">Source Loop</th>
+                                        <th className="py-4 px-6">Campaign</th>
                                         <th className="py-4 px-6">Status</th>
                                         <th className="py-4 px-6">Date</th>
-                                        <th className="py-4 px-6">Timestamp</th>
+                                        <th className="py-4 px-6">Time</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
@@ -159,7 +141,7 @@ export default function UnsubscribedPage() {
                                                         </div>
                                                     </td>
                                                     <td className="py-4 px-6 text-slate-600 capitalize">
-                                                        {lead.source_loop || "Intro"}
+                                                        Sequence
                                                     </td>
                                                     <td className="py-4 px-6">
                                                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700">

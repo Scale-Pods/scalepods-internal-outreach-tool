@@ -147,7 +147,7 @@ export default function EmailAnalyticsPage() {
         const filtered = allLeads.filter(lead => {
             // Count as an email lead if it has any Email_N set
             let hasEmail = false;
-            for (let i = 1; i <= 10; i++) {
+            for (let i = 1; i <= 6; i++) {
                 if (lead[`Email_${i}`] || lead.stage_data?.[`Email_${i}`]) {
                     hasEmail = true;
                     break;
@@ -174,7 +174,7 @@ export default function EmailAnalyticsPage() {
 
         filtered.forEach(lead => {
             // Count sent emails
-            for (let i = 1; i <= 10; i++) {
+            for (let i = 1; i <= 6; i++) {
                 const val = lead[`Email_${i}`] || lead.stage_data?.[`Email_${i}`];
                 if (val && String(val).trim() !== "" && String(val).toLowerCase() !== "no") {
                     sent++;
