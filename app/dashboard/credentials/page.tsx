@@ -57,7 +57,6 @@ export default function CredentialsPage() {
     }, []);
 
     const vapiDetails = voiceBalance?.vapi;
-    const elDetails = voiceBalance?.elevenlabs || (voiceBalance?.character_limit ? voiceBalance : null);
 
     return (
         <div className="space-y-8 pb-10 max-w-5xl mx-auto">
@@ -133,10 +132,9 @@ export default function CredentialsPage() {
                     </div>
                 </CredentialSection>
 
-                {/* Voice Section */}
                 <CredentialSection
-                    title="Voice Agent (Vapi & ElevenLabs)"
-                    description="AI Voice configuration and wallet balances."
+                    title="Voice Agent (Vapi)"
+                    description="AI Voice configuration and wallet balance."
                     icon={Mic}
                     iconColor="text-blue-600"
                     iconBg="bg-blue-50"

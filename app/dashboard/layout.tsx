@@ -42,7 +42,7 @@ const sidebarItems = [
     },
 ];
 
-function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolean, onClose: () => void, type: 'vapi' | 'elevenlabs' | 'maqsam' | 'twilio', details?: any, calls?: any[] }) {
+    function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolean, onClose: () => void, type: 'vapi' | 'maqsam' | 'twilio', details?: any, calls?: any[] }) {
     const { voiceBalance, maqsamBalance } = useData();
 
     const title = (() => {
@@ -94,7 +94,6 @@ function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolea
     }, [calls]);
 
     const vapiDetails = voiceBalance?.vapi;
-    const elDetails = voiceBalance?.elevenlabs || (voiceBalance?.character_limit ? voiceBalance : null);
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -121,33 +120,6 @@ function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolea
                         </div>
                     )}
 
-                    {type === 'elevenlabs' && (
-                        <div className="bg-amber-50/50 rounded-xl p-5 border border-amber-100 flex flex-col gap-4">
-                            <div className="flex flex-col text-center bg-card p-6 rounded-lg border border-amber-100 shadow-sm">
-                                <span className="text-xs font-semibold text-muted-foreground/80 uppercase tracking-wider mb-1">Characters Left</span>
-                                <span className="text-4xl font-black text-amber-600">
-                                    {elDetails ? ((elDetails.character_limit - elDetails.character_count) || 0).toLocaleString() : "---"}
-                                </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="flex flex-col text-center bg-card p-3 rounded-lg border border-amber-100 shadow-sm">
-                                    <span className="text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wider mb-1">Total Character</span>
-                                    <span className="text-lg font-bold text-foreground/90">
-                                        {(elDetails?.character_limit || 0).toLocaleString()}
-                                    </span>
-                                </div>
-                                <div className="flex flex-col text-center bg-card p-3 rounded-lg border border-amber-100 shadow-sm">
-                                    <span className="text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wider mb-1">Used Character</span>
-                                    <span className="text-lg font-bold text-muted-foreground">
-                                        {(elDetails?.character_count || 0).toLocaleString()}
-                                    </span>
-                                </div>
-                            </div>
-                            <Button className="bg-amber-600 hover:bg-amber-700 text-white gap-2" onClick={() => window.open('https://elevenlabs.io/app/subscription', '_blank')}>
-                                <ExternalLink className="h-4 w-4" />Add Funds to Elevenlabs
-                            </Button>
-                        </div>
-                    )}
 
                     {type === 'twilio' && (
                         <div className="bg-rose-50/50 rounded-xl p-5 border border-rose-100 flex flex-col gap-4">
@@ -297,7 +269,7 @@ function DashboardContent({
         }, 0);
     }, [calls]);
 
-    const [walletModal, setWalletModal] = useState<{ isOpen: boolean, type: 'vapi' | 'elevenlabs' | 'maqsam' | 'twilio' }>({
+    const [walletModal, setWalletModal] = useState<{ isOpen: boolean, type: 'vapi' | 'maqsam' | 'twilio' }>({
         isOpen: false,
         type: 'vapi'
     });
@@ -421,20 +393,6 @@ function DashboardContent({
                                         </div>
                                     </Button>
 
-                                    {/* 11Labs Button */}
-                                    <Button
-                                        variant="outline"
-                                        className="h-10 px-3 border-amber-200 bg-amber-50/30 hover:bg-amber-50 text-amber-700 gap-2 flex items-center shadow-sm"
-                                        onClick={() => setWalletModal({ isOpen: true, type: 'elevenlabs' })}
-                                    >
-                                        <Settings className="h-3.5 w-3.5" />
-                                        <div className="flex flex-col items-start leading-[1.1]">
-                                            <span className="text-[9px] font-bold uppercase opacity-70">11Labs</span>
-                                            <span className="text-xs font-bold">
-                                                {loadingBalances ? "..." : (voiceBalance ? ((voiceBalance.elevenlabs?.character_limit || voiceBalance.character_limit || 0) - (voiceBalance.elevenlabs?.character_count || voiceBalance.character_count || 0)).toLocaleString() : "N/A")}
-                                            </span>
-                                        </div>
-                                    </Button>
 
                                     {/* Twilio Button */}
                                     <Button
@@ -477,7 +435,6 @@ function DashboardContent({
                         details={(() => {
                             switch (walletModal.type) {
                                 case 'vapi': return voiceBalance?.vapi;
-                                case 'elevenlabs': return voiceBalance?.elevenlabs || (voiceBalance?.character_limit ? voiceBalance : null);
                                 case 'twilio': return twilioBalance;
                                 case 'maqsam': return maqsamBalance;
                                 default: return null;
