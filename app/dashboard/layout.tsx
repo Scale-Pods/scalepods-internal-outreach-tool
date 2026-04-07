@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, Menu, ChevronLeft, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import {
@@ -42,13 +42,13 @@ const sidebarItems = [
     },
 ];
 
-    function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolean, onClose: () => void, type: 'vapi' | 'maqsam' | 'twilio', details?: any, calls?: any[] }) {
+function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolean, onClose: () => void, type: 'vapi' | 'maqsam' | 'twilio', details?: any, calls?: any[] }) {
     const { voiceBalance, maqsamBalance } = useData();
 
     const title = (() => {
         switch (type) {
             case 'vapi': return 'Vapi Wallet';
-            
+
             case 'maqsam': return 'Maqsam Telephony';
             case 'twilio': return 'Twilio Account';
             default: return 'Balance Detail';
@@ -58,7 +58,7 @@ const sidebarItems = [
     const icon = (() => {
         switch (type) {
             case 'vapi': return <Mic className="h-5 w-5 text-blue-600" />;
-            
+
             case 'maqsam': return <Wallet className="h-5 w-5 text-slate-600" />;
             case 'twilio': return <Smartphone className="h-5 w-5 text-rose-600" />;
             default: return <Wallet className="h-5 w-5" />;
@@ -112,7 +112,7 @@ const sidebarItems = [
                                 <span className="text-5xl font-black text-blue-600">
                                     ${vapiAgentUsed.toFixed(2)}
                                 </span>
-                                
+
                             </div>
                             <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-12" onClick={() => window.open('https://vapi.ai', '_blank')}>
                                 <ExternalLink className="h-4 w-4" /> Add Funds to VAPI
@@ -147,7 +147,7 @@ const sidebarItems = [
                                 </div>
                             </div>
                             <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2" onClick={() => window.open('https://console.twilio.com', '_blank')}>
-                                <ExternalLink className="h-4 w-4" /> Add Funds to Twilio 
+                                <ExternalLink className="h-4 w-4" /> Add Funds to Twilio
                             </Button>
                         </div>
                     )}
@@ -203,6 +203,10 @@ function DashboardContent({
             icon: Mail,
             items: [
                 { title: "Overview", href: "/dashboard/email", icon: LayoutDashboard },
+                { title: "Sent", href: "/dashboard/email/sent", icon: Send },
+                { title: "Received", href: "/dashboard/email/received", icon: Inbox },
+                { title: "Bounces", href: "/dashboard/email/bounces", icon: AlertCircle },
+                { title: "Unsubscribed", href: "/dashboard/email/unsubscribed", icon: UserMinus },
                 { title: "Analytics", href: "/dashboard/email/analytics", icon: BarChart2 },
             ]
         },
@@ -211,8 +215,9 @@ function DashboardContent({
             icon: MessageCircle,
             items: [
                 { title: "Overview", href: "/dashboard/whatsapp", icon: LayoutDashboard },
+                { title: "Chat", href: "/dashboard/whatsapp/chat", icon: MessageCircle },
                 { title: "Leads", href: "/dashboard/whatsapp/leads", icon: Users },
-                { title: "Sent Messages", href: "/dashboard/whatsapp/sent", icon: Send },
+                { title: "Analytics", href: "/dashboard/whatsapp/analytics", icon: BarChart2 },
             ]
         },
         voice: {
@@ -221,6 +226,7 @@ function DashboardContent({
             items: [
                 { title: "Overview", href: "/dashboard/voice", icon: LayoutDashboard },
                 { title: "Call Logs", href: "/dashboard/voice/logs", icon: Mic },
+                { title: "Analytics", href: "/dashboard/voice/analytics", icon: BarChart2 },
             ]
         }
     };
@@ -276,9 +282,6 @@ function DashboardContent({
 
 
     const content = (() => {
-        if (pathname.startsWith("/dashboard/email") || pathname.startsWith("/dashboard/whatsapp") || pathname.startsWith("/dashboard/voice")) {
-            return <>{children}</>;
-        }
 
         return (
             <div className="flex h-screen overflow-hidden bg-background text-foreground">
@@ -343,11 +346,10 @@ function DashboardContent({
                                 <Link
                                     key={index}
                                     href={item.href}
-                                    className={`group flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-all ${
-                                        isActive
+                                    className={`group flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-all ${isActive
                                             ? "bg-gradient-to-r from-green-600 to-emerald-500 text-white shadow-md shadow-green-500/20"
                                             : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                                    }`}
+                                        }`}
                                 >
                                     <item.icon className={`h-5 w-5 flex-shrink-0 ${isActive ? "text-white" : "text-muted-foreground/80 group-hover:text-foreground/80 transition-colors"}`} />
                                     <span className="whitespace-nowrap">{item.title}</span>
@@ -355,7 +357,7 @@ function DashboardContent({
                             );
                         })}
                     </nav>
-                    
+
                     <div className="mt-auto p-4 mb-2 space-y-2">
                         <Button
                             variant="ghost"
