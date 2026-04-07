@@ -1,38 +1,9 @@
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-    const elApiKey = process.env.ELEVENLABS_API_KEY;
     const vapiPrivKey = process.env.VAPI_PRIVATE_KEY;
 
-    let elData = null;
     let vapiData = null;
-
-    if (elApiKey) {
-        try {
-            const elRes = await fetch('https://api.elevenlabs.io/v1/user/subscription', {
-                method: 'GET',
-                headers: { 'xi-api-key': elApiKey, 'Content-Type': 'application/json' }
-            });
-
-            if (elRes.ok) {
-                const data = await elRes.json();
-                elData = {
-                    character_count: data.character_count,
-                    character_limit: data.character_limit,
-                    reset_at: data.next_character_count_reset_unix,
-                    usage_percent: (data.character_count / data.character_limit) * 100,
-                    status: data.status
-                };
-            } else {
-                elData = { error: `Fetch failed (${elRes.status})` };
-            }
-        } catch (e) {
-            console.error('ElevenLabs Balance Fetch Error:', e);
-            elData = { error: 'Fetch exception' };
-        }
-    } else {
-        elData = { error: 'API Key Missing' };
-    }
 
     if (vapiPrivKey) {
         try {
@@ -119,9 +90,6 @@ export async function GET() {
     }
 
     return NextResponse.json({
-        elevenlabs: elData,
-        vapi: vapiData,
-        // Maintain backward compatibility for character_count if only ElevenLabs is used
-        ...(elData || {})
+        vapi: vapiData
     });
 }

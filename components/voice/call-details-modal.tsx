@@ -45,7 +45,7 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
         }
     }, [open, call]);
 
-    // Helper to get messages from various Vapi/ElevenLabs formats
+    // Helper to get messages from various AI provider formats
     const getMessages = (data: any) => {
         if (!data) return [];
 
@@ -72,7 +72,7 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
 
     const getDurationData = (data: any) => {
         let seconds = 0;
-        // Check various ElevenLabs/normalized locations
+        // Check various provider-specific normalized locations
         if (typeof data.call_duration_secs === 'number') seconds = data.call_duration_secs;
         else if (data.analysis?.call_duration_secs) seconds = data.analysis.call_duration_secs;
         else if (typeof data.durationSeconds === 'number') seconds = data.durationSeconds;
@@ -101,7 +101,7 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
 
     const { formatted: durationDisplay, seconds: durationSeconds } = getDurationData(displayCall);
 
-    // ElevenLabs Cost Mapping
+    // Cost Mapping
     // Cost is pre-formatted in /api/calls route as "X credits", fallback to displayCall.cost
     const costDisplay = displayCall.cost || (displayCall.metadata?.cost ? `${displayCall.metadata.cost} credits` : '$0.00');
 

@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { RefreshCw, Play, ChevronLeft, ChevronRight, User, Loader2, Download, ExternalLink, Search, Info, Activity } from "lucide-react";
+import { RefreshCw, ChevronLeft, ChevronRight, User, Download, Search, Info, Activity, Phone } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SPLoader } from "@/components/sp-loader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -110,7 +110,7 @@ export default function VoiceLogsPage() {
     });
     const [statusFilter, setStatusFilter] = useState("all");
     const [typeFilter, setTypeFilter] = useState("all");
-    const [providerFilter, setProviderFilter] = useState("vapi");
+    const [providerFilter, setProviderFilter] = useState("all");
     const [phoneFilter, setPhoneFilter] = useState("");
     const [costModalOpen, setCostModalOpen] = useState(false);
 
@@ -206,7 +206,7 @@ export default function VoiceLogsPage() {
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-900">Call Logs</h1>
-                        <p className="text-slate-500">Comprehensive history including Vapi & ElevenLabs calls.</p>
+                        <p className="text-slate-500">Comprehensive history of Vapi AI calls.</p>
                     </div>
                     <div className="flex items-center gap-3">
                         <Button variant="outline" className="text-slate-600 border-border" onClick={() => setCostModalOpen(true)}>
@@ -232,14 +232,10 @@ export default function VoiceLogsPage() {
                         />
                     </div>
 
-                    <Select value={providerFilter} onValueChange={setProviderFilter}>
-                        <SelectTrigger className="w-[140px] h-9"><SelectValue placeholder="Provider" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Providers</SelectItem>
-                            <SelectItem value="vapi">Vapi</SelectItem>
-                            <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-2 px-3 h-9 border border-border rounded-md bg-slate-50 text-xs font-semibold text-slate-600" title="Vapi and Maqsam sources only">
+                        <Phone className="h-3.5 w-3.5 text-blue-600" />
+                        <span>Voice AI (Active Channels)</span>
+                    </div>
                     <Select value={typeFilter} onValueChange={setTypeFilter}>
                         <SelectTrigger className="w-[140px] h-9"><SelectValue placeholder="Type" /></SelectTrigger>
                         <SelectContent>
@@ -320,7 +316,7 @@ export default function VoiceLogsPage() {
 
             <Dialog open={costModalOpen} onOpenChange={setCostModalOpen}>
                 <DialogContent className="sm:max-w-[500px] bg-white border-border shadow-xl overflow-hidden p-0">
-                    <DialogHeader className="p-6 bg-slate-50 border-border border-border">
+                    <DialogHeader className="p-6 bg-slate-50 border-b border-border">
                         <DialogTitle className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
                                 <Info className="h-5 w-5" />

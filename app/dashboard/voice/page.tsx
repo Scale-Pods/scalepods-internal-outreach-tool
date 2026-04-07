@@ -32,11 +32,8 @@ export default function VoiceDashboardPage() {
         avgCost: 0,
         successRate: 0,
         completedCalls: 0,
-        characterCount: 0,
-        characterLimit: 0,
         vapiBalance: 0,
-        lifetimeCostVapi: 0,
-        lifetimeCostEL: 0
+        lifetimeCostVapi: 0
     });
     const [dailyVolume, setDailyVolume] = useState<any[]>([]);
     const [hourlyDistribution, setHourlyDistribution] = useState<any[]>([]);
@@ -52,8 +49,6 @@ export default function VoiceDashboardPage() {
         if (voiceBalance) {
             setStats(prev => ({
                 ...prev,
-                characterCount: voiceBalance.elevenlabs?.character_count || voiceBalance.character_count || 0,
-                characterLimit: voiceBalance.elevenlabs?.character_limit || voiceBalance.character_limit || 0,
                 vapiBalance: voiceBalance.vapi?.balance || 0
             }));
             setLoadingLocal(false);
@@ -96,7 +91,6 @@ export default function VoiceDashboardPage() {
 
 
         let lifetimeCostVapiSum = 0;
-        let lifetimeCostELSum = 0;
 
         // Separate calculation for lifetime totals (ignoring date filter)
         globalCalls.forEach((call: any) => {
@@ -111,7 +105,6 @@ export default function VoiceDashboardPage() {
                 // Sum the specific agent part for credits
                 lifetimeCostVapiSum += (call.breakdown?.agent !== undefined) ? call.breakdown.agent : cost;
             }
-            if (call.source === 'elevenlabs') lifetimeCostELSum += cost;
         });
 
         filteredCalls.forEach((call: any) => {
@@ -163,8 +156,7 @@ export default function VoiceDashboardPage() {
             avgCost,
             successRate,
             completedCalls: completed,
-            lifetimeCostVapi: (voiceBalance?.vapi?.used !== undefined && voiceBalance?.vapi?.used !== 0) ? voiceBalance.vapi.used : lifetimeCostVapiSum,
-            lifetimeCostEL: lifetimeCostELSum
+            lifetimeCostVapi: lifetimeCostVapiSum
         }));
 
         const dailyData = Array.from(dayMap.entries())
@@ -195,14 +187,10 @@ export default function VoiceDashboardPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
-                    <Select value={providerFilter} onValueChange={setProviderFilter}>
-                        <SelectTrigger className="w-[140px] h-10 border-border"><SelectValue placeholder="Provider" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Providers</SelectItem>
-                            <SelectItem value="vapi">Vapi</SelectItem>
-                            <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-2 px-3 h-10 border border-border rounded-md bg-white text-sm font-medium text-slate-700">
+                        <Phone className="h-4 w-4 text-blue-600" />
+                        <span>Vapi AI</span>
+                    </div>
                     <Button
                         variant="outline"
                         className="flex items-center gap-2 border-border text-slate-600 hover:bg-slate-50 transition-colors h-10"
@@ -217,7 +205,7 @@ export default function VoiceDashboardPage() {
             </div>
 
             {/* Metrics Overview */}
-            <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ${providerFilter === 'all' ? 'xl:grid-cols-5' : 'xl:grid-cols-4'} gap-6`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <MetricCard
                     title="Total Executions"
                     value={`${stats.totalCalls} calls`}
@@ -233,22 +221,12 @@ export default function VoiceDashboardPage() {
                     value={`${Math.round(stats.avgDuration)}s`}
                     icon={<Timer className="h-5 w-5 text-slate-600" />}
                 />
-                {(providerFilter === 'all' || providerFilter === 'vapi') && (
-                    <MetricCard
-                        title="Vapi Credits Used"
-                        value={`$${(stats as any).lifetimeCostVapi.toFixed(2)}`}
-                        badge="Total Used"
-                        icon={<DollarSign className="h-5 w-5 text-blue-600" />}
-                    />
-                )}
-                {(providerFilter === 'all' || providerFilter === 'elevenlabs') && (
-                    <MetricCard
-                        title="ElevenLabs Remaining"
-                        value={`${(stats.characterLimit - stats.characterCount).toLocaleString()}`}
-                        badge={`of ${stats.characterLimit.toLocaleString()}`}
-                        icon={<DollarSign className="h-5 w-5 text-emerald-600" />}
-                    />
-                )}
+                <MetricCard
+                    title="Vapi Credits Used"
+                    value={`$${(stats as any).lifetimeCostVapi.toFixed(2)}`}
+                    badge="Total Used"
+                    icon={<DollarSign className="h-5 w-5 text-blue-600" />}
+                />
             </div>
 
             {/* Charts Section */}

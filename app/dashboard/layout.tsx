@@ -48,7 +48,7 @@ function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolea
     const title = (() => {
         switch (type) {
             case 'vapi': return 'Vapi Wallet';
-            case 'elevenlabs': return 'ElevenLabs Credits';
+            
             case 'maqsam': return 'Maqsam Telephony';
             case 'twilio': return 'Twilio Account';
             default: return 'Balance Detail';
@@ -58,7 +58,7 @@ function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolea
     const icon = (() => {
         switch (type) {
             case 'vapi': return <Mic className="h-5 w-5 text-blue-600" />;
-            case 'elevenlabs': return <Settings className="h-5 w-5 text-amber-600" />;
+            
             case 'maqsam': return <Wallet className="h-5 w-5 text-slate-600" />;
             case 'twilio': return <Smartphone className="h-5 w-5 text-rose-600" />;
             default: return <Wallet className="h-5 w-5" />;

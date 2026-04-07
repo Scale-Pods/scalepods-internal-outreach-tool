@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import RATES_DATA from '../../../context/rates.json';
 
-const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io/v1';
 
 // --- Improved Helper: Number Normalization ---
 function cleanPhoneNumber(num: any): string {
@@ -141,157 +140,6 @@ export async function GET(req: Request) {
         const fromDate = fromParam ? new Date(fromParam) : null;
         const toDate = toParam ? new Date(toParam) : null;
 
-        const apiKey = process.env.ELEVENLABS_API_KEY;
-        const agentId = process.env.ELEVENLABS_AGENT_ID;
-
-        // --- 1. ElevenLabs Aggregation ---
-        let elNormalized: any[] = [];
-        try {
-            if (apiKey) {
-                let allConversations: any[] = [];
-                let hasMore = true;
-                let lastId = null;
-                let pagesFetched = 0;
-                const MAX_PAGES = 50; // Increased to catch over 5000 records
-
-                while (hasMore && pagesFetched < MAX_PAGES) {
-                    let listUrl = `${ELEVENLABS_BASE_URL}/convai/conversations?page_size=100`;
-
-                    if (lastId) listUrl += `&cursor=${lastId}`;
-
-                    const listRes = await fetch(listUrl, {
-                        headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' }
-                    });
-
-                    if (!listRes.ok) break;
-
-                    const listData = await listRes.json();
-                    const list = listData.conversations || [];
-
-                    if (list.length === 0) break;
-
-                    // Filter locally by date if requested to avoid excessive detail fetching
-                    let filteredList = list;
-                    if (fromDate || toDate) {
-                        filteredList = list.filter((c: any) => {
-                            const startTime = c.start_time_unix_secs ? c.start_time_unix_secs * 1000 : 0;
-                            if (fromDate && startTime < fromDate.getTime()) return false;
-                            if (toDate && startTime > toDate.getTime()) return false;
-                            return true;
-                        });
-                    }
-
-                    allConversations = [...allConversations, ...filteredList];
-
-                    // Stop if we've reached conversations older than fromDate
-                    const oldestInPage = list[list.length - 1].start_time_unix_secs * 1000;
-                    if (fromDate && oldestInPage < fromDate.getTime()) break;
-
-                    // ElevenLabs pagination uses next_cursor
-                    lastId = listData.next_cursor;
-                    hasMore = !!lastId;
-                    pagesFetched++;
-                }
-
-                // Enrichment: Fetch details for relevant conversations
-                // --- 1.2. ElevenLabs Enrichment ---
-                // Fetch detailed data for each conversation to get costs/duration
-                const enrichmentLimit = 800; // Increased to cover all of user's 643+ calls
-                const enrichmentMap = new Map();
-
-                // Fetch details in batches to avoid overwhelming the API
-                const toEnrich = allConversations.slice(0, enrichmentLimit);
-                const details = await Promise.all(
-                    toEnrich.map(async (c: any) => {
-                        try {
-                            const dr = await fetch(`${ELEVENLABS_BASE_URL}/convai/conversations/${c.conversation_id}`, {
-                                headers: { 'xi-api-key': apiKey }
-                            });
-                            if (dr.ok) {
-                                return await dr.json();
-                            }
-                        } catch (e) { }
-                        return null;
-                    })
-                );
-
-                details.forEach(d => {
-                    if (d) enrichmentMap.set(d.conversation_id, d);
-                });
-
-                // Normalize ALL conversations, using enriched data where available
-                elNormalized = allConversations.map((c: any, idx: number) => {
-                    const enriched = enrichmentMap.get(c.conversation_id) || {};
-                    const merged = { ...c, ...enriched };
-
-                    const tel = merged.telephony || {};
-                    const meta = merged.metadata || merged.metadata_json || {};
-                    const dv = (merged.conversation_initiation_client_data?.dynamic_variables) || {};
-
-                    const caller = cleanPhoneNumber(tel.caller_number || meta.caller_number || dv.caller_number);
-                    const callee = cleanPhoneNumber(tel.callee_number || meta.callee_number || dv.callee_number);
-
-                    const initType = (merged.conversation_initiation_type || "").toLowerCase();
-                    const direction = (tel.direction || merged.direction || meta.direction || dv.direction || dv.type || "").toLowerCase();
-                    const rawType = (merged.type || meta.type || "").toLowerCase();
-                    const src = (merged.conversation_initiation_source || "").toLowerCase();
-
-                    // Inbound Detection
-                    const isInbound = initType.includes('inbound') || direction === 'inbound' || rawType === 'inbound';
-                    const isWeb = initType === 'web' || src === 'react_sdk';
-
-                    // Clean Inbound/Outbound Logic
-                    const phoneRaw = isInbound ? caller : callee;
-                    const phone = (phoneRaw !== "Unknown") ? `+${phoneRaw}` : (isWeb ? "Website/API" : "Unknown");
-
-                    const duration = merged.call_duration_secs || merged.duration_secs || meta.call_duration_secs || 0;
-                    const rateEntry: any = getRateInfo(phoneRaw);
-                    const costUSD = calculateCostValue(duration, phoneRaw, isInbound);
-
-                    const startTimeSec = merged.start_time_unix_secs || merged.start_time || 0;
-                    if (!startTimeSec) return null; // FIX: Skip ghost entries with no date 
-                    const startedAt = new Date(startTimeSec * 1000).toISOString();
-
-                    // Name Detection
-                    const firstName = dv.first_name || meta.first_name || "";
-                    const lastName = dv.last_name || meta.last_name || "";
-                    const fullName = (firstName && lastName) ? `${firstName} ${lastName}` : (firstName || lastName);
-                    let name = fullName || meta.user_name || meta.name || dv.user_name || dv.name || "Guest";
-
-                    const resolvedFromLead = leadsCache.get(phoneRaw);
-                    if (resolvedFromLead) name = resolvedFromLead;
-
-                    // Filter out phone numbers as names
-                    if (name && /^\d+$/.test(name.replace(/\D/g, '')) && name.length > 5) {
-                        name = "Guest";
-                    }
-
-                    return {
-                        id: merged.conversation_id,
-                        name: name === "Guest" ? "Guest" : name,
-                        startedAt,
-                        durationSeconds: duration,
-                        cost: costUSD > 0 ? `$${costUSD.toFixed(3)}` : (meta.cost ? `${meta.cost} credits` : "$0.00"),
-                        costValue: costUSD,
-                        breakdown: {
-                            agent: 0,
-                            telephony: costUSD,
-                            total: costUSD
-                        },
-                        type: isInbound ? "Inbound" : (isWeb ? "Web Call" : "Outbound"),
-                        isInbound,
-                        phone,
-                        phoneNumber: callee,
-                        country: rateEntry?.Country || (phone.startsWith('+') ? "Other" : "Unknown"),
-                        source: 'elevenlabs',
-                        status: (merged.status === 'success' || merged.status === 'done' || merged.status === 'completed' || merged.call_successful === 'success') ? 'answered' : (merged.status || 'answered')
-                    };
-                }).filter(Boolean);
-            }
-        } catch (e) {
-            console.error("ElevenLabs aggregation fail:", e);
-        }
-
         // --- 1.2. Twilio Telephony Aggregation ---
         // Fetch real-time billing data from Twilio (BYOC carrier)
         const twilioSid = process.env.TWILIO_ACCOUNT_SID;
@@ -331,13 +179,17 @@ export async function GET(req: Request) {
             if (vapiPrivKey) {
                 let allVapiCalls: any[] = [];
                 let hasMoreVapi = true;
-                let lastCreatedAt = null;
+                const vapiAgentId = process.env.VAPI_AGENT_ID;
                 const batchSize = 1000;
+                let lastCreatedAt = null;
 
                 // Fetch up to 5000 calls for lifetime view (adjust if needed)
                 let batchedFetched = 0;
                 while (hasMoreVapi && batchedFetched < 5) {
                     let vapiListUrl = `https://api.vapi.ai/call?limit=${batchSize}`;
+                    if (vapiAgentId) {
+                        vapiListUrl += `&assistantId=${vapiAgentId}`;
+                    }
                     if (lastCreatedAt) {
                         // Vapi uses createdAtLe for pagination moving backwards
                         vapiListUrl += `&createdAtLe=${lastCreatedAt}`;
@@ -542,7 +394,7 @@ export async function GET(req: Request) {
         }
 
         // --- 3. Final Aggregation ---
-        const final = [...elNormalized, ...maqsamNormalized, ...vapiNormalized].sort((a, b) =>
+        const final = [...maqsamNormalized, ...vapiNormalized].sort((a, b) =>
             new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
         );
 

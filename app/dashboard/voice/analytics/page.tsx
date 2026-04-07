@@ -46,8 +46,6 @@ export default function VoiceAnalyticsPage() {
         totalCost: 0,
         successRate: 0,
         typesData: [],
-        characterCount: 0,
-        characterLimit: 0,
         vapiBalance: 0,
         inboundDuration: 0,
         outboundDuration: 0,
@@ -57,8 +55,6 @@ export default function VoiceAnalyticsPage() {
         if (voiceBalance) {
             setStats(prev => ({
                 ...prev,
-                characterCount: voiceBalance.elevenlabs?.character_count || voiceBalance.character_count || 0,
-                characterLimit: voiceBalance.elevenlabs?.character_limit || voiceBalance.character_limit || 0,
                 vapiBalance: voiceBalance.vapi?.balance || 0
             }));
         }
@@ -104,7 +100,6 @@ export default function VoiceAnalyticsPage() {
 
         // Lifetime calculations (all time)
         let lifetimeVapiUsedSum = 0;
-        let lifetimeELUsedSum = 0;
         globalCalls.forEach(call => {
             let cost = 0;
             if (typeof call.cost === 'string') {
@@ -117,7 +112,6 @@ export default function VoiceAnalyticsPage() {
                 // Specifically sum the agent/Vapi portion for credits metric
                 lifetimeVapiUsedSum += (call.breakdown?.agent !== undefined) ? call.breakdown.agent : cost;
             }
-            if (call.source === 'elevenlabs') lifetimeELUsedSum += cost;
         });
 
         data.forEach(call => {
@@ -175,8 +169,7 @@ export default function VoiceAnalyticsPage() {
             typesData: Array.from(typesMap.entries()) as any,
             inboundDuration: inboundSum,
             outboundDuration: outboundSum,
-            lifetimeVapiUsed: (voiceBalance?.vapi?.used !== undefined && voiceBalance?.vapi?.used !== 0) ? voiceBalance.vapi.used : lifetimeVapiUsedSum,
-            lifetimeELUsed: lifetimeELUsedSum
+            lifetimeVapiUsed: lifetimeVapiUsedSum
         }));
 
         const sortedDays = Array.from(dayMap.entries()).sort((a, b) => {
@@ -200,31 +193,19 @@ export default function VoiceAnalyticsPage() {
                     <p className="text-slate-500">Comprehensive insights into voice agent performance.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    <Select value={providerFilter} onValueChange={setProviderFilter}>
-                        <SelectTrigger className="w-[140px] h-10"><SelectValue placeholder="Provider" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Providers</SelectItem>
-                            <SelectItem value="vapi">Vapi</SelectItem>
-                            <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-2 px-3 h-10 border border-border rounded-md bg-white text-sm font-medium text-slate-700 font-sans">
+                        <Phone className="h-4 w-4 text-blue-600" />
+                        <span>Vapi AI</span>
+                    </div>
                     <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
                 </div>
             </div>
 
             {/* Key Metric Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard title="Total Calls" value={stats.totalCalls} change="Historical" icon={<Phone className="h-5 w-5" />} color="text-blue-600" bg="bg-blue-50" />
                 <StatCard title="Total Call Duration" value={formatDuration(stats.inboundDuration + stats.outboundDuration)} change="All Inbound + Outbound" icon={<Clock className="h-5 w-5" />} color="text-slate-600" bg="bg-slate-50" />
                 <StatCard title="Avg Duration" value={`${Math.round(stats.avgDuration)}s`} change="All Time" icon={<Clock className="h-5 w-5" />} color="text-purple-600" bg="bg-purple-50" />
-                <StatCard
-                    title="ElevenLabs Left"
-                    value={(stats.characterLimit - stats.characterCount).toLocaleString()}
-                    change={`of ${stats.characterLimit.toLocaleString()} cap`}
-                    icon={<DollarSign className="h-5 w-5" />}
-                    color="text-emerald-600"
-                    bg="bg-emerald-50"
-                />
                 <StatCard
                     title="Vapi Credits Used"
                     value={`$${(stats as any).lifetimeVapiUsed?.toFixed(2) || '0.00'}`}
