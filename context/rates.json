@@ -1,0 +1,3626 @@
+[
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Saudi Arabia",
+    "Specifier": null,
+    "Prefix": 966,
+    "Rate": 0.16
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "United Arab Emirates",
+    "Specifier": null,
+    "Prefix": 971,
+    "Rate": 0.16
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kuwait",
+    "Specifier": null,
+    "Prefix": 965,
+    "Rate": 0.14
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Qatar",
+    "Specifier": null,
+    "Prefix": 974,
+    "Rate": 0.2
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bahrain",
+    "Specifier": null,
+    "Prefix": 973,
+    "Rate": 0.1
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Jordan",
+    "Specifier": null,
+    "Prefix": 962,
+    "Rate": 0.08
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Australia",
+    "Specifier": null,
+    "Prefix": 6138,
+    "Rate": 0.0483
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Norway",
+    "Specifier": null,
+    "Prefix": 47451,
+    "Rate": 0.0842
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Lithuania",
+    "Specifier": null,
+    "Prefix": 370,
+    "Rate": 0.1325
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Sri Lanka",
+    "Specifier": null,
+    "Prefix": 9476,
+    "Rate": 0.2352
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "New Zealand",
+    "Specifier": null,
+    "Prefix": 642,
+    "Rate": 0.0816
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7495,
+    "Rate": 0.0487
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7863,
+    "Rate": 0.0554
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Andorra",
+    "Specifier": null,
+    "Prefix": 3766,
+    "Rate": 0.2311
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Andorra",
+    "Specifier": null,
+    "Prefix": 376,
+    "Rate": 0.0528
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Mauritius",
+    "Specifier": null,
+    "Prefix": 230,
+    "Rate": 0.2017
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Zimbabwe",
+    "Specifier": null,
+    "Prefix": 263,
+    "Rate": 0.1416
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Belgium",
+    "Specifier": null,
+    "Prefix": 32,
+    "Rate": 0.1442
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Hungary",
+    "Specifier": null,
+    "Prefix": 36,
+    "Rate": 0.0374
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Norway",
+    "Specifier": null,
+    "Prefix": 47,
+    "Rate": 0.0413
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Norway",
+    "Specifier": null,
+    "Prefix": 47906,
+    "Rate": 0.0854
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Norway",
+    "Specifier": null,
+    "Prefix": 479,
+    "Rate": 0.1449
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Norway",
+    "Specifier": null,
+    "Prefix": 47982,
+    "Rate": 0.0842
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Burkina Faso",
+    "Specifier": null,
+    "Prefix": 226,
+    "Rate": 0.2795
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Burkina Faso",
+    "Specifier": null,
+    "Prefix": 22666,
+    "Rate": 0.4445
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Burkina Faso",
+    "Specifier": null,
+    "Prefix": 2267,
+    "Rate": 0.5082
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Burkina Faso",
+    "Specifier": null,
+    "Prefix": 22675,
+    "Rate": 0.4445
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Burkina Faso",
+    "Specifier": null,
+    "Prefix": 22677,
+    "Rate": 0.4445
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Belgium",
+    "Specifier": null,
+    "Prefix": 3246,
+    "Rate": 0.2833
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Belgium",
+    "Specifier": null,
+    "Prefix": 3247,
+    "Rate": 0.2833
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Belgium",
+    "Specifier": null,
+    "Prefix": 3249,
+    "Rate": 0.2833
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Malta",
+    "Specifier": null,
+    "Prefix": 356,
+    "Rate": 0.0452
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Hungary",
+    "Specifier": null,
+    "Prefix": 3630,
+    "Rate": 0.0799
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Hungary",
+    "Specifier": null,
+    "Prefix": 3670,
+    "Rate": 0.1091
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Latvia",
+    "Specifier": null,
+    "Prefix": 371,
+    "Rate": 0.1955
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Monaco",
+    "Specifier": null,
+    "Prefix": 377,
+    "Rate": 0.1227
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Australia",
+    "Specifier": null,
+    "Prefix": 6139,
+    "Rate": 0.0483
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Australia",
+    "Specifier": null,
+    "Prefix": 6173,
+    "Rate": 0.0483
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Indonesia",
+    "Specifier": null,
+    "Prefix": 6261,
+    "Rate": 0.0808
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Philippines",
+    "Specifier": null,
+    "Prefix": 63,
+    "Rate": 0.18575
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7423,
+    "Rate": 0.0747
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7499,
+    "Rate": 0.0487
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7812,
+    "Rate": 0.0441
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7843,
+    "Rate": 0.1152
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7844,
+    "Rate": 0.0554
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7861,
+    "Rate": 0.0554
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Japan",
+    "Specifier": null,
+    "Prefix": 81,
+    "Rate": 0.0604
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Vietnam",
+    "Specifier": null,
+    "Prefix": 84,
+    "Rate": 0.1202
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Hong Kong",
+    "Specifier": null,
+    "Prefix": 852,
+    "Rate": 0.053
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Cambodia",
+    "Specifier": null,
+    "Prefix": 85581,
+    "Rate": 0.123
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Afghanistan",
+    "Specifier": null,
+    "Prefix": 93,
+    "Rate": 0.2804
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Afghanistan",
+    "Specifier": null,
+    "Prefix": 9378,
+    "Rate": 0.2658
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Sri Lanka",
+    "Specifier": null,
+    "Prefix": 94112,
+    "Rate": 0.2352
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Sri Lanka",
+    "Specifier": null,
+    "Prefix": 94672,
+    "Rate": 0.2352
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Sri Lanka",
+    "Specifier": null,
+    "Prefix": 9477,
+    "Rate": 0.2352
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Equatorial Guinea",
+    "Specifier": null,
+    "Prefix": 240,
+    "Rate": 0.5485
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Uganda",
+    "Specifier": null,
+    "Prefix": 25639,
+    "Rate": 0.4562
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Uganda",
+    "Specifier": null,
+    "Prefix": 256,
+    "Rate": 0.4042
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Uganda",
+    "Specifier": null,
+    "Prefix": 25675,
+    "Rate": 0.388
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Uganda",
+    "Specifier": null,
+    "Prefix": 25677,
+    "Rate": 0.4562
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Uganda",
+    "Specifier": null,
+    "Prefix": 25678,
+    "Rate": 0.4562
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Greece",
+    "Specifier": null,
+    "Prefix": 30,
+    "Rate": 0.0792
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Greece",
+    "Specifier": null,
+    "Prefix": 30694,
+    "Rate": 0.1182
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Greece",
+    "Specifier": null,
+    "Prefix": 30697,
+    "Rate": 0.1312
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Portugal",
+    "Specifier": null,
+    "Prefix": 351,
+    "Rate": 0.0583
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Albania",
+    "Specifier": null,
+    "Prefix": 35567,
+    "Rate": 0.5277
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Albania",
+    "Specifier": null,
+    "Prefix": 35569,
+    "Rate": 0.5277
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Aland Islands",
+    "Specifier": null,
+    "Prefix": 358,
+    "Rate": 0.2017
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Slovakia",
+    "Specifier": null,
+    "Prefix": 421919,
+    "Rate": 0.1834
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Turkey",
+    "Specifier": null,
+    "Prefix": 90212,
+    "Rate": 0.0721
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Turkey",
+    "Specifier": null,
+    "Prefix": 90,
+    "Rate": 0.0793
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Tajikistan",
+    "Specifier": null,
+    "Prefix": 99255,
+    "Rate": 0.2066
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Georgia",
+    "Specifier": null,
+    "Prefix": 995,
+    "Rate": 0.2365
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Hong Kong",
+    "Specifier": null,
+    "Prefix": 8529,
+    "Rate": 0.0611
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Hong Kong",
+    "Specifier": null,
+    "Prefix": 85259,
+    "Rate": 0.0611
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Greece",
+    "Specifier": null,
+    "Prefix": 30693,
+    "Rate": 0.1312
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Uzbekistan",
+    "Specifier": null,
+    "Prefix": 998,
+    "Rate": 0.1325
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Azerbaijan",
+    "Specifier": null,
+    "Prefix": 99451,
+    "Rate": 0.3717
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Iran",
+    "Specifier": null,
+    "Prefix": 98,
+    "Rate": 0.0623
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Mongolia",
+    "Specifier": null,
+    "Prefix": 9769,
+    "Rate": 0.0729
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Mongolia",
+    "Specifier": null,
+    "Prefix": 9768,
+    "Rate": 0.0729
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Palestine (970)",
+    "Specifier": null,
+    "Prefix": 97259,
+    "Rate": 0.2409
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Palestine (970)",
+    "Specifier": null,
+    "Prefix": 97256,
+    "Rate": 0.2409
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Palestine (970)",
+    "Specifier": null,
+    "Prefix": 9725,
+    "Rate": 0.1672
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Iraq",
+    "Specifier": null,
+    "Prefix": 9647,
+    "Rate": 0.2794
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Myanmar",
+    "Specifier": null,
+    "Prefix": 95,
+    "Rate": 0.2
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Sri Lanka",
+    "Specifier": null,
+    "Prefix": 9471,
+    "Rate": 0.2352
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Pakistan",
+    "Specifier": null,
+    "Prefix": 92,
+    "Rate": 0.1617
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "India",
+    "Specifier": null,
+    "Prefix": 919,
+    "Rate": 0.0582
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "India",
+    "Specifier": null,
+    "Prefix": 918,
+    "Rate": 0.0582
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "India",
+    "Specifier": null,
+    "Prefix": 9179,
+    "Rate": 0.0612
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "India",
+    "Specifier": null,
+    "Prefix": 917,
+    "Rate": 0.0582
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "India",
+    "Specifier": null,
+    "Prefix": 91,
+    "Rate": 0.0802
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Turkey",
+    "Specifier": null,
+    "Prefix": 9055,
+    "Rate": 0.2218
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Turkey",
+    "Specifier": null,
+    "Prefix": 9054882,
+    "Rate": 0.1958
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Turkey",
+    "Specifier": null,
+    "Prefix": 9054,
+    "Rate": 0.2164
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Turkey",
+    "Specifier": null,
+    "Prefix": 9053388,
+    "Rate": 0.1973
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Turkey",
+    "Specifier": null,
+    "Prefix": 9053382,
+    "Rate": 0.1973
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Turkey",
+    "Specifier": null,
+    "Prefix": 9053,
+    "Rate": 0.2129
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Turkey",
+    "Specifier": null,
+    "Prefix": 9050,
+    "Rate": 0.2218
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Cambodia",
+    "Specifier": null,
+    "Prefix": 85596,
+    "Rate": 0.123
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Hong Kong",
+    "Specifier": null,
+    "Prefix": 8526,
+    "Rate": 0.0611
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "South Korea",
+    "Specifier": null,
+    "Prefix": 821,
+    "Rate": 0.0576
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "South Korea",
+    "Specifier": null,
+    "Prefix": 82,
+    "Rate": 0.0411
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7747,
+    "Rate": 0.391
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7707,
+    "Rate": 0.391
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7702,
+    "Rate": 0.2505
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7701,
+    "Rate": 0.2505
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Timor Leste",
+    "Specifier": null,
+    "Prefix": 670,
+    "Rate": 1.1448
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Thailand",
+    "Specifier": null,
+    "Prefix": 66,
+    "Rate": 0.1325
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Singapore",
+    "Specifier": null,
+    "Prefix": 65,
+    "Rate": 0.0868
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Philippines",
+    "Specifier": null,
+    "Prefix": 63956,
+    "Rate": 0.1858
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Philippines",
+    "Specifier": null,
+    "Prefix": 63945,
+    "Rate": 0.1858
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Philippines",
+    "Specifier": null,
+    "Prefix": 63922,
+    "Rate": 0.1858
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Philippines",
+    "Specifier": null,
+    "Prefix": 63917,
+    "Rate": 0.1858
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Philippines",
+    "Specifier": null,
+    "Prefix": 639,
+    "Rate": 0.2053
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Indonesia",
+    "Specifier": null,
+    "Prefix": 62852,
+    "Rate": 0.1063
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Indonesia",
+    "Specifier": null,
+    "Prefix": 62838,
+    "Rate": 0.1063
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Indonesia",
+    "Specifier": null,
+    "Prefix": 62822,
+    "Rate": 0.1063
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Indonesia",
+    "Specifier": null,
+    "Prefix": 62812,
+    "Rate": 0.1063
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Indonesia",
+    "Specifier": null,
+    "Prefix": 628,
+    "Rate": 0.1085
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Australia",
+    "Specifier": null,
+    "Prefix": 614,
+    "Rate": 0.126
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Malaysia",
+    "Specifier": null,
+    "Prefix": 60,
+    "Rate": 0.0868
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bolivia",
+    "Specifier": null,
+    "Prefix": 5917,
+    "Rate": 0.2744
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Colombia",
+    "Specifier": null,
+    "Prefix": 573,
+    "Rate": 0.144
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Brazil",
+    "Specifier": null,
+    "Prefix": 55749,
+    "Rate": 0.2623
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Brazil",
+    "Specifier": null,
+    "Prefix": 55459,
+    "Rate": 0.2623
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Brazil",
+    "Specifier": null,
+    "Prefix": 55439,
+    "Rate": 0.2623
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Brazil",
+    "Specifier": null,
+    "Prefix": 55319,
+    "Rate": 0.2623
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Brazil",
+    "Specifier": null,
+    "Prefix": 5531,
+    "Rate": 0.043
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Brazil",
+    "Specifier": null,
+    "Prefix": 55199,
+    "Rate": 0.2623
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Brazil",
+    "Specifier": null,
+    "Prefix": 55119,
+    "Rate": 0.2623
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Brazil",
+    "Specifier": null,
+    "Prefix": 55,
+    "Rate": 0.0547
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Germany",
+    "Specifier": null,
+    "Prefix": 4917,
+    "Rate": 0.0682
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Germany",
+    "Specifier": null,
+    "Prefix": 49163,
+    "Rate": 0.179
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Germany",
+    "Specifier": null,
+    "Prefix": 491577,
+    "Rate": 0.179
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Germany",
+    "Specifier": null,
+    "Prefix": 4915,
+    "Rate": 0.0682
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Germany",
+    "Specifier": null,
+    "Prefix": 49,
+    "Rate": 0.0396
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Poland",
+    "Specifier": null,
+    "Prefix": 48783,
+    "Rate": 0.1325
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Poland",
+    "Specifier": null,
+    "Prefix": 4851,
+    "Rate": 0.1325
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Poland",
+    "Specifier": null,
+    "Prefix": 48,
+    "Rate": 0.0473
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Denmark",
+    "Specifier": null,
+    "Prefix": 45271,
+    "Rate": 0.0616
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Denmark",
+    "Specifier": null,
+    "Prefix": 45,
+    "Rate": 0.0402
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "United Kingdom",
+    "Specifier": null,
+    "Prefix": 44,
+    "Rate": 0.07
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Austria",
+    "Specifier": null,
+    "Prefix": 4368,
+    "Rate": 0.2017
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Austria",
+    "Specifier": null,
+    "Prefix": 4367,
+    "Rate": 0.2017
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Austria",
+    "Specifier": null,
+    "Prefix": 43,
+    "Rate": 0.178
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Switzerland",
+    "Specifier": null,
+    "Prefix": 41754,
+    "Rate": 0.4795
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Switzerland",
+    "Specifier": null,
+    "Prefix": 41,
+    "Rate": 0.0441
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Italy",
+    "Specifier": null,
+    "Prefix": 393,
+    "Rate": 0.0977
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Italy",
+    "Specifier": null,
+    "Prefix": 39,
+    "Rate": 0.039
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Montenegro",
+    "Specifier": null,
+    "Prefix": 38269,
+    "Rate": 0.5354
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Belarus",
+    "Specifier": null,
+    "Prefix": 375,
+    "Rate": 0.5082
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bulgaria",
+    "Specifier": null,
+    "Prefix": 35989,
+    "Rate": 0.3716
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Cyprus",
+    "Specifier": null,
+    "Prefix": 357,
+    "Rate": 0.1442
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Albania",
+    "Specifier": null,
+    "Prefix": 35568,
+    "Rate": 0.5277
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Ireland",
+    "Specifier": null,
+    "Prefix": 35387,
+    "Rate": 0.1244
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Ireland",
+    "Specifier": null,
+    "Prefix": 35386,
+    "Rate": 0.1023
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Ireland",
+    "Specifier": null,
+    "Prefix": 35383,
+    "Rate": 0.1165
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Ireland",
+    "Specifier": null,
+    "Prefix": 353,
+    "Rate": 0.0383
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Portugal",
+    "Specifier": null,
+    "Prefix": 3519,
+    "Rate": 0.1325
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Spain",
+    "Specifier": null,
+    "Prefix": 346,
+    "Rate": 0.1325
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Spain",
+    "Specifier": null,
+    "Prefix": 34,
+    "Rate": 0.0408
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "The Netherlands",
+    "Specifier": null,
+    "Prefix": 31614,
+    "Rate": 0.0849
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "The Netherlands",
+    "Specifier": null,
+    "Prefix": 31,
+    "Rate": 0.0463
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Greece",
+    "Specifier": null,
+    "Prefix": 30698,
+    "Rate": 0.1312
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "South Africa",
+    "Specifier": null,
+    "Prefix": 2783,
+    "Rate": 0.2017
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "South Africa",
+    "Specifier": null,
+    "Prefix": 2779,
+    "Rate": 0.2017
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "South Africa",
+    "Specifier": null,
+    "Prefix": 2773,
+    "Rate": 0.2017
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "South Africa",
+    "Specifier": null,
+    "Prefix": 2772,
+    "Rate": 0.2017
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "South Africa",
+    "Specifier": null,
+    "Prefix": 2771,
+    "Rate": 0.2017
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "South Africa",
+    "Specifier": null,
+    "Prefix": 2763,
+    "Rate": 0.2017
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "South Africa",
+    "Specifier": null,
+    "Prefix": 27,
+    "Rate": 0.1325
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Zimbabwe",
+    "Specifier": null,
+    "Prefix": 26378,
+    "Rate": 0.5874
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Zimbabwe",
+    "Specifier": null,
+    "Prefix": 26377,
+    "Rate": 0.5874
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Mozambique",
+    "Specifier": null,
+    "Prefix": 258,
+    "Rate": 0.3716
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "United Kingdom",
+    "Specifier": null,
+    "Prefix": 447,
+    "Rate": 0.0656
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Uganda",
+    "Specifier": null,
+    "Prefix": 25670,
+    "Rate": 0.388
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Tanzania",
+    "Specifier": null,
+    "Prefix": 255,
+    "Rate": 0.4731
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kenya",
+    "Specifier": null,
+    "Prefix": 25478,
+    "Rate": 0.3339
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kenya",
+    "Specifier": null,
+    "Prefix": 25477,
+    "Rate": 0.2689
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kenya",
+    "Specifier": null,
+    "Prefix": 25475,
+    "Rate": 0.3339
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kenya",
+    "Specifier": null,
+    "Prefix": 2547,
+    "Rate": 0.3274
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Somalia",
+    "Specifier": null,
+    "Prefix": 252,
+    "Rate": 0.4313
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Ethiopia",
+    "Specifier": null,
+    "Prefix": 25193,
+    "Rate": 0.3236
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Ethiopia",
+    "Specifier": null,
+    "Prefix": 251913,
+    "Rate": 0.3236
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Ethiopia",
+    "Specifier": null,
+    "Prefix": 251,
+    "Rate": 0.305
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Sudan",
+    "Specifier": null,
+    "Prefix": 249,
+    "Rate": 0.2365
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Nigeria",
+    "Specifier": null,
+    "Prefix": 234,
+    "Rate": 0.176
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Ghana",
+    "Specifier": null,
+    "Prefix": 23354,
+    "Rate": 0.4003
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Ghana",
+    "Specifier": null,
+    "Prefix": 23326,
+    "Rate": 0.3418
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Ghana",
+    "Specifier": null,
+    "Prefix": 23324,
+    "Rate": 0.4003
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Ghana",
+    "Specifier": null,
+    "Prefix": 233,
+    "Rate": 0.3275
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Sierra Leone",
+    "Specifier": null,
+    "Prefix": 232,
+    "Rate": 0.7217
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Ivory Coast",
+    "Specifier": null,
+    "Prefix": 225,
+    "Rate": 0.5082
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Mauritania",
+    "Specifier": null,
+    "Prefix": 2222,
+    "Rate": 0.7217
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Senegal",
+    "Specifier": null,
+    "Prefix": 22177,
+    "Rate": 0.4964
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Gambia",
+    "Specifier": null,
+    "Prefix": 220,
+    "Rate": 0.9255
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Tunisia",
+    "Specifier": null,
+    "Prefix": 216,
+    "Rate": 0.7217
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Algeria",
+    "Specifier": null,
+    "Prefix": 21379,
+    "Rate": 0.6655
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Algeria",
+    "Specifier": null,
+    "Prefix": 21377,
+    "Rate": 0.6655
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Algeria",
+    "Specifier": null,
+    "Prefix": 21369,
+    "Rate": 0.6655
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Algeria",
+    "Specifier": null,
+    "Prefix": 21367,
+    "Rate": 0.6655
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Algeria",
+    "Specifier": null,
+    "Prefix": 21366,
+    "Rate": 0.6655
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Algeria",
+    "Specifier": null,
+    "Prefix": 2135,
+    "Rate": 0.87
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Antigua and Barbuda",
+    "Specifier": null,
+    "Prefix": 1905,
+    "Rate": 0.0322
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Antigua and Barbuda",
+    "Specifier": null,
+    "Prefix": 186846,
+    "Rate": 0.2871
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Antigua and Barbuda",
+    "Specifier": null,
+    "Prefix": 1778,
+    "Rate": 0.0322
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Antigua and Barbuda",
+    "Specifier": null,
+    "Prefix": 1613,
+    "Rate": 0.0322
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Antigua and Barbuda",
+    "Specifier": null,
+    "Prefix": 1514,
+    "Rate": 0.0322
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Antigua and Barbuda",
+    "Specifier": null,
+    "Prefix": 124625,
+    "Rate": 0.3029
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Antigua and Barbuda",
+    "Specifier": null,
+    "Prefix": 1,
+    "Rate": 0.0754
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "France",
+    "Specifier": null,
+    "Prefix": 338,
+    "Rate": 0.49
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "France",
+    "Specifier": null,
+    "Prefix": 3364004,
+    "Rate": 0.56
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "France",
+    "Specifier": null,
+    "Prefix": 3364003,
+    "Rate": 0.56
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "France",
+    "Specifier": null,
+    "Prefix": 3364002,
+    "Rate": 0.56
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "France",
+    "Specifier": null,
+    "Prefix": 3364001,
+    "Rate": 0.56
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "France",
+    "Specifier": null,
+    "Prefix": 3364000,
+    "Rate": 0.56
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "France",
+    "Specifier": null,
+    "Prefix": 3363800,
+    "Rate": 0.56
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "France",
+    "Specifier": null,
+    "Prefix": 33,
+    "Rate": 0.11
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Yemen",
+    "Specifier": null,
+    "Prefix": 967,
+    "Rate": 0.2
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Syria",
+    "Specifier": null,
+    "Prefix": 963,
+    "Rate": 0.26
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Oman",
+    "Specifier": null,
+    "Prefix": 968,
+    "Rate": 0.26
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Palestine (970)",
+    "Specifier": null,
+    "Prefix": 970,
+    "Rate": 0.24
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bulgaria",
+    "Specifier": null,
+    "Prefix": 35988,
+    "Rate": 0.3392
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bosnia and Herzegovina",
+    "Specifier": null,
+    "Prefix": 3876031,
+    "Rate": 0.5836
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Turkey",
+    "Specifier": null,
+    "Prefix": 90312,
+    "Rate": 0.0721
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Japan",
+    "Specifier": null,
+    "Prefix": 8180,
+    "Rate": 0.1522
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Mauritania",
+    "Specifier": null,
+    "Prefix": 22231,
+    "Rate": 0.7217
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Mauritania",
+    "Specifier": null,
+    "Prefix": 22236,
+    "Rate": 0.7217
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Algeria",
+    "Specifier": null,
+    "Prefix": 21365,
+    "Rate": 0.6655
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Romania",
+    "Specifier": null,
+    "Prefix": 403,
+    "Rate": 0.0464
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Indonesia",
+    "Specifier": null,
+    "Prefix": 62,
+    "Rate": 0.1027
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Nicaragua",
+    "Specifier": null,
+    "Prefix": 50576,
+    "Rate": 0.3274
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Syria",
+    "Specifier": null,
+    "Prefix": 9639,
+    "Rate": 0.2621
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Brunei",
+    "Specifier": null,
+    "Prefix": 673,
+    "Rate": 0.0721
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Papua New Guinea",
+    "Specifier": null,
+    "Prefix": 675,
+    "Rate": 0.7217
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Fiji",
+    "Specifier": null,
+    "Prefix": 679,
+    "Rate": 0.3717
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Algeria",
+    "Specifier": null,
+    "Prefix": 213,
+    "Rate": 0.78245
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Australia",
+    "Specifier": null,
+    "Prefix": 61,
+    "Rate": 0.0499
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Australia",
+    "Specifier": null,
+    "Prefix": 6129,
+    "Rate": 0.0483
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Macao",
+    "Specifier": null,
+    "Prefix": 853,
+    "Rate": 0.1442
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Cambodia",
+    "Specifier": null,
+    "Prefix": 85512,
+    "Rate": 0.123
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Cambodia",
+    "Specifier": null,
+    "Prefix": 855,
+    "Rate": 0.1076
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Cambodia",
+    "Specifier": null,
+    "Prefix": 85592,
+    "Rate": 0.123
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Laos",
+    "Specifier": null,
+    "Prefix": 856,
+    "Rate": 0.1299
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Sri Lanka",
+    "Specifier": null,
+    "Prefix": 94,
+    "Rate": 0.2298
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Palestine (970)",
+    "Specifier": null,
+    "Prefix": 972,
+    "Rate": 0.0977
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Mongolia",
+    "Specifier": null,
+    "Prefix": 976,
+    "Rate": 0.0794
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Angola",
+    "Specifier": null,
+    "Prefix": 244,
+    "Rate": 0.1217
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Croatia",
+    "Specifier": null,
+    "Prefix": 38591,
+    "Rate": 0.3717
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Argentina",
+    "Specifier": null,
+    "Prefix": 5411,
+    "Rate": 0.035
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Argentina",
+    "Specifier": null,
+    "Prefix": 54,
+    "Rate": 0.062
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Indonesia",
+    "Specifier": null,
+    "Prefix": 6221,
+    "Rate": 0.0626
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Indonesia",
+    "Specifier": null,
+    "Prefix": 6222,
+    "Rate": 0.0808
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bangladesh",
+    "Specifier": null,
+    "Prefix": 880,
+    "Rate": 0.0831
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Tajikistan",
+    "Specifier": null,
+    "Prefix": 99298,
+    "Rate": 0.2076
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Argentina",
+    "Specifier": null,
+    "Prefix": 549,
+    "Rate": 0.2014
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Australia",
+    "Specifier": null,
+    "Prefix": 611800,
+    "Rate": 0.0286
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Benin",
+    "Specifier": null,
+    "Prefix": 229,
+    "Rate": 0.3717
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Slovenia",
+    "Specifier": null,
+    "Prefix": 386,
+    "Rate": 0.2017
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "North Macedonia",
+    "Specifier": null,
+    "Prefix": 38977,
+    "Rate": 0.5354
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Papua New Guinea",
+    "Specifier": null,
+    "Prefix": 6757,
+    "Rate": 0.9371
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kenya",
+    "Specifier": null,
+    "Prefix": 254,
+    "Rate": 0.2611
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Sri Lanka",
+    "Specifier": null,
+    "Prefix": 94115,
+    "Rate": 0.2352
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Australia",
+    "Specifier": null,
+    "Prefix": 6113,
+    "Rate": 0.059
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bulgaria",
+    "Specifier": null,
+    "Prefix": 35987,
+    "Rate": 0.3716
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Azerbaijan",
+    "Specifier": null,
+    "Prefix": 99455,
+    "Rate": 0.4445
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Sri Lanka",
+    "Specifier": null,
+    "Prefix": 94117,
+    "Rate": 0.2352
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "South Sudan",
+    "Specifier": null,
+    "Prefix": 211,
+    "Rate": 0.2621
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Croatia",
+    "Specifier": null,
+    "Prefix": 38595,
+    "Rate": 0.3717
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Namibia",
+    "Specifier": null,
+    "Prefix": 26481,
+    "Rate": 0.1741
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Azerbaijan",
+    "Specifier": null,
+    "Prefix": 99470,
+    "Rate": 0.4315
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Cook Islands",
+    "Specifier": null,
+    "Prefix": 682,
+    "Rate": 0.9255
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Azerbaijan",
+    "Specifier": null,
+    "Prefix": 99450,
+    "Rate": 0.3717
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Azerbaijan",
+    "Specifier": null,
+    "Prefix": 994,
+    "Rate": 0.2748
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Eritrea",
+    "Specifier": null,
+    "Prefix": 291,
+    "Rate": 0.3152
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Gabon",
+    "Specifier": null,
+    "Prefix": 241,
+    "Rate": 0.6263
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Montenegro",
+    "Specifier": null,
+    "Prefix": 382,
+    "Rate": 0.2352
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Namibia",
+    "Specifier": null,
+    "Prefix": 264,
+    "Rate": 0.1559
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "North Macedonia",
+    "Specifier": null,
+    "Prefix": 389,
+    "Rate": 0.2495
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7846,
+    "Rate": 0.0616
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7831,
+    "Rate": 0.0616
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7498,
+    "Rate": 0.0616
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Senegal",
+    "Specifier": null,
+    "Prefix": 221,
+    "Rate": 0.2871
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Eswatini",
+    "Specifier": null,
+    "Prefix": 268,
+    "Rate": 0.0853
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "North Macedonia",
+    "Specifier": null,
+    "Prefix": 38970,
+    "Rate": 0.5354
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Slovakia",
+    "Specifier": null,
+    "Prefix": 421948,
+    "Rate": 0.1913
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Colombia",
+    "Specifier": null,
+    "Prefix": 57,
+    "Rate": 0.0881
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Chile",
+    "Specifier": null,
+    "Prefix": 56,
+    "Rate": 0.0547
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Chad",
+    "Specifier": null,
+    "Prefix": 2359,
+    "Rate": 0.7214
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Chad",
+    "Specifier": null,
+    "Prefix": 2356,
+    "Rate": 0.7214
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bosnia and Herzegovina",
+    "Specifier": null,
+    "Prefix": 38761,
+    "Rate": 0.5836
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Iceland",
+    "Specifier": null,
+    "Prefix": 35478,
+    "Rate": 0.1074
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bosnia and Herzegovina",
+    "Specifier": null,
+    "Prefix": 38762,
+    "Rate": 0.5836
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "United Kingdom",
+    "Specifier": null,
+    "Prefix": 445,
+    "Rate": 0.0512
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "United Kingdom",
+    "Specifier": null,
+    "Prefix": 448,
+    "Rate": 0.4178
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Guatemala",
+    "Specifier": null,
+    "Prefix": 502,
+    "Rate": 0.2626
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bosnia and Herzegovina",
+    "Specifier": null,
+    "Prefix": 38765,
+    "Rate": 0.5836
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "New Zealand",
+    "Specifier": null,
+    "Prefix": 64,
+    "Rate": 0.0428
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Mauritania",
+    "Specifier": null,
+    "Prefix": 22241,
+    "Rate": 0.6654
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Niger",
+    "Specifier": null,
+    "Prefix": 227,
+    "Rate": 0.4821
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Guinea-Bissau",
+    "Specifier": null,
+    "Prefix": 24595,
+    "Rate": 0.6655
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Mauritania",
+    "Specifier": null,
+    "Prefix": 22249,
+    "Rate": 0.6654
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kosovo",
+    "Specifier": null,
+    "Prefix": 383,
+    "Rate": 0.9254
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Mauritania",
+    "Specifier": null,
+    "Prefix": 222,
+    "Rate": 0.8475
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Slovakia",
+    "Specifier": null,
+    "Prefix": 421915,
+    "Rate": 0.1834
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Albania",
+    "Specifier": null,
+    "Prefix": 355,
+    "Rate": 0.2378
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Maldives",
+    "Specifier": null,
+    "Prefix": 960,
+    "Rate": 1.1855
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Martinique",
+    "Specifier": null,
+    "Prefix": 596,
+    "Rate": 0.0532
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Saint Barthelemy",
+    "Specifier": null,
+    "Prefix": 590,
+    "Rate": 0.0525
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Iceland",
+    "Specifier": null,
+    "Prefix": 35476,
+    "Rate": 0.1074
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Slovakia",
+    "Specifier": null,
+    "Prefix": 421944,
+    "Rate": 0.1913
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Iceland",
+    "Specifier": null,
+    "Prefix": 354,
+    "Rate": 0.0482
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Gibraltar",
+    "Specifier": null,
+    "Prefix": 35054,
+    "Rate": 0.2729
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Liechtenstein",
+    "Specifier": null,
+    "Prefix": 423,
+    "Rate": 0.1962
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": null,
+    "Specifier": null,
+    "Prefix": 24,
+    "Rate": 0.7217
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7708,
+    "Rate": 0.391
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Slovakia",
+    "Specifier": null,
+    "Prefix": 421904,
+    "Rate": 0.1682
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Croatia",
+    "Specifier": null,
+    "Prefix": 385,
+    "Rate": 0.0974
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Djibouti",
+    "Specifier": null,
+    "Prefix": 253,
+    "Rate": 0.426
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Tonga",
+    "Specifier": null,
+    "Prefix": 676,
+    "Rate": 0.8952
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Venezuela",
+    "Specifier": null,
+    "Prefix": 58424,
+    "Rate": 0.0977
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Venezuela",
+    "Specifier": null,
+    "Prefix": 58414,
+    "Rate": 0.0977
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Venezuela",
+    "Specifier": null,
+    "Prefix": 58412,
+    "Rate": 0.0977
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bolivia",
+    "Specifier": null,
+    "Prefix": 5916,
+    "Rate": 0.2744
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bosnia and Herzegovina",
+    "Specifier": null,
+    "Prefix": 38766,
+    "Rate": 0.5836
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Faroe Islands",
+    "Specifier": null,
+    "Prefix": 29827,
+    "Rate": 0.2605
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Belize",
+    "Specifier": null,
+    "Prefix": 5016,
+    "Rate": 0.297
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bulgaria",
+    "Specifier": null,
+    "Prefix": 359,
+    "Rate": 0.1357
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Lesotho",
+    "Specifier": null,
+    "Prefix": 266,
+    "Rate": 0.3716
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bosnia and Herzegovina",
+    "Specifier": null,
+    "Prefix": 387,
+    "Rate": 0.5836
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Tajikistan",
+    "Specifier": null,
+    "Prefix": 992,
+    "Rate": 0.2066
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Slovakia",
+    "Specifier": null,
+    "Prefix": 421,
+    "Rate": 0.1834
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Nicaragua",
+    "Specifier": null,
+    "Prefix": 505,
+    "Rate": 0.3274
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Iraq",
+    "Specifier": null,
+    "Prefix": 964,
+    "Rate": 0.26
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Moldova",
+    "Specifier": null,
+    "Prefix": 373,
+    "Rate": 0.4438
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Luxembourg",
+    "Specifier": null,
+    "Prefix": 352,
+    "Rate": 0.1325
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Estonia",
+    "Specifier": null,
+    "Prefix": 372,
+    "Rate": 0.4705
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Cuba",
+    "Specifier": null,
+    "Prefix": 53,
+    "Rate": 1.0477
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "China",
+    "Specifier": null,
+    "Prefix": 86,
+    "Rate": 0.0245
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Armenia",
+    "Specifier": null,
+    "Prefix": 374,
+    "Rate": 0.2987
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kyrgyzstan",
+    "Specifier": null,
+    "Prefix": 996,
+    "Rate": 0.3269
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Nepal",
+    "Specifier": null,
+    "Prefix": 977,
+    "Rate": 0.2365
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Lebanon",
+    "Specifier": null,
+    "Prefix": 961,
+    "Rate": 0.2352
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Morocco",
+    "Specifier": null,
+    "Prefix": 212,
+    "Rate": 0.6252
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Czechia",
+    "Specifier": null,
+    "Prefix": 420,
+    "Rate": 0.1286
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Sweden",
+    "Specifier": null,
+    "Prefix": 46,
+    "Rate": 0.0659
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Botswana",
+    "Specifier": null,
+    "Prefix": 267,
+    "Rate": 0.2804
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Serbia",
+    "Specifier": null,
+    "Prefix": 381,
+    "Rate": 0.5354
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Ukraine",
+    "Specifier": null,
+    "Prefix": 380,
+    "Rate": 0.3163
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Ecuador",
+    "Specifier": null,
+    "Prefix": 593,
+    "Rate": 0.2545
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Liberia",
+    "Specifier": null,
+    "Prefix": 231,
+    "Rate": 0.5224
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Comoros",
+    "Specifier": null,
+    "Prefix": 269,
+    "Rate": 0.4871
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Costa Rica",
+    "Specifier": null,
+    "Prefix": 506,
+    "Rate": 0.1052
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Burundi",
+    "Specifier": null,
+    "Prefix": 257,
+    "Rate": 0.7214
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Aruba",
+    "Specifier": null,
+    "Prefix": 297,
+    "Rate": 0.2768
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Mali",
+    "Specifier": null,
+    "Prefix": 223,
+    "Rate": 0.5354
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Panama",
+    "Specifier": null,
+    "Prefix": 507,
+    "Rate": 0.1864
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Togo",
+    "Specifier": null,
+    "Prefix": 228,
+    "Rate": 0.4326
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Honduras",
+    "Specifier": null,
+    "Prefix": 504,
+    "Rate": 0.2638
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Libya",
+    "Specifier": null,
+    "Prefix": 218,
+    "Rate": 0.4432
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7395,
+    "Rate": 0.0598
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7705,
+    "Rate": 0.391
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Zambia",
+    "Specifier": null,
+    "Prefix": 260,
+    "Rate": 0.5484
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "San Marino",
+    "Specifier": null,
+    "Prefix": 378,
+    "Rate": 0.039
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Madagascar",
+    "Specifier": null,
+    "Prefix": 261,
+    "Rate": 0.7551
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Peru",
+    "Specifier": null,
+    "Prefix": 51,
+    "Rate": 0.1418
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Suriname",
+    "Specifier": null,
+    "Prefix": 597,
+    "Rate": 0.3625
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Reunion",
+    "Specifier": null,
+    "Prefix": 262,
+    "Rate": 0.1572
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Samoa",
+    "Specifier": null,
+    "Prefix": 6857,
+    "Rate": 0.9869
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Cabo Verde",
+    "Specifier": null,
+    "Prefix": 238,
+    "Rate": 0.3326
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "French Guiana",
+    "Specifier": null,
+    "Prefix": 594,
+    "Rate": 0.1187
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Paraguay",
+    "Specifier": null,
+    "Prefix": 595,
+    "Rate": 0.1624
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "El Salvador",
+    "Specifier": null,
+    "Prefix": 503,
+    "Rate": 0.3007
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Haiti",
+    "Specifier": null,
+    "Prefix": 509,
+    "Rate": 0.4055
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Malawi",
+    "Specifier": null,
+    "Prefix": 265,
+    "Rate": 0.4769
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Greenland",
+    "Specifier": null,
+    "Prefix": 299,
+    "Rate": 0.094
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "New Caledonia",
+    "Specifier": null,
+    "Prefix": 687,
+    "Rate": 0.3196
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7700,
+    "Rate": 0.33
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Guinea",
+    "Specifier": null,
+    "Prefix": 224,
+    "Rate": 0.5097
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Rwanda",
+    "Specifier": null,
+    "Prefix": 250,
+    "Rate": 0.3735
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Romania",
+    "Specifier": null,
+    "Prefix": 407,
+    "Rate": 0.0945
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Romania",
+    "Specifier": null,
+    "Prefix": 402,
+    "Rate": 0.0464
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Central African Republic",
+    "Specifier": null,
+    "Prefix": 2362,
+    "Rate": 1.2128
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Central African Republic",
+    "Specifier": null,
+    "Prefix": 2363,
+    "Rate": 1.2128
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Central African Republic",
+    "Specifier": null,
+    "Prefix": 2368,
+    "Rate": 0.42976
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Central African Republic",
+    "Specifier": null,
+    "Prefix": 23670,
+    "Rate": 0.65084
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Central African Republic",
+    "Specifier": null,
+    "Prefix": 23677,
+    "Rate": 0.60704
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Central African Republic",
+    "Specifier": null,
+    "Prefix": 23672,
+    "Rate": 0.41728
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Central African Republic",
+    "Specifier": null,
+    "Prefix": 23674,
+    "Rate": 1.2128
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Central African Republic",
+    "Specifier": null,
+    "Prefix": 23675,
+    "Rate": 0.65768
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Central African Republic",
+    "Specifier": null,
+    "Prefix": 23676,
+    "Rate": 0.65768
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Turkmenistan",
+    "Specifier": null,
+    "Prefix": 993,
+    "Rate": 0.21565
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Turkmenistan",
+    "Specifier": null,
+    "Prefix": 9936,
+    "Rate": 0.28208
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "French Polynesia",
+    "Specifier": null,
+    "Prefix": 689,
+    "Rate": 0.34695
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Cameroon",
+    "Specifier": null,
+    "Prefix": 237,
+    "Rate": 0.3717
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Guyana",
+    "Specifier": null,
+    "Prefix": 592,
+    "Rate": 0.3451
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bonaire, Saint Eustatius and Saba",
+    "Specifier": null,
+    "Prefix": 599,
+    "Rate": 0.1663
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Micronesia",
+    "Specifier": null,
+    "Prefix": 691,
+    "Rate": 0.57
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Palau",
+    "Specifier": null,
+    "Prefix": 680,
+    "Rate": 0.29
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bhutan",
+    "Specifier": null,
+    "Prefix": 975,
+    "Rate": 0.1
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Bolivia",
+    "Specifier": null,
+    "Prefix": 591,
+    "Rate": 0.25
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Uruguay",
+    "Specifier": null,
+    "Prefix": 598,
+    "Rate": 0.2483
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7706,
+    "Rate": 0.27
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Saint Pierre and Miquelon",
+    "Specifier": null,
+    "Prefix": 508,
+    "Rate": 0.269
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7391,
+    "Rate": 0.0662
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7342,
+    "Rate": 0.0554
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7343,
+    "Rate": 0.0525
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7771,
+    "Rate": 0.2651
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7777,
+    "Rate": 0.2651
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7778,
+    "Rate": 0.2651
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7775,
+    "Rate": 0.2651
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7776,
+    "Rate": 0.2651
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7848,
+    "Rate": 0.1152
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7382,
+    "Rate": 0.0554
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7727,
+    "Rate": 0.1052
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7928,
+    "Rate": 0.1
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7,
+    "Rate": 0.1345
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Falkland Islands",
+    "Specifier": null,
+    "Prefix": 500,
+    "Rate": 2.42
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Faroe Islands",
+    "Specifier": null,
+    "Prefix": 298,
+    "Rate": 0.07
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Vanuatu",
+    "Specifier": null,
+    "Prefix": 6781,
+    "Rate": null
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Spain",
+    "Specifier": null,
+    "Prefix": 34590,
+    "Rate": 0.26
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Antigua and Barbuda",
+    "Specifier": null,
+    "Prefix": 1945,
+    "Rate": 0.027
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Mexico",
+    "Specifier": null,
+    "Prefix": 52,
+    "Rate": 0.05
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Samoa",
+    "Specifier": null,
+    "Prefix": 685,
+    "Rate": 0.29
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Taiwan",
+    "Specifier": null,
+    "Prefix": 886,
+    "Rate": 0.27
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Egypt",
+    "Specifier": null,
+    "Prefix": 20,
+    "Rate": 0.07
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Gibraltar",
+    "Specifier": null,
+    "Prefix": 350,
+    "Rate": 0.185
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Venezuela",
+    "Specifier": null,
+    "Prefix": 58,
+    "Rate": 0.07
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Belize",
+    "Specifier": null,
+    "Prefix": 501,
+    "Rate": 0.32
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7901,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7902,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7903,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7904,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7905,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7906,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7909,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7900,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7915,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7916,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7917,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7918,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7919,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7950,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7951,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7952,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7960,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7961,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7962,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7963,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7964,
+    "Rate": 0.37
+  },
+  {
+    "Type": "Outbound",
+    "Category": null,
+    "Country": "Kazakhstan",
+    "Specifier": null,
+    "Prefix": 7965,
+    "Rate": 0.37
+  }
+]

@@ -1,0 +1,153 @@
+INTRO EMAIL LOOP (3 Emails)
+Email 1 � Day 0
+Subject: Still exploring � or sorted already?
+Hi {{ $json.Name }},
+Quick note from me.
+You�d enquired about a property in Dubai some time ago, and I�ve just come across an option that wasn�t available back then.
+Before I assume anything � are you still exploring, or have you already wrapped this up?
+If you�re still looking, happy to share. If not, no worries at all.
+Best,
+{{Agent Name}}
+ScalePods
+
+Email 2 � Day 5
+Subject: Should I park this for now?
+Hi {{ $json.Name }},
+Just checking in briefly.
+I reached out earlier about a new option that came up recently.
+If property isn�t on your radar anymore, feel free to say the word � I�ll stop following up.
+And if you are still exploring, I can share details and take it from there.
+Either way works.
+Regards,
+Samaa
+
+Email 3 � Day 7
+Subject: Closing the loop on this
+Hi {{ $json.Name }},
+Last follow-up from my side.
+The option I mentioned earlier is still available, and it does line up well with what you were initially looking for.
+If you�d like the details, I�ll send them across.
+If not, just let me know and I�ll close this out.
+Cheers,
+{{Agent Name}}
+
+?? FOLLOW-UP LOOP (After Reply / Re-engagement)
+Email 4 � Day 0
+Subject: Picking up where we left off
+Hi {{ $json.Name }},
+Just reconnecting regarding your earlier enquiry with ScalePods.
+No assumptions here � simply checking if the timing is any better now.
+If it makes sense to restart the conversation, I�m happy to help.
+Best,
+{{BD_Name}}
+
+Email 5 � Day 5
+Subject: Is this still something to revisit?
+Hi {{ $json.Name }},
+Hope you�re doing well.
+Just wanted to check whether property is still something you�re exploring, or if this is better revisited later.
+No pressure either way � a quick yes / no helps me align.
+Regards,
+{{Agent Name}}
+
+Email 6 � Day 7
+Subject: Before I archive this
+Hi {{ $json.Name }},
+One last note before I close this on my end.
+I�ve come across a property that fits what you were originally considering, and thought it was worth flagging.
+If you�d like a quick overview, happy to share.
+If not, no worries � I�ll stop here.
+Best,
+{{Agent Name}}
+
+?? NURTURE EMAIL LOOP
+(Low-pressure, trust-building, not salesy)
+
+Week 1
+Email 7 � Day 0
+Subject: Staying informed about Dubai (no selling)
+Hi {{ $json.Name }},
+From time to time, we share short notes on how the Dubai property market is moving � pricing trends, supply pockets, and timing insights.
+No obligation to act.
+Just useful context, so decisions aren�t made blind or late.
+Thought I�d let you know.
+Regards,
+ScalePods
+
+Email 8 � Day 5
+Subject: One interesting launch worth tracking
+Hi {{ $json.Name }},
+Something new came to market recently that caught my attention � strong location fundamentals and sensible entry pricing.
+Not a pitch.
+Just sharing in case you�re still keeping an eye on opportunities in Dubai.
+If you�d like a walkthrough, I�m happy to do that.
+Best,
+{{Agent Name}}
+
+Email 9 � Day 7
+Subject: Quick check � should I share details?
+Hi {{ $json.Name }},
+Following up briefly.
+I�d mentioned a new launch earlier that stood out from a long-term value perspective.
+Let me know if you�d like details � or if now�s not the right time, that�s completely fine too.
+Best,
+{{Agent Name}}
+
+Week 2
+Email 10 � Day 0
+Subject: This crossed my desk
+Hi {{ $json.Name }},
+This came up recently and reminded me of the kind of options people usually look for early in their search.
+No urgency, no assumptions � just sharing in case you�re still tracking the market rather than acting immediately.
+Happy to pass along details if useful.
+Regards,
+{{Agent Name}}
+
+Email 11 � Day 5
+Subject: One worth a closer look
+Hi {{ $json.Name }},
+Some launches genuinely stand out � especially from a capital appreciation standpoint.
+We�re working on one such project currently.
+Not assuming you�re actively searching.
+Just keeping you informed in case this aligns with your thinking.
+Best,
+{{Agent Name}}
+
+Email 12 � Day 7
+Subject: Before this gets noticed widely
+Hi {{ $json.Name }},
+Most people only notice opportunities once prices have already moved.
+This particular project is still relatively under the radar.
+If you�d like a quick overview, I can share it with you.
+Regards,
+{{Agent Name}}
+
+Week 4
+Email 13 � Day 0
+Subject: One to quietly keep on a watchlist
+Hi {{ $json.Name }},
+Even when clients aren�t actively buying, some prefer keeping a short watchlist for launches with strong upside.
+This one fits that category reasonably well.
+If you�d like me to keep you posted on similar opportunities, just let me know.
+Best,
+{{Agent Name}}
+
+Email 14 � Day 5
+Subject: Is property still on your radar?
+Hi {{ $json.Name }},
+Totally fine if real estate isn�t a priority right now, happens more often than people admit.
+If you are loosely tracking opportunities with long-term potential, I�m happy to share occasional updates.
+No follow-ups unless you want them.
+Regards,
+{{Agent Name}}
+
+Email 15 � Day 7
+Subject: For whenever the timing feels right
+Hi {{ $json.Name }},
+Last note for now.
+I occasionally come across launches that make sense from a timing and upside perspective, not hype-driven noise.
+I can keep you in that loop, or pause entirely.
+Whichever you prefer.
+Warm regards,
+{{Agent Name}}
+ScalePods
