@@ -59,10 +59,16 @@ export function consolidateLeads(data: any): ConsolidatedLead[] {
         // 2. WhatsApp stages from icp_tracker (1-5)
         for (let i = 1; i <= 5; i++) {
             const key = `Whatsapp_${i}`;
+            const statusKey = `Whatsapp_${i}_status`;
             const val = l[key];
+            const status = l[statusKey];
+            
             if (val !== undefined && val !== null && String(val).trim() !== "") {
                 stages.push(key);
                 stage_data[key] = val;
+                if (status) {
+                    stage_data[statusKey] = status;
+                }
             }
         }
 
@@ -72,14 +78,26 @@ export function consolidateLeads(data: any): ConsolidatedLead[] {
         const email = String(getVal(l, ["Email"]) || "No Email");
         const phone = String(getVal(l, ["Phone", "Company Phone Number"]) || "");
         
-        // Use "Email Last Contacted" for the main contacted field
-        const lastContacted = getVal(l, ["Email Last Contacted", "Whatsapp Last Contacted", "Voice Last Contacted", "Last Contacted"]);
+        // Use designated last contacted fields from icp_tracker
+        const lastContacted = getVal(l, ["Whatsapp Last Contacted", "Voice Last Contacted", "Email Last Contacted", "Last Contacted"]);
         
         // Use "SENDERS  EMAIL" (double space possibility handled via getVal normalization if needed)
         const sender = getVal(l, ["SENDERS  EMAIL", "Senders email", "Sender Email"]);
         
-        // Replied/Unsubscribed
-        const replied = String(getVal(l, ["Replied", "Email_Replied", "W.P_Replied"]) || "No");
+        // Replied/Unsubscribed checks (including WhatsApp-specific ones from icp_tracker)
+        let repliedStatus = String(getVal(l, ["Replied", "whatsapp_replied", "Email_Replied"]) || "No");
+        
+        // If not explicitly "Yes/No", check if any Whatsapp_i_status contains "Replied"
+        if (repliedStatus === "No") {
+            for (let i = 1; i <= 5; i++) {
+                const s = l[`Whatsapp_${i}_status`];
+                if (s && String(s).toLowerCase().includes('replied')) {
+                    repliedStatus = "Yes";
+                    break;
+                }
+            }
+        }
+
         const unsubscribed = String(getVal(l, ["Unsubscribed"]) || "No");
 
         return {
@@ -88,7 +106,7 @@ export function consolidateLeads(data: any): ConsolidatedLead[] {
             name,
             phone,
             email,
-            replied,
+            replied: repliedStatus,
             current_loop: "Campaign",
             source_loop: "Campaign",
             stages_passed: stages,
@@ -97,7 +115,8 @@ export function consolidateLeads(data: any): ConsolidatedLead[] {
             updated_at: getVal(l, ["updated_at"]),
             last_contacted: lastContacted,
             sender_email: sender,
-            email_replied: replied,
+            email_replied: repliedStatus,
+            whatsapp_replied: repliedStatus,
             unsubscribed,
             ...l // spread original data for additional fields
         };

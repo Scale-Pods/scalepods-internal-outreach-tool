@@ -109,34 +109,25 @@ export function WhatsAppChatDetail({ customerId, onClose }: WhatsAppChatDetailPr
             const f = found as any;
             let seq = 1;
 
-            // Drip sequence W.P_1 → W.P_12  (skip missing slots, no duplicates)
-            for (let i = 1; i <= 12; i++) {
-                const raw = f[`W.P_${i}`] || f.stage_data?.[`WhatsApp ${i}`];
+            // Drip sequence Whatsapp_1 → Whatsapp_5 from icp_tracker
+            for (let i = 1; i <= 5; i++) {
+                const raw = f[`Whatsapp_${i}`] || f.stage_data?.[`Whatsapp_${i}`];
                 if (!raw) continue;
-                const tsRaw: string | null = f[`W.P_${i} TS`] || null;
-                const msg = parseMsg(raw, `W.P_${i}`, 'bot', seq++);
+                const tsRaw: string | null = f[`Whatsapp_${i}_status`] || f.stage_data?.[`Whatsapp_${i}_status`] || null;
+                const msg = parseMsg(raw, `Whatsapp_${i}`, 'bot', seq++);
                 if (msg) {
                     (msg as any).tsStatus = tsRaw;
-                    // If content had no embedded timestamp, fall back to the TS field date
+                    // Try to extract date from status if available
                     if (!msg.date) msg.date = parseTsDate(tsRaw);
                     timeline.push(msg);
                 }
             }
 
-            // Bot follow-up after initial reply
-            const initialFollowUpRaw = f["W.P_FollowUp"] || f.stage_data?.["WhatsApp FollowUp"];
-            const initialFollowUpMsg = parseMsg(initialFollowUpRaw, "W.P_FollowUp", "bot", seq++);
-            if (initialFollowUpMsg) timeline.push(initialFollowUpMsg);
-
-            // Paired reply / follow-up rounds (up to 10)
-            for (let i = 1; i <= 10; i++) {
-                const rRaw = f[`W.P_Replied_${i}`];
-                const rMsg = parseMsg(rRaw, `W.P_Replied_${i}`, 'user', seq++);
+            // Simple Replied check (Unified in icp_tracker)
+            const repliedVal = f.whatsapp_replied || f.whatsapp_replied_1 || f.Replied;
+            if (repliedVal && String(repliedVal).toLowerCase() !== "no" && String(repliedVal).toLowerCase() !== "none") {
+                const rMsg = parseMsg(repliedVal, "User Reply", 'user', seq++);
                 if (rMsg) timeline.push(rMsg);
-
-                const fRaw = f[`W.P_FollowUp_${i}`];
-                const fMsg = parseMsg(fRaw, `W.P_FollowUp_${i}`, 'bot', seq++);
-                if (fMsg) timeline.push(fMsg);
             }
 
             // No date sorting — insertion sequence IS the correct conversation order:
@@ -279,7 +270,7 @@ export function WhatsAppChatDetail({ customerId, onClose }: WhatsAppChatDetailPr
                                 <div>
                                     <span className="text-[10px] font-bold text-slate-400 uppercase">Source Table</span>
                                     <p className="font-bold text-blue-600 mt-1 text-xs">
-                                        {lead.id.startsWith('intro-') ? 'nr_wf' : (lead.id.startsWith('followup-') ? 'followup' : 'nurture')}
+                                        icp_tracker
                                     </p>
                                 </div>
                             </div>

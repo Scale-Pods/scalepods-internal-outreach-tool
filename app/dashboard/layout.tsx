@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone } from "lucide-react";
+import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, Menu, ChevronLeft, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import {
@@ -285,17 +285,19 @@ function DashboardContent({
                 {/* Sidebar */}
                 <aside className="hidden w-64 flex-col bg-[#0B0F19] border-r border-border md:flex font-sans">
                     {/* Logo Section */}
-                    <div className="p-6 pb-4 flex justify-center items-center gap-3">
+                    <div className="p-6 pb-4 flex justify-start items-center gap-3">
                         <Link href="/" className="relative w-10 h-10 block flex-shrink-0">
                             <Image
-                                src="/SP_logo.png"
+                                src="/sidebar_logo.png"
                                 alt="ScalePods Logo"
                                 fill
                                 className="object-contain drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]"
                                 priority
                             />
                         </Link>
-                        <span className="text-xl font-black tracking-tight text-foreground uppercase">ScalePods</span>
+                        <span className="text-xl font-bold tracking-tight text-white uppercase whitespace-nowrap">
+                            ScalePods
+                        </span>
                     </div>
 
                     <div className="px-4 pb-2">
@@ -334,36 +336,38 @@ function DashboardContent({
                         <div className="h-[1px] w-full bg-accent"></div>
                     </div>
 
-                    <nav className="flex-1 overflow-auto px-4 space-y-2">
+                    <nav className="flex-1 overflow-y-auto overflow-x-hidden px-4 space-y-2 mt-2 custom-scrollbar">
                         {activeConfig.items.map((item: any, index: number) => {
                             const isActive = pathname === item.href;
                             return (
                                 <Link
                                     key={index}
                                     href={item.href}
-                                    className={`group flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-all ${isActive
-                                        ? "bg-gradient-to-r from-green-600 to-emerald-500 text-white shadow-md shadow-green-500/20"
-                                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                                        }`}
+                                    className={`group flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-all ${
+                                        isActive
+                                            ? "bg-gradient-to-r from-green-600 to-emerald-500 text-white shadow-md shadow-green-500/20"
+                                            : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                                    }`}
                                 >
-                                    <item.icon className={`h-5 w-5 ${isActive ? "text-white" : "text-muted-foreground/80 group-hover:text-foreground/80 transition-colors"}`} />
-                                    {item.title}
+                                    <item.icon className={`h-5 w-5 flex-shrink-0 ${isActive ? "text-white" : "text-muted-foreground/80 group-hover:text-foreground/80 transition-colors"}`} />
+                                    <span className="whitespace-nowrap">{item.title}</span>
                                 </Link>
                             );
                         })}
                     </nav>
-                    <div className="mt-auto p-4 mb-4 space-y-3">
+                    
+                    <div className="mt-auto p-4 mb-2 space-y-2">
                         <Button
                             variant="ghost"
-                            className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground hover:bg-accent"
+                            className="w-full justify-start gap-2 px-4 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-300"
                             onClick={async () => {
                                 await logout();
                                 router.push('/');
                                 router.refresh();
                             }}
                         >
-                            <LogOut className="h-4 w-4" />
-                            Logout
+                            <LogOut className="h-4 w-4 flex-shrink-0" />
+                            <span className="whitespace-nowrap">Logout</span>
                         </Button>
                     </div>
                 </aside>
