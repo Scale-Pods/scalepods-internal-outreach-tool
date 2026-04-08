@@ -286,7 +286,7 @@ function DashboardContent({
         return (
             <div className="flex h-screen overflow-hidden bg-background text-foreground">
                 {/* Sidebar */}
-                <aside className="hidden w-64 flex-col bg-[#0B0F19] border-r border-border md:flex font-sans">
+                <aside className="hidden w-64 flex-col bg-white border-r border-border md:flex font-sans">
                     {/* Logo Section */}
                     <div className="p-6 pb-4 flex justify-start items-center gap-3">
                         <Link href="/" className="relative w-10 h-10 block flex-shrink-0">
@@ -294,12 +294,12 @@ function DashboardContent({
                                 src="/sidebar_logo.png"
                                 alt="ScalePods Logo"
                                 fill
-                                className="object-contain drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]"
+                                className="object-contain"
                                 priority
                             />
                         </Link>
-                        <span className="text-xl font-bold tracking-tight text-white uppercase whitespace-nowrap">
-                            ScalePods
+                        <span className="text-2xl font-black tracking-tighter text-slate-900 uppercase whitespace-nowrap">
+                            SCALEPODS
                         </span>
                     </div>
 
@@ -309,7 +309,7 @@ function DashboardContent({
                                 <Button
                                     suppressHydrationWarning
                                     variant="outline"
-                                    className="w-full justify-between bg-transparent border-border text-slate-300 hover:bg-slate-900 hover:text-white h-10 shadow-sm"
+                                    className="w-full justify-between bg-transparent border-border text-slate-600 hover:bg-slate-100 hover:text-slate-900 h-10 shadow-sm"
                                 >
                                     <span className="flex items-center gap-2">
                                         <activeConfig.icon className="h-4 w-4 text-blue-600" />
@@ -347,8 +347,8 @@ function DashboardContent({
                                     key={index}
                                     href={item.href}
                                     className={`group flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-all ${isActive
-                                            ? "bg-gradient-to-r from-green-600 to-emerald-500 text-white shadow-md shadow-green-500/20"
-                                            : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                                            ? "bg-slate-900 text-white shadow-lg shadow-slate-200"
+                                            : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
                                         }`}
                                 >
                                     <item.icon className={`h-5 w-5 flex-shrink-0 ${isActive ? "text-white" : "text-muted-foreground/80 group-hover:text-foreground/80 transition-colors"}`} />
