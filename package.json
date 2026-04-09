@@ -29,6 +29,7 @@
         "bcryptjs": "^3.0.3",
         "class-variance-authority": "^0.7.0",
         "clsx": "^2.1.1",
+        "country-state-city": "^3.2.1",
         "date-fns": "^3.6.0",
         "jose": "^6.2.0",
         "lucide-react": "^0.563.0",
@@ -39,7 +40,8 @@
         "recharts": "^3.7.0",
         "resend": "^6.9.3",
         "tailwind-merge": "^2.5.4",
-        "tailwindcss-animate": "^1.0.7"
+        "tailwindcss-animate": "^1.0.7",
+        "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.1/xlsx-0.20.1.tgz"
     },
     "devDependencies": {
         "@types/bcryptjs": "^2.4.6",
