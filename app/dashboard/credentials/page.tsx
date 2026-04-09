@@ -97,10 +97,9 @@ export default function CredentialsPage() {
                     iconColor="text-emerald-600"
                     iconBg="bg-emerald-50"
                 >
-                    <div className="grid gap-6 md:grid-cols-2">
-                        <ReadOnlyField label="WhatsApp Account 1 " value="+971 52 563 3027" />
-                        <ReadOnlyField label="WhatsApp Account 2" value="+971 52 563 2921" />
-                    </div>
+                    <div className="grid gap-6 md:grid-cols-1">
+                        <ReadOnlyField label="WhatsApp Account 1 " value="+91 77385 58481" />
+                        </div>
                 </CredentialSection>
 
                 {/* Provisioned Numbers Section */}
@@ -111,23 +110,11 @@ export default function CredentialsPage() {
                     iconColor="text-slate-600"
                     iconBg="bg-slate-50"
                 >
-                    <div className="grid gap-8 md:grid-cols-3">
+                    <div className="grid gap-8 md:grid-cols-1">
                         {/* UK Section */}
                         <div className="space-y-4 bg-slate-50/50 p-4 rounded-xl border border-border">
-                            <ReadOnlyField label="Twilio (UK)" value="+44 (7462) 179309" />
+                            <ReadOnlyField label="Twilio (UK)" value="+44 (7414) 280238" />
                             <ReadOnlyField label="Agent ID" value="918c25eb-9882-452e-86df-b4851d464852" />
-                        </div>
-
-                        {/* US Section */}
-                        <div className="space-y-4 bg-slate-50/50 p-4 rounded-xl border border-border">
-                            <ReadOnlyField label="Twilio (US)" value="+1 (478) 215 9151" />
-                            <ReadOnlyField label="Agent ID" value="b35e3032-7865-4913-ba22-a913b5d4117b" />
-                        </div>
-
-                        {/* UAE Section */}
-                        <div className="space-y-4 bg-slate-50/50 p-4 rounded-xl border border-border">
-                            <ReadOnlyField label="Maqsam (UAE)" value="+97148714150" />
-                            <ReadOnlyField label="Agent ID" value="70f05e16-18f3-4f6e-964a-f47b299c6c1d" />
                         </div>
                     </div>
                 </CredentialSection>
