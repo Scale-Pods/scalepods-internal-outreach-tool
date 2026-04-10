@@ -712,14 +712,42 @@ function CustomerRow({ lead: leadRaw, onClick, loopMap = {} }: { lead: Consolida
     if (lead["W.P_FollowUp"] || lead.stage_data?.["WhatsApp FollowUp"]) sentCount++;
     for (let i = 1; i <= 10; i++) { if (lead[`W.P_FollowUp_${i}`]) sentCount++; }
 
-    // Collect all available statuses (legacy)
-    const allStatuses = [];
-    for (let i = 1; i <= 12; i++) {
-        if (lead[`W.P_${i} TS`]) {
-            allStatuses.push({ index: i, status: lead[`W.P_${i} TS`] });
+    // Get latest Bot_Replied_Status (new schema) — find the last bot message's status + timestamp
+    let latestBotStatus: string | null = null;
+    let latestBotStatusIndex = 0;
+    let latestBotTimestamp: string | null = null;
+    for (let i = 25; i >= 1; i--) {
+        const s = lead[`Bot_Replied_Status_${i}`];
+        if (s && String(s).trim()) {
+            latestBotStatus = String(s).trim();
+            latestBotStatusIndex = i;
+            latestBotTimestamp = lead[`Bot_Replied_TS_${i}`] || lead[`Bot_Replied_Timestamp_${i}`] || null;
+            break;
         }
     }
-    const displayStatuses = allStatuses.slice(-2);
+
+    // Fallback: Whatsapp_1_status through Whatsapp_5_status (drip message statuses)
+    if (!latestBotStatus) {
+        for (let i = 5; i >= 1; i--) {
+            const s = lead[`Whatsapp_${i}_status`] || lead.stage_data?.[`Whatsapp_${i}_status`];
+            if (s && String(s).trim()) {
+                latestBotStatus = String(s).trim();
+                latestBotStatusIndex = i;
+                break;
+            }
+        }
+    }
+
+    // Legacy fallback: W.P_ TS fields
+    const legacyStatuses = [];
+    if (!latestBotStatus) {
+        for (let i = 1; i <= 12; i++) {
+            if (lead[`W.P_${i} TS`]) {
+                legacyStatuses.push({ index: i, status: lead[`W.P_${i} TS`] });
+            }
+        }
+    }
+    const displayLegacyStatuses = legacyStatuses.slice(-2);
 
     // Check if user has replied — new schema + legacy
     let hasReplied = false;
@@ -796,10 +824,15 @@ function CustomerRow({ lead: leadRaw, onClick, loopMap = {} }: { lead: Consolida
             </td>
             <td className="px-4 py-3 text-center">
                 <div className="flex flex-col items-center gap-1.5">
-                    {displayStatuses.map((s) => (
-                        <MessageStatusBadge key={s.index} index={s.index} status={s.status} />
-                    ))}
-                    {displayStatuses.length === 0 && <span className="text-slate-300 text-[10px]">—</span>}
+                    {latestBotStatus ? (
+                        <MessageStatusBadge index={latestBotStatusIndex} status={latestBotStatus} fallbackTimestamp={latestBotTimestamp} />
+                    ) : displayLegacyStatuses.length > 0 ? (
+                        displayLegacyStatuses.map((s) => (
+                            <MessageStatusBadge key={s.index} index={s.index} status={s.status} />
+                        ))
+                    ) : (
+                        <span className="text-slate-300 text-[10px]">—</span>
+                    )}
                 </div>
             </td>
             <td className="px-4 py-3 text-right text-slate-500 text-xs text-nowrap">
@@ -816,27 +849,30 @@ function CustomerRow({ lead: leadRaw, onClick, loopMap = {} }: { lead: Consolida
     );
 }
 
-function MessageStatusBadge({ index, status }: { index: number, status: string }) {
+function MessageStatusBadge({ index, status, fallbackTimestamp }: { index: number, status: string, fallbackTimestamp?: string | null }) {
     if (!status) return null;
     const parts = status.split(' - ');
     const statusText = parts[0].trim();
-    // If there's no " - ", the entire status string might be the timestamp
-    const rawTimestamp = parts.length > 1 ? parts[1].trim() : status.trim();
+    // Use embedded timestamp from status string, or fallback to separate TS field
+    let rawTimestamp = parts.length > 1 ? parts[1].trim() : null;
+    if (!rawTimestamp && fallbackTimestamp) rawTimestamp = String(fallbackTimestamp).trim();
 
     const formatTooltipDate = (dateStr: string) => {
+        // Try dd/mm/yyyy format first
         const d = new Date(dateStr.replace(/(\d{1,2})\/(\d{1,2})\/(\d{4})/, '$3-$2-$1'));
         const finalDate = isNaN(d.getTime()) ? new Date(dateStr) : d;
         if (isNaN(finalDate.getTime())) return dateStr;
         const now = new Date();
         if (finalDate.toDateString() === now.toDateString()) return finalDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        return finalDate.toLocaleString([], { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return finalDate.toLocaleString([], { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
     const formatted = statusText.charAt(0).toUpperCase() + statusText.slice(1).toLowerCase();
     let badgeClass = "bg-slate-100 text-slate-600 border-border";
-    if (formatted.includes("Delivered")) badgeClass = "bg-emerald-50 text-emerald-700 border-bordermerald-100";
-    if (formatted.includes("Read")) badgeClass = "bg-blue-50 text-blue-700 border-borderlue-100";
+    if (formatted.includes("Delivered")) badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-100";
+    if (formatted.includes("Read")) badgeClass = "bg-blue-50 text-blue-700 border-blue-100";
     if (formatted.includes("Failed")) badgeClass = "bg-red-50 text-red-700 border-red-100";
+    if (formatted.includes("Sent")) badgeClass = "bg-amber-50 text-amber-700 border-amber-100";
 
     return (
         <TooltipProvider>
