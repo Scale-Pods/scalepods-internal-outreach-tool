@@ -28,6 +28,13 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function GoogleMapsScrapper() {
     const [loading, setLoading] = useState(false);
@@ -68,6 +75,7 @@ export default function GoogleMapsScrapper() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [campaignLeads, setCampaignLeads] = useState<any[]>([]);
     const [fetchingLeads, setFetchingLeads] = useState(false);
+    const [activeJobs, setActiveJobs] = useState<any[]>([]);
 
     // Countries & States
     const countries = Country.getAllCountries();
@@ -116,20 +124,17 @@ export default function GoogleMapsScrapper() {
     }, []);
 
     const fetchCampaigns = async () => {
-        console.log("Fetching campaigns from leads_scraper_gmap...");
+        console.log("Fetching campaigns from API...");
         
         try {
-            const { data, error } = await supabase
-                .from('leads_scraper_gmap')
-                .select('*');
+            const response = await fetch('/api/google-maps/leads');
+            if (!response.ok) throw new Error("Failed to fetch leads from API");
             
-            if (error) {
-                console.error("Supabase fetch failed:", error);
-                return;
-            }
+            const result = await response.json();
+            const data = result.data;
 
             if (!data || data.length === 0) {
-                console.log("No rows found in 'leads_scraper_gmap'.");
+                console.log("No rows found.");
                 setCampaigns([]);
                 return;
             }
@@ -157,7 +162,7 @@ export default function GoogleMapsScrapper() {
 
             // Clean up transient active jobs
             setActiveJobs(prev => prev.filter(job => 
-                !grouped.some(c => (c.campaign_name || c.campaignName || c.campaign) === job.campaign_name)
+                !grouped.some((c: any) => (c.campaign_name || c.campaignName || c.campaign) === job.campaign_name)
             ));
         } catch (e) {
             console.error("Unexpected fetch crash:", e);
@@ -177,7 +182,7 @@ export default function GoogleMapsScrapper() {
         XLSX.writeFile(workbook, `${fileName}.xlsx`);
     };
 
-    const [activeJobs, setActiveJobs] = useState<any[]>([]);
+
 
     useEffect(() => {
         if (formData.countryCode) {
@@ -264,22 +269,38 @@ export default function GoogleMapsScrapper() {
             {/* Active Jobs Sidebar/Toast Area */}
             <div className="fixed top-24 right-6 w-80 z-[100] space-y-3 pointer-events-none">
                 {submitted && result?.status === 'success' && (
-                    <div className="pointer-events-auto bg-emerald-600 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right-full duration-500">
-                        <CheckCircle2 className="h-6 w-6" />
-                        <div>
-                            <p className="font-bold text-sm">Scrapper Started!</p>
-                            <p className="text-[10px] opacity-90">Workflow deployed to n8n successfully.</p>
+                    <div className="pointer-events-auto bg-emerald-600 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-3 animate-in slide-in-from-right-full duration-500 relative group">
+                        <div className="flex items-center gap-3">
+                            <CheckCircle2 className="h-6 w-6" />
+                            <div>
+                                <p className="font-bold text-sm">Scrapper Started!</p>
+                                <p className="text-[10px] opacity-90">Workflow deployed to n8n successfully.</p>
+                            </div>
                         </div>
+                        <button 
+                            onClick={() => setSubmitted(false)}
+                            className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
                     </div>
                 )}
                 
                 {activeJobs.map(job => (
-                    <div key={job.id} className="pointer-events-auto bg-white border-2 border-slate-100 p-4 rounded-2xl shadow-xl flex flex-col gap-2 animate-in slide-in-from-right-full">
+                    <div key={job.id} className="pointer-events-auto bg-white border-2 border-slate-100 p-4 rounded-2xl shadow-xl flex flex-col gap-2 animate-in slide-in-from-right-full relative">
                         <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-black uppercase text-blue-600 tracking-tighter">Active Extraction</span>
-                            <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black uppercase text-blue-600 tracking-tighter">Active Extraction</span>
+                                <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                            </div>
+                            <button 
+                                onClick={() => setActiveJobs(prev => prev.filter(j => j.id !== job.id))}
+                                className="text-slate-400 hover:text-red-500 transition-colors"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </button>
                         </div>
-                        <p className="font-bold text-slate-800 text-xs truncate">{job.campaign_name || 'Unnamed Job'}</p>
+                        <p className="font-bold text-slate-800 text-xs truncate pr-4">{job.campaign_name || 'Unnamed Job'}</p>
                         <Progress value={45} className="h-1 bg-blue-50" />
                     </div>
                 ))}
@@ -292,199 +313,351 @@ export default function GoogleMapsScrapper() {
                 ← Back to Selection
             </Button>
 
-            <div className="flex items-center gap-4 mb-2">
-                <div className="p-3 bg-red-50 rounded-2xl border border-red-100">
-                    <MapPin className="h-8 w-8 text-red-600" />
+            <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-red-50 rounded-xl border border-red-100">
+                    <MapPin className="h-6 w-6 text-red-600" />
                 </div>
                 <div>
-                    <h1 className="text-3xl font-black text-slate-900">Google Maps Scrapper</h1>
-                    <p className="text-slate-500">Advanced extraction for local business leads and SEO data.</p>
+                    <h1 className="text-2xl font-black text-slate-900 leading-none">Google Maps Scrapper</h1>
+                    <p className="text-slate-500 text-xs">Advanced extraction for local business leads.</p>
                 </div>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid gap-6 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-4">
                     {/* Search Settings */}
-                    <Card className="md:col-span-2 border-2 border-red-100 shadow-sm overflow-hidden">
-                        <CardHeader className="bg-red-50/50 border-b border-red-100 py-4">
-                            <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                <Search className="h-4 w-4 text-red-600" /> Primary Search Parameters
+                    <Card className="md:col-span-3 border-2 border-red-100 shadow-sm overflow-hidden">
+                        <CardHeader className="bg-red-50/50 border-b border-red-100 py-2 px-4">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2">
+                                <Search className="h-4 w-4 text-red-600" /> Search Parameters
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="p-6 space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="campaign_name" className="font-bold text-slate-700 flex items-center gap-2">
-                                    <Tag className="h-4 w-4 text-red-600" /> Campaign Name
-                                </Label>
-                                <Input 
-                                    id="campaign_name" 
-                                    value={formData.campaign_name} 
-                                    onChange={handleChange} 
-                                    placeholder="e.g. NYC Italian Restaurants Q2" 
-                                    className="border-red-100 focus:border-red-400 focus:ring-red-400" 
-                                    required 
-                                />
-                            </div>
-                            <div className="space-y-4 col-span-2 border-t border-red-50 pt-4">
-                                <Label className="font-bold text-slate-700">Search Queries</Label>
-                                <div className="flex flex-wrap gap-2 mb-2">
-                                    {searchQueries.map((query, index) => (
-                                        <div key={index} className="flex items-center gap-1 bg-slate-100 px-3 py-1 rounded-full text-sm">
-                                            {query}
-                                            <button type="button" onClick={() => setSearchQueries(prev => prev.filter((_, i) => i !== index))} className="text-slate-500 hover:text-red-500">
-                                                <X className="h-3 w-3" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="flex gap-2">
+                        <CardContent className="p-4 space-y-3">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <Label htmlFor="campaign_name" className="text-xs font-bold text-slate-700 flex items-center gap-2">
+                                        <Tag className="h-3 w-3 text-red-600" /> Campaign Name
+                                    </Label>
                                     <Input 
-                                        value={currentSearchQuery} 
-                                        onChange={(e) => setCurrentSearchQuery(e.target.value)} 
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                if (currentSearchQuery.trim()) {
-                                                    setSearchQueries(prev => [...prev, currentSearchQuery.trim()]);
-                                                    setCurrentSearchQuery("");
-                                                }
-                                            }
-                                        }}
-                                        placeholder="e.g. Italian Restaurants in NY" 
-                                        className="border-red-100 focus:border-red-400 focus:ring-red-400" 
-                                        required={searchQueries.length === 0}
+                                        id="campaign_name" 
+                                        value={formData.campaign_name} 
+                                        onChange={handleChange} 
+                                        placeholder="e.g. NYC Restaurants" 
+                                        className="h-9 border-red-100 focus:border-red-400 focus:ring-red-400 text-sm" 
+                                        required 
                                     />
-                                    <Button type="button" variant="outline" onClick={() => {
-                                        if (currentSearchQuery.trim()) {
-                                            setSearchQueries(prev => [...prev, currentSearchQuery.trim()]);
-                                            setCurrentSearchQuery("");
-                                        }
-                                    }}>Add</Button>
                                 </div>
-                            </div>
-                            <div className="grid grid-cols-1 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="categoryFilterWords" className="font-bold text-slate-700">Place categories ($)</Label>
-                                    <div className="h-40 overflow-y-auto w-full rounded-md border border-red-100 bg-white p-2 flex flex-col gap-1">
-                                        {CATEGORIES.map(cat => (
-                                            <label key={cat} className="flex items-center gap-2 p-1.5 hover:bg-red-50 cursor-pointer rounded transition-colors text-sm">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={selectedCategories.includes(cat)}
-                                                    onChange={(e) => {
-                                                        if (e.target.checked) setSelectedCategories(prev => [...prev, cat]);
-                                                        else setSelectedCategories(prev => prev.filter(c => c !== cat));
-                                                    }}
-                                                    className="rounded border-red-300 text-red-600 focus:ring-red-600 w-4 h-4"
-                                                />
-                                                <span className="capitalize font-medium text-slate-700">{cat}</span>
-                                            </label>
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-bold text-slate-700">Search Queries</Label>
+                                    <div className="flex gap-2">
+                                        <Input 
+                                            value={currentSearchQuery} 
+                                            onChange={(e) => setCurrentSearchQuery(e.target.value)} 
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    if (currentSearchQuery.trim()) {
+                                                        setSearchQueries(prev => [...prev, currentSearchQuery.trim()]);
+                                                        setCurrentSearchQuery("");
+                                                    }
+                                                }
+                                            }}
+                                            placeholder="Add query..." 
+                                            className="h-9 border-red-100 focus:border-red-400 focus:ring-red-400 text-sm" 
+                                            required={searchQueries.length === 0}
+                                        />
+                                        <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => {
+                                            if (currentSearchQuery.trim()) {
+                                                setSearchQueries(prev => [...prev, currentSearchQuery.trim()]);
+                                                setCurrentSearchQuery("");
+                                            }
+                                        }}>Add</Button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                        {searchQueries.map((query, index) => (
+                                            <Badge key={index} variant="secondary" className="text-[10px] font-medium bg-slate-100 px-2 py-0">
+                                                {query}
+                                                <button type="button" onClick={() => setSearchQueries(prev => prev.filter((_, i) => i !== index))} className="ml-1 text-slate-500 hover:text-red-500">
+                                                    <X className="h-2 w-2" />
+                                                </button>
+                                            </Badge>
                                         ))}
                                     </div>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-3 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="countryCode" className="font-bold text-slate-700">Country</Label>
-                                    <select 
-                                        id="countryCode"
-                                        value={formData.countryCode}
-                                        onChange={handleCountryChange}
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 border-red-100 focus:border-red-400 focus:ring-red-400"
-                                    >
-                                        <option value="">Select Country</option>
-                                        {countries.map(c => (
-                                            <option key={c.isoCode} value={c.isoCode}>{c.name}</option>
-                                        ))}
-                                    </select>
+
+                            <div className="grid grid-cols-3 gap-3 pt-2 border-t border-red-50">
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold uppercase text-slate-500">Country</Label>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                className="w-full h-8 justify-between text-[10px] px-2 border-slate-200"
+                                            >
+                                                <span className="truncate">
+                                                    {formData.countryCode 
+                                                        ? countries.find(c => c.isoCode === formData.countryCode)?.name 
+                                                        : "Country"}
+                                                </span>
+                                                <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-56 p-0" align="start">
+                                            <div className="p-2 border-b">
+                                                <Input 
+                                                    placeholder="Search country..." 
+                                                    className="h-7 text-[10px]"
+                                                    onChange={(e) => {
+                                                        const val = e.target.value.toLowerCase();
+                                                        const items = document.querySelectorAll('.country-item');
+                                                        items.forEach((item: any) => {
+                                                            if (item.textContent.toLowerCase().includes(val)) item.style.display = 'flex';
+                                                            else item.style.display = 'none';
+                                                        });
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="max-h-60 overflow-y-auto p-1">
+                                                {countries.map((c) => (
+                                                    <div
+                                                        key={c.isoCode}
+                                                        className={cn(
+                                                            "country-item relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-[10px] outline-none hover:bg-red-50 transition-colors",
+                                                            formData.countryCode === c.isoCode && "bg-red-50 text-red-700 font-bold"
+                                                        )}
+                                                        onClick={() => {
+                                                            handleCountryChange({ target: { value: c.isoCode } } as any);
+                                                        }}
+                                                    >
+                                                        {c.name}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="state" className="font-bold text-slate-700">State / Region</Label>
-                                    <select 
-                                        id="state"
-                                        value={formData.state}
-                                        onChange={(e) => {
-                                            const stateName = e.target.value;
-                                            setFormData(prev => ({...prev, state: stateName}));
-                                        }}
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 border-red-100 focus:border-red-400 focus:ring-red-400"
-                                    >
-                                        <option value="">Select State/Region</option>
-                                        {statesList.map(s => (
-                                            <option key={s.isoCode} value={s.name}>{s.name}</option>
-                                        ))}
-                                    </select>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold uppercase text-slate-500">State</Label>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                className="w-full h-8 justify-between text-[10px] px-2 border-slate-200"
+                                                disabled={!formData.countryCode}
+                                            >
+                                                <span className="truncate">
+                                                    {formData.state || "State/Region"}
+                                                </span>
+                                                <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-56 p-0" align="start">
+                                            <div className="p-2 border-b">
+                                                <Input 
+                                                    placeholder="Search state..." 
+                                                    className="h-7 text-[10px]"
+                                                    onChange={(e) => {
+                                                        const val = e.target.value.toLowerCase();
+                                                        const items = document.querySelectorAll('.state-item');
+                                                        items.forEach((item: any) => {
+                                                            if (item.textContent.toLowerCase().includes(val)) item.style.display = 'flex';
+                                                            else item.style.display = 'none';
+                                                        });
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="max-h-60 overflow-y-auto p-1">
+                                                {statesList.length === 0 && (
+                                                    <div className="p-2 text-[10px] text-slate-400 text-center">No states found</div>
+                                                )}
+                                                {statesList.map((s) => (
+                                                    <div
+                                                        key={s.isoCode}
+                                                        className={cn(
+                                                            "state-item relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-[10px] outline-none hover:bg-red-50 transition-colors",
+                                                            formData.state === s.name && "bg-red-50 text-red-700 font-bold"
+                                                        )}
+                                                        onClick={() => {
+                                                            setFormData(prev => ({...prev, state: s.name}));
+                                                        }}
+                                                    >
+                                                        {s.name}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="language" className="font-bold text-slate-700">Language</Label>
-                                    <select 
-                                        id="language"
-                                        value={formData.language}
-                                        onChange={handleChange}
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 border-red-100 focus:border-red-400 focus:ring-red-400"
-                                    >
-                                        {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}
-                                    </select>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold uppercase text-slate-500">Language</Label>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                className="w-full h-8 justify-between text-[10px] px-2 border-slate-200"
+                                            >
+                                                <span className="truncate">
+                                                    {LANGUAGES.find(l => l.code === formData.language)?.name || "Language"}
+                                                </span>
+                                                <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-48 p-0" align="start">
+                                            <div className="max-h-60 overflow-y-auto p-1">
+                                                {LANGUAGES.map((l) => (
+                                                    <div
+                                                        key={l.code}
+                                                        className={cn(
+                                                            "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-[10px] outline-none hover:bg-red-50 transition-colors",
+                                                            formData.language === l.code && "bg-red-50 text-red-700 font-bold"
+                                                        )}
+                                                        onClick={() => {
+                                                            setFormData(prev => ({...prev, language: l.code}));
+                                                        }}
+                                                    >
+                                                        {l.name}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
-                                
+                            </div>
+
+                            <div className="space-y-2 pt-2 border-t border-red-50">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] font-bold uppercase text-slate-500">Place Categories</Label>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    className="w-full h-8 justify-between text-[10px] px-2 border-slate-200"
+                                                >
+                                                    <span className="truncate">
+                                                        {selectedCategories.length > 0 
+                                                            ? `${selectedCategories.length} Selected` 
+                                                            : "Select Categories"}
+                                                    </span>
+                                                    <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-48 p-0" align="start">
+                                                <div className="max-h-60 overflow-y-auto p-1">
+                                                    {CATEGORIES.map((cat) => (
+                                                        <div
+                                                            key={cat}
+                                                            className={cn(
+                                                                "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-[10px] outline-none hover:bg-slate-100 transition-colors",
+                                                                selectedCategories.includes(cat) && "bg-red-50 text-red-700 font-bold"
+                                                            )}
+                                                            onClick={() => {
+                                                                if (selectedCategories.includes(cat)) {
+                                                                    setSelectedCategories(prev => prev.filter(c => c !== cat));
+                                                                } else {
+                                                                    setSelectedCategories(prev => [...prev, cat]);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <div className={cn(
+                                                                "mr-2 flex h-3.5 w-3.5 items-center justify-center rounded-sm border border-red-400",
+                                                                selectedCategories.includes(cat) ? "bg-red-600 border-red-600" : "opacity-50"
+                                                            )}>
+                                                                {selectedCategories.includes(cat) && <Check className="h-2.5 w-2.5 text-white" />}
+                                                            </div>
+                                                            {cat}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
+                                        <div className="flex flex-wrap gap-1 mt-1 max-h-16 overflow-y-auto">
+                                            {selectedCategories.map(cat => (
+                                                <Badge key={cat} variant="secondary" className="bg-red-50 text-red-700 text-[9px] px-1 py-0 border-red-100 capitalize">
+                                                    {cat}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] font-bold uppercase text-slate-500">Enrichment Departments</Label>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    className="w-full h-8 justify-between text-[10px] px-2 border-slate-200"
+                                                >
+                                                    <span className="truncate">
+                                                        {selectedDepartments.length > 0 
+                                                            ? `${selectedDepartments.length} Selected` 
+                                                            : "Select Depts"}
+                                                    </span>
+                                                    <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-48 p-0" align="start">
+                                                <div className="max-h-60 overflow-y-auto p-1">
+                                                    {DEPARTMENTS.map((dept) => (
+                                                        <div
+                                                            key={dept}
+                                                            className={cn(
+                                                                "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-[10px] outline-none hover:bg-slate-100 transition-colors",
+                                                                selectedDepartments.includes(dept) && "bg-blue-50 text-blue-700 font-bold"
+                                                            )}
+                                                            onClick={() => {
+                                                                if (selectedDepartments.includes(dept)) {
+                                                                    setSelectedDepartments(prev => prev.filter(d => d !== dept));
+                                                                } else {
+                                                                    setSelectedDepartments(prev => [...prev, dept]);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <div className={cn(
+                                                                "mr-2 flex h-3.5 w-3.5 items-center justify-center rounded-sm border border-blue-400",
+                                                                selectedDepartments.includes(dept) ? "bg-blue-600 border-blue-600" : "opacity-50"
+                                                            )}>
+                                                                {selectedDepartments.includes(dept) && <Check className="h-2.5 w-2.5 text-white" />}
+                                                            </div>
+                                                            {dept}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
+                                        <div className="flex flex-wrap gap-1 mt-1 max-h-16 overflow-y-auto">
+                                            {selectedDepartments.map(dept => (
+                                                <Badge key={dept} variant="secondary" className="bg-blue-50 text-blue-700 text-[9px] px-1 py-0 border-blue-100">
+                                                    {dept}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
 
                     {/* Limits */}
-                    <Card className="border-2 border-slate-100 shadow-sm overflow-hidden">
-                        <CardHeader className="bg-slate-50 border-b border-slate-100 py-4">
-                            <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                <Filter className="h-4 w-4 text-slate-600" /> Limits & Enrichment
+                    <Card className="border-2 border-slate-100 shadow-sm overflow-hidden flex flex-col">
+                        <CardHeader className="bg-slate-50 border-b border-slate-100 py-2 px-4">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2">
+                                <Filter className="h-4 w-4 text-slate-600" /> Limits
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="p-6 space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="maxCrawledPlacesPerSearch" className="font-bold text-slate-700 text-xs uppercase">Max Places per Search Item</Label>
-                                <Input id="maxCrawledPlacesPerSearch" type="number" min={1} value={formData.maxCrawledPlacesPerSearch} onChange={handleChange} className="border-slate-200 focus:border-red-400 focus:ring-red-400" />
+                        <CardContent className="p-4 space-y-4 flex-1">
+                            <div className="space-y-1">
+                                <Label htmlFor="maxCrawledPlacesPerSearch" className="font-bold text-slate-500 text-[9px] uppercase tracking-wider">Max Places / Item</Label>
+                                <Input id="maxCrawledPlacesPerSearch" type="number" min={1} value={formData.maxCrawledPlacesPerSearch} onChange={handleChange} className="h-8 text-xs" />
                             </div>
-
-                            <div className="space-y-2 relative">
-                                <div className="flex justify-between items-center mb-2">
-                                    <Label htmlFor="maximumLeadsEnrichmentRecords" className="font-bold text-slate-700 text-xs uppercase flex items-center gap-1">
-                                        Max Leads per Place
-                                        <div className="group relative flex items-center">
-                                            <Info className="h-4 w-4 text-slate-400 cursor-pointer hover:text-red-500 transition-colors" />
-                                            <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden group-hover:block w-80 p-4 bg-slate-900/95 backdrop-blur-md text-white text-xs rounded-xl shadow-2xl font-normal leading-relaxed border border-slate-700 z-[9999]">
-                                                <div className="space-y-2">
-                                                    <p className="font-bold text-red-400">Lead Enrichment Info</p>
-                                                    <p>Enrich your results with detailed contact and company information, including employee names, titles, emails, and LinkedIn profiles.</p>
-                                                    <p className="text-yellow-400/90 font-medium border-l-2 border-yellow-400 pl-2">⚠️ GDPR Warning: Personal data is protected globally. Ensure you have a legitimate reason before scraping.</p>
-                                                    <p className="bg-white/10 p-2 rounded text-[10px]">Excludes chains: McDonalds, Starbucks, Dominos, PizzaHut.</p>
-                                                    <p className="text-red-300 font-bold border-t border-white/10 pt-2 flex items-center gap-1">
-                                                        <span className="text-lg">💰</span> Cost warning: Multiplier applied per place.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </Label>
-                                </div>
-                                <Input id="maximumLeadsEnrichmentRecords" type="number" min={0} value={formData.maximumLeadsEnrichmentRecords} onChange={handleChange} className="border-slate-200 focus:border-red-400 focus:ring-red-400" />
-                            </div>
-                           
-                            <div className="space-y-2">
-                                <Label htmlFor="leadsEnrichmentDepartments" className="font-bold text-slate-700 text-xs uppercase mb-2 block">Enrichment Depts.</Label>
-                                <div className="h-48 overflow-y-auto w-full rounded-md border border-slate-200 bg-white p-2 flex flex-col gap-1">
-                                    {DEPARTMENTS.map(dept => (
-                                        <label key={dept} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 cursor-pointer rounded transition-colors">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={selectedDepartments.includes(dept)}
-                                                onChange={(e) => {
-                                                    if (e.target.checked) setSelectedDepartments(prev => [...prev, dept]);
-                                                    else setSelectedDepartments(prev => prev.filter(d => d !== dept));
-                                                }}
-                                                className="rounded border-slate-300 text-red-600 focus:ring-red-600 w-4 h-4"
-                                            />
-                                            <span className="text-sm font-medium text-slate-700">{dept}</span>
-                                        </label>
-                                    ))}
-                                </div>
+                            <div className="space-y-1">
+                                <Label htmlFor="maximumLeadsEnrichmentRecords" className="font-bold text-slate-500 text-[9px] uppercase tracking-wider">Max Leads / Place</Label>
+                                <Input id="maximumLeadsEnrichmentRecords" type="number" min={0} value={formData.maximumLeadsEnrichmentRecords} onChange={handleChange} className="h-8 text-xs" />
                             </div>
                         </CardContent>
                     </Card>
@@ -492,7 +665,7 @@ export default function GoogleMapsScrapper() {
 
                 <Button 
                     type="submit" 
-                    className="w-full bg-red-600 hover:bg-red-700 text-white h-14 text-xl font-black shadow-xl shadow-red-200 transition-all active:scale-[0.98]"
+                    className="w-full bg-red-600 hover:bg-red-700 text-white h-10 text-sm font-black shadow-lg shadow-red-200 transition-all active:scale-[0.99]"
                     disabled={loading}
                 >
                     {loading ? (
@@ -540,7 +713,7 @@ export default function GoogleMapsScrapper() {
                         </Button>
                     </Card>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {campaigns.map((campaign) => (
                             <Card 
                                 key={campaign.id} 
@@ -562,29 +735,18 @@ export default function GoogleMapsScrapper() {
                                         </div>
                                     </div>
 
-                                    <div className="space-y-4">
-                                        <div className="space-y-2">
-                                            <div className="flex items-center justify-between text-xs">
-                                                <span className="text-slate-500 font-medium">Extraction Progress</span>
+                                    <div className="space-y-3">
+                                        <div className="space-y-1">
+                                            <div className="flex items-center justify-between text-[10px]">
+                                                <span className="text-slate-500 font-medium tracking-tight uppercase">Progress</span>
                                                 <span className={campaign.status === 'completed' ? 'text-emerald-600 font-bold' : 'text-blue-600 font-bold'}>
                                                     {campaign.status === 'completed' ? '100%' : '65%'}
                                                 </span>
                                             </div>
                                             <Progress 
                                                 value={campaign.status === 'completed' ? 100 : 65} 
-                                                className={`h-2 rounded-full ${campaign.status === 'completed' ? 'bg-emerald-100' : 'bg-blue-100'}`}
+                                                className={`h-1.5 rounded-full ${campaign.status === 'completed' ? 'bg-emerald-100' : 'bg-blue-100'}`}
                                             />
-                                        </div>
-
-                                        <div className="bg-slate-50 p-3 rounded-2xl space-y-2">
-                                            <div className="flex items-center gap-2 text-xs text-slate-500">
-                                                <Search className="h-3 w-3" />
-                                                <span className="font-medium truncate">{campaign.searchStringsArray || 'Default Search'}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-xs text-slate-500">
-                                                <Globe className="h-3 w-3" />
-                                                <span className="font-medium uppercase tracking-wider">{campaign.countryCode || 'US'} - {campaign.language || 'EN'}</span>
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -652,53 +814,48 @@ export default function GoogleMapsScrapper() {
                         </div>
                     </div>
                     
-                    <div className="flex-1 overflow-auto p-10">
-                        <div className="max-w-6xl mx-auto">
-                            <div className="bg-white border-2 border-slate-100 rounded-[40px] shadow-2xl shadow-slate-200/50 overflow-hidden">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow className="bg-slate-50/50 border-slate-100">
-                                            <TableHead className="py-6 px-8 font-black text-slate-900 text-sm uppercase tracking-widest border-r border-slate-100">Attribute</TableHead>
-                                            <TableHead className="py-6 px-8 font-black text-slate-900 text-sm uppercase tracking-widest">Extracted Value</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                <TableBody>
-                                    {Array.isArray(campaignLeads) && campaignLeads.map((lead: any, leadIdx: number) => (
-                                        <React.Fragment key={leadIdx}>
-                                            {lead && (
-                                                <>
-                                                    <TableRow className="bg-slate-100/50">
-                                                        <TableCell colSpan={2} className="py-2 px-8 font-black text-[10px] text-slate-400 uppercase tracking-widest">
-                                                            Lead Instance #{leadIdx + 1}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                    {Object.entries(lead).map(([key, value]) => (
-                                                        <TableRow key={key} className="border-slate-100 hover:bg-white transition-colors">
-                                                            <TableCell className="py-3 px-8 font-bold text-slate-500 text-xs uppercase tracking-wider border-r border-slate-100 w-1/3 group-hover:text-red-500 transition-colors">
+                    <div className="flex-1 overflow-auto p-4 sm:p-10">
+                        <div className="mx-auto w-full">
+                            <div className="bg-white border-2 border-slate-100 rounded-3xl shadow-2xl shadow-slate-200/50 overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="bg-slate-50/50 border-slate-200">
+                                                {Array.isArray(campaignLeads) && campaignLeads.length > 0 && 
+                                                    Object.keys(campaignLeads[0])
+                                                        .filter(key => key !== 'leads') // Filter out the grouped leads array if present
+                                                        .map((key) => (
+                                                            <TableHead key={key} className="py-4 px-4 font-black text-slate-900 text-[10px] uppercase tracking-widest border-r border-slate-100 whitespace-nowrap">
                                                                 {key.replace(/_/g, ' ')}
-                                                            </TableCell>
-                                                            <TableCell className="py-3 px-8 text-slate-700 font-medium text-sm">
+                                                            </TableHead>
+                                                        ))
+                                                }
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {Array.isArray(campaignLeads) && campaignLeads.map((lead: any, leadIdx: number) => (
+                                                <TableRow key={leadIdx} className="border-slate-100 hover:bg-slate-50 transition-colors">
+                                                    {Object.entries(lead)
+                                                        .filter(([key]) => key !== 'leads')
+                                                        .map(([key, value], valIdx) => (
+                                                            <TableCell key={valIdx} className="py-3 px-4 text-slate-700 font-medium text-xs border-r border-slate-100 whitespace-nowrap max-w-[300px] overflow-hidden text-ellipsis">
                                                                 {typeof value === 'object' ? (
-                                                                    <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-                                                                        <pre className="text-[11px] text-slate-500 font-mono leading-relaxed">
-                                                                            {JSON.stringify(value, null, 2)}
-                                                                        </pre>
-                                                                    </div>
+                                                                    <span className="text-[10px] text-slate-400 font-mono">
+                                                                        {JSON.stringify(value)}
+                                                                    </span>
                                                                 ) : (
-                                                                    <span className="break-all">{String(value)}</span>
+                                                                    <span>{String(value || '-')}</span>
                                                                 )}
                                                             </TableCell>
-                                                        </TableRow>
-                                                    ))}
-                                                </>
-                                            )}
-                                        </React.Fragment>
-                                    ))}
-                                </TableBody>
-                                </Table>
+                                                        ))}
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
                             </div>
                             <div className="mt-8 text-center text-slate-400 text-xs font-medium">
-                                End of data for campaign: {selectedCampaign?.id}
+                                Showing {campaignLeads.length} leads for campaign: {selectedCampaign?.campaign_name}
                             </div>
                         </div>
                     </div>
