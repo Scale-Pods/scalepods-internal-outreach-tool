@@ -287,17 +287,17 @@ function DashboardContent({
         return (
             <div className="flex h-screen overflow-hidden bg-background text-foreground">
                 {/* Sidebar */}
-                <aside className="hidden w-64 flex-col bg-[#080c14] border-r border-slate-800/50 md:flex font-sans relative overflow-hidden">
+                <aside className="hidden w-64 flex-col bg-white border-r border-slate-200/60 md:flex font-sans relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-cyan-600/5 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none" />
                     {/* Logo Section */}
                     <div className="px-4 py-2 flex justify-center items-center">
                         <Link href="/" className="relative w-full h-16 block">
                             <Image
-                                src="/SP_logo.png"
+                                src="/ScalePods - Logo- FINAL.png"
                                 alt="ScalePods Logo"
                                 fill
-                                className="object-contain object-center invert brightness-0 [filter:invert(1)] transition-transform hover:scale-105 duration-300"
+                                className="object-contain object-center transition-transform hover:scale-105 duration-300"
                                 priority
                             />
                         </Link>
@@ -309,34 +309,34 @@ function DashboardContent({
                                 <Button
                                     suppressHydrationWarning
                                     variant="outline"
-                                    className="w-full justify-between bg-slate-900/50 border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-cyan-400 h-10 shadow-sm transition-all"
+                                    className="w-full justify-between bg-slate-50/50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-cyan-600 h-10 shadow-sm transition-all"
                                 >
                                     <span className="flex items-center gap-2">
-                                        <activeConfig.icon className="h-4 w-4 text-cyan-500" />
+                                        <activeConfig.icon className="h-4 w-4 text-cyan-600" />
                                         <span className="truncate">{activeConfig.label}</span>
                                     </span>
                                     <ChevronDown className="h-4 w-4 opacity-50 flex-shrink-0" />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-[220px] bg-[#0d121f] border-slate-800 text-slate-300">
-                                <DropdownMenuItem className="hover:bg-cyan-500/10 hover:text-cyan-400 cursor-pointer" onClick={() => router.push("/dashboard")}>
+                            <DropdownMenuContent align="start" className="w-[220px] bg-white border-slate-200 text-slate-600">
+                                <DropdownMenuItem className="hover:bg-cyan-50 hover:text-cyan-600 cursor-pointer" onClick={() => router.push("/dashboard")}>
                                     <LayoutDashboard className="mr-2 h-4 w-4" /> Master Overview
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="hover:bg-cyan-500/10 hover:text-cyan-400 cursor-pointer" onClick={() => router.push("/dashboard/email")}>
+                                <DropdownMenuItem className="hover:bg-cyan-50 hover:text-cyan-600 cursor-pointer" onClick={() => router.push("/dashboard/email")}>
                                     <Mail className="mr-2 h-4 w-4" /> Email Marketing
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="hover:bg-cyan-500/10 hover:text-cyan-400 cursor-pointer" onClick={() => router.push("/dashboard/whatsapp")}>
+                                <DropdownMenuItem className="hover:bg-cyan-50 hover:text-cyan-600 cursor-pointer" onClick={() => router.push("/dashboard/whatsapp")}>
                                     <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp CRM
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="hover:bg-cyan-500/10 hover:text-cyan-400 cursor-pointer" onClick={() => router.push("/dashboard/voice")}>
+                                <DropdownMenuItem className="hover:bg-cyan-50 hover:text-cyan-600 cursor-pointer" onClick={() => router.push("/dashboard/voice")}>
                                     <Mic className="mr-2 h-4 w-4" /> Voice Agent
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
 
-                    <div className="px-4 py-2">
-                        <div className="h-[1px] w-full bg-accent"></div>
+                    <div className="px-4 py-1">
+                        <div className="h-[1px] w-full bg-slate-100"></div>
                     </div>
 
                     <nav className="flex-1 overflow-y-auto overflow-x-hidden px-4 space-y-2 mt-2 custom-scrollbar">
@@ -347,11 +347,11 @@ function DashboardContent({
                                     key={index}
                                     href={item.href}
                                     className={`group flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-300 ${isActive
-                                            ? "bg-cyan-600 text-white shadow-lg shadow-cyan-900/50"
-                                            : "text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/5"
+                                            ? "bg-cyan-600 text-white shadow-lg shadow-cyan-100"
+                                            : "text-slate-600 hover:text-cyan-600 hover:bg-cyan-50"
                                         }`}
                                 >
-                                    <item.icon className={`h-5 w-5 flex-shrink-0 ${isActive ? "text-white" : "text-slate-500 group-hover:text-cyan-400 transition-colors"}`} />
+                                    <item.icon className={`h-5 w-5 flex-shrink-0 ${isActive ? "text-white" : "text-slate-500 group-hover:text-cyan-600 transition-colors"}`} />
                                     <span className="whitespace-nowrap">{item.title}</span>
                                 </Link>
                             );
@@ -361,7 +361,7 @@ function DashboardContent({
                     <div className="mt-auto p-4 mb-2 space-y-2">
                         <Button
                             variant="ghost"
-                            className="w-full justify-start gap-2 px-4 text-slate-500 hover:text-red-400 hover:bg-red-500/5 transition-all duration-300"
+                            className="w-full justify-start gap-2 px-4 text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all duration-300"
                             onClick={async () => {
                                 await logout();
                                 router.push('/');

@@ -58,7 +58,17 @@ export async function GET(request: Request) {
         const data = await response.json();
 
         // Filter for specific emails
-        const targetEmails = ["info@ScalePods.me", "sales@ScalePods.me"];
+        const targetEmails = [
+            "adnan@scalepods.co",
+            "adnan@scalepods.org",
+            "nancy@scalepods.co",
+            "palashy@scalepods.org",
+            "raunak@scalepods.co",
+            "raunak@scalepods.tech",
+            "tanushree@scalepods.co",
+            "viraj@scalepods.co",
+            "viraj@scalepods.tech"
+        ];
 
         let filteredData = data;
         if (Array.isArray(data)) {

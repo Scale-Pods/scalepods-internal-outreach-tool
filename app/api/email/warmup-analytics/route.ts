@@ -20,8 +20,15 @@ export async function POST() {
         }
 
         const targetEmails = [
-            "info@ScalePods.me",
-            "sales@ScalePods.me"
+            "adnan@scalepods.co",
+            "adnan@scalepods.org",
+            "nancy@scalepods.co",
+            "palashy@scalepods.org",
+            "raunak@scalepods.co",
+            "raunak@scalepods.tech",
+            "tanushree@scalepods.co",
+            "viraj@scalepods.co",
+            "viraj@scalepods.tech"
         ];
 
         const response = await fetch('https://api.instantly.ai/api/v2/accounts/warmup-analytics', {

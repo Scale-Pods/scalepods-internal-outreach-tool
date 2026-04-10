@@ -66,6 +66,7 @@ export default function EmailAnalyticsPage() {
         from: subDays(new Date(), 30),
         to: new Date(),
     });
+    const [dbCampaigns, setDbCampaigns] = useState<any[]>([]);
 
     const loading = loadingLocal || loadingLeads;
 
@@ -100,6 +101,13 @@ export default function EmailAnalyticsPage() {
 
             setWarmupData(warmupJson);
             setGeneralData(generalJson);
+
+            // Fetch DB Analytics
+            const dbRes = await fetch('/api/email/db-data');
+            if (dbRes.ok) {
+                const dbJson = await dbRes.json();
+                setDbCampaigns(dbJson.campaignAnalytics || []);
+            }
 
             // Calculate Unsubscribed from Global Leads
             if (!loadingLeads) {
@@ -254,6 +262,42 @@ export default function EmailAnalyticsPage() {
                     <AlertTitle>Error</AlertTitle>
                     <AlertDescription>{error}</AlertDescription>
                 </Alert>
+            )}
+
+            {/* Database Campaigns Section */}
+            {dbCampaigns.length > 1 && (
+                <div className="space-y-4">
+                    <h2 className="text-xl font-bold text-slate-900">Instantly Campaign Analytics (DB)</h2>
+                    <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-border">
+                                <tr>
+                                    {Object.keys(dbCampaigns[1] || {}).filter(k => k !== 'id' && k !== 'created_at').map(key => (
+                                        <th key={key} className="px-6 py-4 font-bold relative group">
+                                            <span>{key.replace(/_/g, ' ')}</span>
+                                            {dbCampaigns[0][key] && (
+                                                <div className="absolute hidden group-hover:block z-50 w-48 p-2 mt-1 -ml-4 bg-slate-900 text-white text-[10px] normal-case rounded-md shadow-xl border border-slate-700 font-medium">
+                                                    {dbCampaigns[0][key]}
+                                                </div>
+                                            )}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {dbCampaigns.slice(1).map((campaign, idx) => (
+                                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                        {Object.entries(campaign).filter(([k]) => k !== 'id' && k !== 'created_at').map(([key, val]: any) => (
+                                            <td key={key} className="px-6 py-4 text-slate-600 font-medium whitespace-nowrap">
+                                                {typeof val === 'number' ? val.toLocaleString() : (val || '---')}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             )}
 
             {/* Campaign Performance Section */}
