@@ -202,7 +202,7 @@ export default function SentEmailsPage() {
     );
 
     return (
-        <div className="space-y-6 pb-10 pt-6 max-w-5xl mx-auto relative min-h-[500px]">
+        <div className="space-y-6 pb-10 pt-6 relative min-h-[500px]">
             {loading && <SPLoader />}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>

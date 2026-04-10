@@ -175,7 +175,7 @@ export default function ReceivedEmailsPage() {
     }, [replies, searchQuery, dateRange, sortBy]);
 
     return (
-        <div className="space-y-8 pb-10 pt-6 max-w-5xl mx-auto relative min-h-[500px]">
+        <div className="space-y-8 pb-10 pt-6 relative min-h-[500px]">
             {loading && <SPLoader />}
 
             {/* Header section with refined spacing */}
