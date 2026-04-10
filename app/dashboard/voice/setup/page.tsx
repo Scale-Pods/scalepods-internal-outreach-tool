@@ -10,10 +10,13 @@ import { Mic, Save } from "lucide-react";
 
 export default function VoiceSetupPage() {
     return (
-        <div className="space-y-8 max-w-[800px] mx-auto pb-10">
-            <div>
-                <h1 className="text-2xl font-bold">Agent Configuration</h1>
-                <p className="text-slate-500">Configure your AI voice assistant's personality and tools</p>
+        <div className="space-y-8 pb-10 pt-6 relative min-h-[500px]">
+            {/* Header section with refined spacing */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Agent Configuration</h1>
+                    <p className="text-slate-500 text-sm mt-1">Configure your AI voice assistant's personality and tools</p>
+                </div>
             </div>
 
             <Tabs defaultValue="personality" className="w-full">

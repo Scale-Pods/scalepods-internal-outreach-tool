@@ -14,7 +14,7 @@ import { CallDetailsModal } from "@/components/voice/call-details-modal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { format, parseISO, subDays } from "date-fns";
-import { calculateDuration, formatDuration } from "@/lib/utils";
+import { calculateDuration, formatDuration, cn } from "@/lib/utils";
 import { useData } from "@/context/DataContext";
 
 // Progressive fetch for missing metadata (phone numbers/direction)
@@ -210,22 +210,22 @@ export default function VoiceLogsPage() {
     const paginatedCalls = calls.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
     return (
-        <div className="space-y-6 pb-10 relative min-h-[500px]">
+        <div className="space-y-6 pb-10 pt-6 relative min-h-[500px]">
             {loading && allCallsMapped.length === 0 && <SPLoader />}
-            <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 border-b border-slate-100 pb-6 mb-2">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-900">Call Logs</h1>
-                        <p className="text-slate-500">Comprehensive history of Vapi AI calls.</p>
+                        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Call Logs</h1>
+                        <p className="text-slate-500 text-sm mt-1">Comprehensive history of AI voice interactions</p>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <Button variant="outline" className="text-slate-600 border-border" onClick={() => setCostModalOpen(true)}>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Button variant="outline" className="text-slate-600 border-border h-10 shadow-sm" onClick={() => setCostModalOpen(true)}>
                             <Info className="h-4 w-4 mr-2" />
                             Cost Info
                         </Button>
                         <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
-                        <Button variant="outline" onClick={handleRefresh} disabled={loading}>
-                            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                        <Button variant="outline" className="h-10 px-4 shadow-sm" onClick={handleRefresh} disabled={loading}>
+                            <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
                             Refresh
                         </Button>
                     </div>

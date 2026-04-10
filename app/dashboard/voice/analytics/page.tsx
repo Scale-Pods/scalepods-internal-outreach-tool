@@ -204,16 +204,16 @@ export default function VoiceAnalyticsPage() {
     };
 
     return (
-        <div className="space-y-8 pb-10 relative min-h-[500px]">
+        <div className="space-y-6 pb-10 pt-6 relative min-h-[500px]">
             {loading && <SPLoader />}
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {/* Header section with refined spacing */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Voice Analytics</h1>
-                    <p className="text-slate-500">Comprehensive insights into voice agent performance.</p>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Voice Analytics</h1>
+                    <p className="text-slate-500 text-sm mt-1">Comprehensive insights into voice agent performance</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 px-3 h-10 border border-border rounded-md bg-white text-sm font-medium text-slate-700 font-sans">
+                    <div className="flex items-center gap-2 px-3 h-10 border border-border rounded-md bg-white text-sm font-medium text-slate-700 shadow-sm">
                         <Phone className="h-4 w-4 text-blue-600" />
                         <span>Vapi AI</span>
                     </div>

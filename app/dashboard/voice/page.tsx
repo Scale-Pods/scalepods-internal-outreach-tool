@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Phone, Clock, DollarSign, TrendingUp, Calendar as CalendarIcon, Timer, Loader2 } from "lucide-react";
+import { Phone, Clock, DollarSign, TrendingUp, Calendar as CalendarIcon, Timer, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SPLoader } from "@/components/sp-loader";
 import React, { useEffect, useState } from "react";
@@ -19,7 +19,7 @@ import {
 } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, parseISO, startOfDay, getHours, subDays } from "date-fns";
-import { calculateDuration, formatDuration } from "@/lib/utils";
+import { calculateDuration, formatDuration, cn } from "@/lib/utils";
 import { useData } from "@/context/DataContext";
 
 export default function VoiceDashboardPage() {
@@ -175,30 +175,27 @@ export default function VoiceDashboardPage() {
     // Added providerFilter here
 
     return (
-        <div className="space-y-8 pb-10 relative min-h-[500px]">
+        <div className="space-y-8 pb-10 pt-6 relative min-h-[500px]">
             {loading && <SPLoader />}
-            {/* Header Section */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {/* Header Section with refined spacing */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Voice Agent Dashboard</h1>
-                    <div className="flex items-center gap-2 text-slate-500">
-                        <p>Monitor your AI voice agent performance.</p>
-
-                    </div>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Voice Agent Overview</h1>
+                    <p className="text-slate-500 text-sm mt-1">Monitor and analyze AI voice agent performance</p>
                 </div>
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 px-3 h-10 border border-border rounded-md bg-white text-sm font-medium text-slate-700">
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2 px-3 h-10 border border-border rounded-md bg-white text-sm font-medium text-slate-700 shadow-sm">
                         <Phone className="h-4 w-4 text-blue-600" />
                         <span>Vapi AI</span>
                     </div>
                     <Button
                         variant="outline"
-                        className="flex items-center gap-2 border-border text-slate-600 hover:bg-slate-50 transition-colors h-10"
+                        className="flex items-center gap-2 border-border text-slate-600 hover:bg-slate-50 transition-colors h-10 px-4"
                         onClick={refreshAll}
                         disabled={loading}
                     >
-                        <TrendingUp className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                        Refresh Data
+                        <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                        Refresh
                     </Button>
                     <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
                 </div>
