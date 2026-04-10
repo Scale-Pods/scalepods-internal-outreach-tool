@@ -730,24 +730,6 @@ export default function GoogleMapsScrapper() {
                                                 {campaign.campaign_name || 'Unnamed Extraction'}
                                             </h3>
                                         </div>
-                                        <div className={`p-2 rounded-xl ${campaign.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600 animate-pulse'}`}>
-                                            {campaign.status === 'completed' ? <CheckCircle2 className="h-5 w-5" /> : <Loader2 className="h-5 w-5 animate-spin" />}
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        <div className="space-y-1">
-                                            <div className="flex items-center justify-between text-[10px]">
-                                                <span className="text-slate-500 font-medium tracking-tight uppercase">Progress</span>
-                                                <span className={campaign.status === 'completed' ? 'text-emerald-600 font-bold' : 'text-blue-600 font-bold'}>
-                                                    {campaign.status === 'completed' ? '100%' : '65%'}
-                                                </span>
-                                            </div>
-                                            <Progress 
-                                                value={campaign.status === 'completed' ? 100 : 65} 
-                                                className={`h-1.5 rounded-full ${campaign.status === 'completed' ? 'bg-emerald-100' : 'bg-blue-100'}`}
-                                            />
-                                        </div>
                                     </div>
                                 </div>
 

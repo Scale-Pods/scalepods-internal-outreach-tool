@@ -287,21 +287,20 @@ function DashboardContent({
         return (
             <div className="flex h-screen overflow-hidden bg-background text-foreground">
                 {/* Sidebar */}
-                <aside className="hidden w-64 flex-col bg-white border-r border-border md:flex font-sans">
+                <aside className="hidden w-64 flex-col bg-[#080c14] border-r border-slate-800/50 md:flex font-sans relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+                    <div className="absolute bottom-0 left-0 w-32 h-32 bg-cyan-600/5 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none" />
                     {/* Logo Section */}
-                    <div className="p-6 pb-4 flex justify-start items-center gap-3">
-                        <Link href="/" className="relative w-10 h-10 block flex-shrink-0">
+                    <div className="px-4 py-2 flex justify-center items-center">
+                        <Link href="/" className="relative w-full h-16 block">
                             <Image
-                                src="/sidebar_logo.png"
+                                src="/SP_logo.png"
                                 alt="ScalePods Logo"
                                 fill
-                                className="object-contain"
+                                className="object-contain object-center invert brightness-0 [filter:invert(1)] transition-transform hover:scale-105 duration-300"
                                 priority
                             />
                         </Link>
-                        <span className="text-2xl font-black tracking-tighter text-slate-900 uppercase whitespace-nowrap">
-                            SCALEPODS
-                        </span>
                     </div>
 
                     <div className="px-4 pb-2">
@@ -310,26 +309,26 @@ function DashboardContent({
                                 <Button
                                     suppressHydrationWarning
                                     variant="outline"
-                                    className="w-full justify-between bg-transparent border-border text-slate-600 hover:bg-slate-100 hover:text-slate-900 h-10 shadow-sm"
+                                    className="w-full justify-between bg-slate-900/50 border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-cyan-400 h-10 shadow-sm transition-all"
                                 >
                                     <span className="flex items-center gap-2">
-                                        <activeConfig.icon className="h-4 w-4 text-blue-600" />
+                                        <activeConfig.icon className="h-4 w-4 text-cyan-500" />
                                         <span className="truncate">{activeConfig.label}</span>
                                     </span>
                                     <ChevronDown className="h-4 w-4 opacity-50 flex-shrink-0" />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-[220px]">
-                                <DropdownMenuItem onClick={() => router.push("/dashboard")}>
+                            <DropdownMenuContent align="start" className="w-[220px] bg-[#0d121f] border-slate-800 text-slate-300">
+                                <DropdownMenuItem className="hover:bg-cyan-500/10 hover:text-cyan-400 cursor-pointer" onClick={() => router.push("/dashboard")}>
                                     <LayoutDashboard className="mr-2 h-4 w-4" /> Master Overview
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => router.push("/dashboard/email")}>
+                                <DropdownMenuItem className="hover:bg-cyan-500/10 hover:text-cyan-400 cursor-pointer" onClick={() => router.push("/dashboard/email")}>
                                     <Mail className="mr-2 h-4 w-4" /> Email Marketing
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => router.push("/dashboard/whatsapp")}>
+                                <DropdownMenuItem className="hover:bg-cyan-500/10 hover:text-cyan-400 cursor-pointer" onClick={() => router.push("/dashboard/whatsapp")}>
                                     <MessageCircle className="mr-2 h-4 w-4" /> WhatsApp CRM
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => router.push("/dashboard/voice")}>
+                                <DropdownMenuItem className="hover:bg-cyan-500/10 hover:text-cyan-400 cursor-pointer" onClick={() => router.push("/dashboard/voice")}>
                                     <Mic className="mr-2 h-4 w-4" /> Voice Agent
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -347,12 +346,12 @@ function DashboardContent({
                                 <Link
                                     key={index}
                                     href={item.href}
-                                    className={`group flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-all ${isActive
-                                            ? "bg-slate-900 text-white shadow-lg shadow-slate-200"
-                                            : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                                    className={`group flex items-center gap-4 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-300 ${isActive
+                                            ? "bg-cyan-600 text-white shadow-lg shadow-cyan-900/50"
+                                            : "text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/5"
                                         }`}
                                 >
-                                    <item.icon className={`h-5 w-5 flex-shrink-0 ${isActive ? "text-white" : "text-muted-foreground/80 group-hover:text-foreground/80 transition-colors"}`} />
+                                    <item.icon className={`h-5 w-5 flex-shrink-0 ${isActive ? "text-white" : "text-slate-500 group-hover:text-cyan-400 transition-colors"}`} />
                                     <span className="whitespace-nowrap">{item.title}</span>
                                 </Link>
                             );
@@ -362,7 +361,7 @@ function DashboardContent({
                     <div className="mt-auto p-4 mb-2 space-y-2">
                         <Button
                             variant="ghost"
-                            className="w-full justify-start gap-2 px-4 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-300"
+                            className="w-full justify-start gap-2 px-4 text-slate-500 hover:text-red-400 hover:bg-red-500/5 transition-all duration-300"
                             onClick={async () => {
                                 await logout();
                                 router.push('/');

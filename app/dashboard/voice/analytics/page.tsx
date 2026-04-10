@@ -25,7 +25,7 @@ import { format, parseISO, startOfDay, subDays } from "date-fns";
 import { useData } from "@/context/DataContext";
 
 export default function VoiceAnalyticsPage() {
-    const { calls: globalCalls, loadingCalls, voiceBalance } = useData();
+    const { calls: globalCalls, loadingCalls, voiceBalance, leads } = useData();
     const [statusFilter, setStatusFilter] = useState("all");
     const [providerFilter, setProviderFilter] = useState("vapi");
     const [calls, setCalls] = useState<any[]>([]);
@@ -49,6 +49,9 @@ export default function VoiceAnalyticsPage() {
         vapiBalance: 0,
         inboundDuration: 0,
         outboundDuration: 0,
+        pickUpRate: 0,
+        completionRate: 0,
+        positiveRate: 0,
     });
 
     useEffect(() => {
@@ -169,7 +172,24 @@ export default function VoiceAnalyticsPage() {
             typesData: Array.from(typesMap.entries()) as any,
             inboundDuration: inboundSum,
             outboundDuration: outboundSum,
-            lifetimeVapiUsed: lifetimeVapiUsedSum
+            lifetimeVapiUsed: lifetimeVapiUsedSum,
+            pickUpRate: totalCalls > 0 ? (data.filter((c: any) => calculateDuration(c) > 18).length / totalCalls) * 100 : 0,
+            completionRate: totalCalls > 0 ? (data.filter((c: any) => {
+                const reason = c.endedReason || c.raw?.endedReason;
+                return reason === 'customer-ended-call' || reason === 'assistant-ended-call';
+            }).length / totalCalls) * 100 : 0,
+            positiveRate: (() => {
+                if (totalCalls === 0 || !leads || leads.length === 0) return 0;
+                
+                const positiveCount = leads.filter((l: any) => 
+                    l.voice_sentiment === 'Expression of Interest' || 
+                    l.voice_sentiment === 'Callback- Plan Postponed' ||
+                    l.voice2_sentiment === 'Expression of Interest' || 
+                    l.voice2_sentiment === 'Callback- Plan Postponed'
+                ).length;
+                
+                return (positiveCount / totalCalls) * 100;
+            })()
         }));
 
         const sortedDays = Array.from(dayMap.entries()).sort((a, b) => {
@@ -216,6 +236,34 @@ export default function VoiceAnalyticsPage() {
                 />
             </div>
 
+            {/* Performance Conversion Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <StatCard 
+                    title="Call Pick-up Rate" 
+                    value={`${stats.pickUpRate.toFixed(1)}%`} 
+                    change="Duration > 18s" 
+                    icon={<PhoneIncoming className="h-5 w-5" />} 
+                    color="text-emerald-600" 
+                    bg="bg-emerald-50" 
+                />
+                <StatCard 
+                    title="Call Completion Rate" 
+                    value={`${stats.completionRate.toFixed(1)}%`} 
+                    change="Ended by User/AI" 
+                    icon={<CheckCircle className="h-5 w-5" />} 
+                    color="text-cyan-600" 
+                    bg="bg-cyan-50" 
+                />
+                <StatCard 
+                    title="Positive Response Rate" 
+                    value={`${stats.positiveRate.toFixed(1)}%`} 
+                    change="Interested Leads( EOI & Callback )" 
+                    icon={<DollarSign className="h-5 w-5" />} 
+                    color="text-amber-600" 
+                    bg="bg-amber-50" 
+                />
+            </div>
+
             {/* Charts Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Call Volume Trends */}
@@ -258,104 +306,7 @@ export default function VoiceAnalyticsPage() {
                     </CardContent>
                 </Card>
 
-                {/* Cost Analysis -> Credits Usage */}
-                <Card className="border-border">
-                    <CardHeader>
-                        <CardTitle className="text-lg">Credits Usage</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="w-full h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={costData.length ? costData : [{ name: 'No data', value: 0 }]}>
-                                    <defs>
-                                        <linearGradient id="colorCost" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                                    <YAxis axisLine={false} tickLine={false} />
-                                    <Tooltip formatter={(value) => [`${value} credits`, 'Used']} />
-                                    <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorCost)" />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </CardContent>
-                </Card>
-
-
-
-                {/* Performance Tables */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <Card className="border-border">
-                        <CardHeader>
-                            <CardTitle className="text-lg">Call Sources Volume</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Channel Type</TableHead>
-                                        <TableHead className="text-right">Volume</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {/* @ts-ignore */}
-                                    {(stats.typesData || []).map((typeTuple: any, i: number) => (
-                                        <TableRow key={i}>
-                                            <TableCell className="font-medium">{typeTuple[0]}</TableCell>
-                                            <TableCell className="text-right font-bold">{typeTuple[1]}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {(!stats.typesData || stats.typesData.length === 0) && (
-                                        <TableRow>
-                                            <TableCell colSpan={2} className="text-center py-4 text-slate-500">No data available for this range</TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="border-border">
-                        <CardHeader>
-                            <CardTitle className="text-lg">Response Time Performance</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-6">
-                                <div>
-                                    <div className="flex justify-between items-end mb-2">
-                                        <p className="font-medium text-slate-700">First Response Time</p>
-                                        <p className="font-bold text-2xl text-slate-900">2.3s</p>
-                                    </div>
-                                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                                        <div className="h-full w-[40%] bg-blue-500 rounded-full"></div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="flex justify-between items-end mb-2">
-                                        <p className="font-medium text-slate-700">Follow-up Latency</p>
-                                        <p className="font-bold text-2xl text-slate-900">1.8s</p>
-                                    </div>
-                                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                                        <div className="h-full w-[30%] bg-emerald-500 rounded-full"></div>
-                                    </div>
-                                </div>
-                                <div className="pt-4 flex gap-4 text-xs text-slate-500">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                                        <span>Target: &lt;3s</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                        <span>Target: &lt;2s</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                
             </div>
         </div>
     );
