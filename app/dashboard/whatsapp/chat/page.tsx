@@ -242,13 +242,25 @@ export default function WhatsappChatPage() {
     const filteredLeads = useMemo(() => {
         return leads.filter(l => {
             const lead = l as any;
-            const matchesSearch = lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                lead.phone.includes(searchQuery);
+            const leadName = (lead.name || lead.Name || '').toLowerCase();
+            const leadPhone = lead.phone || lead.Phone || '';
+            const matchesSearch = leadName.includes(searchQuery.toLowerCase()) ||
+                leadPhone.includes(searchQuery);
 
             let hasReplied = false;
-            if (lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none") {
+            // New schema
+            for (let i = 1; i <= 25; i++) {
+                const r = lead[`User_Replied_${i}`];
+                if (r && String(r).trim() && String(r).toLowerCase() !== 'no' && String(r).toLowerCase() !== 'none') {
+                    hasReplied = true;
+                    break;
+                }
+            }
+            // Legacy
+            if (!hasReplied && lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none") {
                 hasReplied = true;
-            } else {
+            }
+            if (!hasReplied) {
                 for (let i = 1; i <= 10; i++) {
                     const r = lead[`W.P_Replied_${i}`];
                     if (r && String(r).toLowerCase() !== "no" && String(r).toLowerCase() !== "none") {
@@ -280,19 +292,29 @@ export default function WhatsappChatPage() {
                     return false;
                 });
 
+            // Date filter using "Whatsapp Last Contacted" column
             let matchesDate = true;
             if (dateRange?.from) {
-                const latestActivity = getLeadLatestActivity(lead);
-                const from = startOfDay(new Date(dateRange.from));
-                const to = endOfDay(new Date(dateRange.to || dateRange.from));
-                matchesDate = latestActivity >= from && latestActivity <= to;
+                const wlc = lead["Whatsapp Last Contacted"] || lead["whatsapp_last_contacted"];
+                if (wlc) {
+                    const contactDate = new Date(wlc);
+                    const from = startOfDay(new Date(dateRange.from));
+                    const to = endOfDay(new Date(dateRange.to || dateRange.from));
+                    matchesDate = contactDate >= from && contactDate <= to;
+                } else {
+                    matchesDate = false;
+                }
             }
 
             return matchesSearch && matchesReplyStatus && matchesLoop && matchesMessageStatus && matchesDate;
         }).sort((a, b) => {
-            const dateA = getLeadLatestActivity(a);
-            const dateB = getLeadLatestActivity(b);
-            return dateB.getTime() - dateA.getTime();
+            const aLead = a as any;
+            const bLead = b as any;
+            const wlcA = aLead["Whatsapp Last Contacted"] || aLead["whatsapp_last_contacted"];
+            const wlcB = bLead["Whatsapp Last Contacted"] || bLead["whatsapp_last_contacted"];
+            const dateA = wlcA ? new Date(wlcA).getTime() : 0;
+            const dateB = wlcB ? new Date(wlcB).getTime() : 0;
+            return dateB - dateA;
         });
     }, [leads, searchQuery, activeFilters, dateRange]);
 
@@ -781,7 +803,14 @@ function CustomerRow({ lead: leadRaw, onClick, loopMap = {} }: { lead: Consolida
                 </div>
             </td>
             <td className="px-4 py-3 text-right text-slate-500 text-xs text-nowrap">
-                {latestDate.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })}
+                {(() => {
+                    const wlc = lead["Whatsapp Last Contacted"] || lead["whatsapp_last_contacted"];
+                    if (wlc) {
+                        const d = new Date(wlc);
+                        if (!isNaN(d.getTime())) return d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' });
+                    }
+                    return <span className="text-slate-300">—</span>;
+                })()}
             </td>
         </tr>
     );
