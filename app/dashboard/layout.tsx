@@ -291,12 +291,13 @@ function DashboardContent({
                     <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-cyan-600/5 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none" />
                     {/* Logo Section */}
-                    <div className="px-4 py-2 flex justify-center items-center">
-                        <Link href="/" className="relative w-full h-16 block">
+                    <div className="px-4 py-4 flex justify-center items-center">
+                        <Link href="/" className="relative w-full h-20 block">
                             <Image
                                 src="/ScalePods - Logo- FINAL.png"
                                 alt="ScalePods Logo"
                                 fill
+                                sizes="(max-width: 256px) 100vw, 256px"
                                 className="object-contain object-center transition-transform hover:scale-105 duration-300"
                                 priority
                             />
