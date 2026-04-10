@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,13 +27,16 @@ import {
     Send,
     MessageCircle,
     MessageSquare,
-    RefreshCw
+    RefreshCw,
+    Database
 } from "lucide-react";
 import { SPLoader } from "@/components/sp-loader";
 import { useData } from "@/context/DataContext";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { subDays, startOfDay, endOfDay } from "date-fns";
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+
+type SourceTable = 'icp_tracker' | 'meta_lead_tracker';
 
 // --- Sorting & Activity Helpers ---
 const getMsgDate = (raw: any) => {
@@ -99,10 +102,62 @@ const getLeadLatestActivity = (lead: any) => {
 export default function WhatsappChatPage() {
     const { leads: allLeads, loadingLeads } = useData();
     const [leads, setLeads] = useState<ConsolidatedLead[]>([]);
-    const loading = loadingLeads;
     const [searchQuery, setSearchQuery] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
     const leadsPerPage = 10;
+
+    // Table source selector
+    const [sourceTable, setSourceTable] = useState<SourceTable>('icp_tracker');
+    const [metaLeads, setMetaLeads] = useState<any[]>([]);
+    const [loadingMeta, setLoadingMeta] = useState(false);
+
+    // Loop data from master_leads_unique
+    const [loopMap, setLoopMap] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        // Fetch loop data on mount
+        (async () => {
+            try {
+                const res = await fetch('/api/leads/loops');
+                if (res.ok) {
+                    const data = await res.json();
+                    const map: Record<string, string> = {};
+                    (data.data || []).forEach((row: any) => {
+                        if (row.Phone && row.Loop) {
+                            const normalized = String(row.Phone).replace(/\D/g, '');
+                            if (normalized) map[normalized] = row.Loop;
+                        }
+                    });
+                    setLoopMap(map);
+                }
+            } catch (err) {
+                console.error('Failed to fetch loop data:', err);
+            }
+        })();
+    }, []);
+
+    const fetchMetaLeads = useCallback(async () => {
+        setLoadingMeta(true);
+        try {
+            const res = await fetch('/api/leads/meta');
+            if (res.ok) {
+                const data = await res.json();
+                setMetaLeads(data.leads || []);
+            }
+        } catch (err) {
+            console.error('Failed to fetch meta_lead_tracker:', err);
+        } finally {
+            setLoadingMeta(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (sourceTable === 'meta_lead_tracker' && metaLeads.length === 0) {
+            fetchMetaLeads();
+        }
+    }, [sourceTable]);
+
+    const loading = sourceTable === 'icp_tracker' ? loadingLeads : loadingMeta;
 
     // URL Sync for chat
     const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -147,25 +202,42 @@ export default function WhatsappChatPage() {
     });
 
     useEffect(() => {
-        if (loadingLeads) return;
-
-        const wpLeads = allLeads.filter(l => {
-            const lead = l as any;
-            if (lead.stages_passed.some((s: string) => s.toLowerCase().includes("whatsapp"))) return true;
-            if (lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none") return true;
-            for (let i = 1; i <= 10; i++) {
-                const r = lead[`W.P_Replied_${i}`];
-                if (r && String(r).toLowerCase() !== "no" && String(r).toLowerCase() !== "none") return true;
-                if (lead[`W.P_FollowUp_${i}`]) return true;
-            }
-            for (let i = 1; i <= 12; i++) {
-                if (lead[`W.P_${i}`] || lead.stage_data?.[`WhatsApp ${i}`]) return true;
-            }
-            return false;
-        });
-
-        setLeads(wpLeads);
-    }, [allLeads, loadingLeads]);
+        if (sourceTable === 'icp_tracker') {
+            if (loadingLeads) return;
+            const wpLeads = allLeads.filter(l => {
+                const lead = l as any;
+                // Check Whatsapp_1-5 fields (icp_tracker schema)
+                for (let i = 1; i <= 5; i++) {
+                    if (lead[`Whatsapp_${i}`]) return true;
+                }
+                // Check User_Replied / Bot_Replied chain
+                for (let i = 1; i <= 25; i++) {
+                    if (lead[`User_Replied_${i}`] && String(lead[`User_Replied_${i}`]).toLowerCase() !== 'no') return true;
+                    if (lead[`Bot_Replied_${i}`]) return true;
+                }
+                // Legacy W.P_ fields
+                if (lead.stages_passed?.some?.((s: string) => s.toLowerCase().includes("whatsapp"))) return true;
+                for (let i = 1; i <= 12; i++) {
+                    if (lead[`W.P_${i}`] || lead.stage_data?.[`WhatsApp ${i}`]) return true;
+                }
+                return false;
+            });
+            setLeads(wpLeads);
+        } else {
+            // meta_lead_tracker — show all leads that have any Whatsapp_ field
+            const wpLeads = metaLeads.filter((lead: any) => {
+                for (let i = 1; i <= 5; i++) {
+                    if (lead[`Whatsapp_${i}`]) return true;
+                }
+                for (let i = 1; i <= 25; i++) {
+                    if (lead[`User_Replied_${i}`] && String(lead[`User_Replied_${i}`]).toLowerCase() !== 'no') return true;
+                    if (lead[`Bot_Replied_${i}`]) return true;
+                }
+                return false;
+            });
+            setLeads(wpLeads as any);
+        }
+    }, [allLeads, loadingLeads, sourceTable, metaLeads, loadingMeta]);
 
     const filteredLeads = useMemo(() => {
         return leads.filter(l => {
@@ -232,12 +304,23 @@ export default function WhatsappChatPage() {
 
         filteredLeads.forEach(l => {
             const lead = l as any;
+
+            // Count failed (legacy)
             for (let i = 1; i <= 12; i++) {
                 const ts = (lead[`W.P_${i} TS`] || "").toLowerCase();
                 if (ts.includes("failed")) failedCount++;
             }
 
-            // Count bot outgoing messages — identical logic to CustomerRow.sentCount
+            // Count bot outgoing messages — new schema + legacy
+            // New: Whatsapp_1-5
+            for (let i = 1; i <= 5; i++) {
+                if (lead[`Whatsapp_${i}`]) sentCount++;
+            }
+            // New: Bot_Replied_1-25
+            for (let i = 1; i <= 25; i++) {
+                if (lead[`Bot_Replied_${i}`]) sentCount++;
+            }
+            // Legacy W.P_ fields
             for (let i = 1; i <= 12; i++) {
                 if (lead[`W.P_${i}`] || lead.stage_data?.[`WhatsApp ${i}`]) sentCount++;
             }
@@ -246,11 +329,21 @@ export default function WhatsappChatPage() {
                 if (lead[`W.P_FollowUp_${i}`]) sentCount++;
             }
 
-            // Replied check
+            // Replied check — new schema + legacy
             let leadReplied = false;
-            if (lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none") {
+            // New: User_Replied_1-25
+            for (let i = 1; i <= 25; i++) {
+                const r = lead[`User_Replied_${i}`];
+                if (r && String(r).trim() && String(r).toLowerCase() !== 'no' && String(r).toLowerCase() !== 'none') {
+                    leadReplied = true;
+                    break;
+                }
+            }
+            // Legacy
+            if (!leadReplied && lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none") {
                 leadReplied = true;
-            } else {
+            }
+            if (!leadReplied) {
                 for (let i = 1; i <= 10; i++) {
                     const r = lead[`W.P_Replied_${i}`];
                     if (r && String(r).toLowerCase() !== "no" && String(r).toLowerCase() !== "none") {
@@ -264,6 +357,14 @@ export default function WhatsappChatPage() {
 
         const uniqueSentCount = filteredLeads.filter(l => {
             const lead = l as any;
+            // New schema
+            for (let i = 1; i <= 5; i++) {
+                if (lead[`Whatsapp_${i}`]) return true;
+            }
+            for (let i = 1; i <= 25; i++) {
+                if (lead[`Bot_Replied_${i}`]) return true;
+            }
+            // Legacy
             for (let i = 1; i <= 12; i++) {
                 if (lead[`W.P_${i}`] || lead.stage_data?.[`WhatsApp ${i}`]) return true;
             }
@@ -365,6 +466,31 @@ export default function WhatsappChatPage() {
                     <p className="text-slate-500 text-sm mt-1">Real-time engagement across your leads</p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    {/* Table Source Selector */}
+                    <div className="flex items-center bg-slate-100 rounded-lg p-1 gap-0.5">
+                        <button
+                            onClick={() => { setSourceTable('icp_tracker'); setCurrentPage(1); }}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                                sourceTable === 'icp_tracker'
+                                    ? 'bg-white text-slate-900 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                            <Database className="h-3.5 w-3.5" />
+                            ICP Tracker
+                        </button>
+                        <button
+                            onClick={() => { setSourceTable('meta_lead_tracker'); setCurrentPage(1); }}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                                sourceTable === 'meta_lead_tracker'
+                                    ? 'bg-white text-slate-900 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                            <Database className="h-3.5 w-3.5" />
+                            Meta Lead
+                        </button>
+                    </div>
                     <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
                     <Button variant="outline" size="sm" onClick={() => window.location.reload()} className="gap-2 h-10 px-4">
                         <RefreshCw className="h-4 w-4" /> Refresh Chat
@@ -461,7 +587,7 @@ export default function WhatsappChatPage() {
                                     </thead>
                                     <tbody className="divide-y divide-border">
                                         {paginatedLeads.map((lead) => (
-                                            <CustomerRow key={lead.id} lead={lead} onClick={() => setSelectedLeadId(lead.id)} />
+                                            <CustomerRow key={lead.id} lead={lead} onClick={() => setSelectedLeadId(lead.id)} loopMap={loopMap} />
                                         ))}
                                     </tbody>
                                 </table>
@@ -495,7 +621,7 @@ export default function WhatsappChatPage() {
             <Dialog open={!!selectedLeadId} onOpenChange={(open) => !open && setSelectedLeadId(null)}>
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden p-6 gap-0">
                     <DialogHeader className="sr-only"><DialogTitle>WhatsApp Chat Detail</DialogTitle></DialogHeader>
-                    {selectedLeadId && <WhatsAppChatDetail customerId={selectedLeadId} onClose={() => setSelectedLeadId(null)} />}
+                    {selectedLeadId && <WhatsAppChatDetail customerId={selectedLeadId} onClose={() => setSelectedLeadId(null)} sourceTable={sourceTable} metaLeads={metaLeads} />}
                 </DialogContent>
             </Dialog>
         </div>
@@ -551,29 +677,41 @@ function FilterOption({ label, checked, onCheckedChange }: any) {
     );
 }
 
-function CustomerRow({ lead: leadRaw, onClick }: { lead: ConsolidatedLead; onClick: () => void }) {
+function CustomerRow({ lead: leadRaw, onClick, loopMap = {} }: { lead: ConsolidatedLead; onClick: () => void; loopMap?: Record<string, string> }) {
     const lead = leadRaw as any;
     const latestDate = getLeadLatestActivity(lead);
 
+    // Count sent messages — check new schema (Whatsapp_1-5 + Bot_Replied_1-25) and legacy W.P_ fields
     let sentCount = 0;
+    for (let i = 1; i <= 5; i++) { if (lead[`Whatsapp_${i}`]) sentCount++; }
+    for (let i = 1; i <= 25; i++) { if (lead[`Bot_Replied_${i}`]) sentCount++; }
+    // Legacy W.P_ fields
     for (let i = 1; i <= 12; i++) { if (lead[`W.P_${i}`] || lead.stage_data?.[`WhatsApp ${i}`]) sentCount++; }
     if (lead["W.P_FollowUp"] || lead.stage_data?.["WhatsApp FollowUp"]) sentCount++;
     for (let i = 1; i <= 10; i++) { if (lead[`W.P_FollowUp_${i}`]) sentCount++; }
 
-    // Collect all available statuses
+    // Collect all available statuses (legacy)
     const allStatuses = [];
     for (let i = 1; i <= 12; i++) {
         if (lead[`W.P_${i} TS`]) {
             allStatuses.push({ index: i, status: lead[`W.P_${i} TS`] });
         }
     }
-    // Just show the last 2 to keep UI clean, in chronological order
     const displayStatuses = allStatuses.slice(-2);
 
+    // Check if user has replied — new schema + legacy
     let hasReplied = false;
-    if (lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none") {
+    for (let i = 1; i <= 25; i++) {
+        const r = lead[`User_Replied_${i}`];
+        if (r && String(r).trim() && String(r).toLowerCase() !== 'no' && String(r).toLowerCase() !== 'none') {
+            hasReplied = true;
+            break;
+        }
+    }
+    if (!hasReplied && lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none") {
         hasReplied = true;
-    } else {
+    }
+    if (!hasReplied) {
         for (let i = 1; i <= 10; i++) {
             const r = lead[`W.P_Replied_${i}`];
             if (r && String(r).toLowerCase() !== "no" && String(r).toLowerCase() !== "none") {
@@ -592,16 +730,26 @@ function CustomerRow({ lead: leadRaw, onClick }: { lead: ConsolidatedLead; onCli
         return d.toLocaleString([], { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
+    const displayName = lead.name || lead.Name || 'Unknown';
+    const displayPhone = lead.phone || lead.Phone || '';
+    // Resolve Loop from master_leads_unique via phone lookup
+    const phoneNormalized = String(displayPhone).replace(/\D/g, '');
+    const displayLoop = loopMap[phoneNormalized] || lead.source_loop || lead.Source_Loop || lead.Loop || '';
+
     return (
         <tr className="hover:bg-slate-50 transition-colors cursor-pointer group" onClick={onClick}>
             <td className="px-4 py-3">
                 <div className="block">
-                    <div className="font-bold text-slate-900 group-hover:text-emerald-700">{lead.name}</div>
-                    <div className="text-xs text-slate-500">{lead.phone}</div>
+                    <div className="font-bold text-slate-900 group-hover:text-emerald-700">{displayName}</div>
+                    <div className="text-xs text-slate-500">{displayPhone}</div>
                 </div>
             </td>
             <td className="px-4 py-3 text-center">
-                <Badge variant="outline" className="text-[10px] uppercase font-bold border-borderlue-100 text-blue-600 bg-blue-50">{lead.source_loop}</Badge>
+                {displayLoop ? (
+                    <Badge variant="outline" className="text-[10px] uppercase font-bold border-borderlue-100 text-blue-600 bg-blue-50">{displayLoop}</Badge>
+                ) : (
+                    <span className="text-slate-300 text-[10px]">—</span>
+                )}
             </td>
             <td className="px-4 py-3 text-center font-bold text-slate-700">{sentCount}</td>
             <td className="px-4 py-3 text-center">
