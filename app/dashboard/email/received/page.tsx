@@ -12,8 +12,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Mail, ChevronDown, ChevronUp, Reply, Search } from "lucide-react";
+import { Mail, ChevronDown, ChevronUp, Reply, Search, RefreshCw, BarChart2, Inbox } from "lucide-react";
 import React, { useState, useEffect, useMemo } from "react";
+import { cn } from "@/lib/utils";
 import {
     Collapsible,
     CollapsibleContent,
@@ -26,82 +27,118 @@ import { useData } from "@/context/DataContext";
 export default function ReceivedEmailsPage() {
     const { leads: allLeads, loadingLeads } = useData();
     const [replies, setReplies] = useState<any[]>([]);
-    const loading = loadingLeads;
+    const [sortBy, setSortBy] = useState("newest");
     const [searchQuery, setSearchQuery] = useState("");
     const [dateRange, setDateRange] = useState<any>(undefined);
-    const [sortBy, setSortBy] = useState("newest");
+    const [loadingDB, setLoadingDB] = useState(false);
+    
+    const loading = loadingLeads || loadingDB;
+
+    const fetchReplies = async () => {
+        if (loadingLeads && replies.length === 0) return;
+
+        try {
+            setLoadingDB(true);
+            const realReplies: any[] = [];
+
+            // 1. Process legacy leads table replies
+            allLeads.forEach((lead: any, index: number) => {
+                const emailReply = lead.email_replied;
+                if (!emailReply || emailReply === "No" || String(emailReply).trim() === "") return;
+
+                const trimmed = String(emailReply).trim();
+                const lines = trimmed.split("\n");
+                const lastLine = lines[lines.length - 1].trim();
+                const lastLineDate = new Date(lastLine);
+
+                let displayDate: string = lead.created_at || new Date().toISOString();
+                let cleanContent = trimmed;
+
+                if (!isNaN(lastLineDate.getTime()) && lastLine.includes("-") && lastLine.includes(":")) {
+                    displayDate = lastLineDate.toISOString();
+                    cleanContent = lines.slice(0, -1).join("\n").trim() || "Email Reply Received";
+                }
+
+                const emailStages = (lead.stages_passed || []).filter((s: string) => s.startsWith("Email_"));
+                const lastEmailStage = emailStages.length > 0 ? emailStages[emailStages.length - 1] : "";
+
+                realReplies.push({
+                    id: `${lead.id || index}-legacy`,
+                    sender: lead.email || "No Email Provided",
+                    senderName: lead.name || "Lead",
+                    status: "Replied",
+                    subject: lastEmailStage ? `Reply to ${lastEmailStage}` : "Email Reply",
+                    timestamp: format(new Date(displayDate), "MMM dd, yyyy • p"),
+                    content: cleanContent,
+                    originalDate: displayDate,
+                    source: "Legacy",
+                });
+            });
+
+            // 2. Fetch new database replies
+            const dbRes = await fetch('/api/email/db-data');
+            if (dbRes.ok) {
+                const { leadReplies } = await dbRes.json();
+                if (Array.isArray(leadReplies)) {
+                    if (leadReplies.length > 0) {
+                        console.log("DEBUG: First DB Reply Object:", leadReplies[0]);
+                    }
+                    
+                    leadReplies.forEach((reply: any, idx: number) => {
+                        const date = reply.timestamp || reply.created_at || reply.date || new Date().toISOString();
+                        
+                        // Aggressive search for sender email
+                        const sender = reply.sender_email_id || reply.sender_email || reply.from_email || 
+                                     reply.email || reply.lead_email || reply.email_id || 
+                                     (reply.sender_name ? `${reply.sender_name} (ID: ${reply.id})` : `Unknown (${reply.id || idx})`);
+                        
+                        // Aggressive search for content
+                        const content = reply.reply || reply.reply_text || reply.content || 
+                                      reply.body || reply.text || reply.message || 
+                                      reply.email_body || reply.message_text || "Empty Reply";
+                        
+                        // Aggressive search for name
+                        const name = reply.sender_name || reply.lead_name || reply.name || 
+                                   reply.first_name || reply.full_name || "Lead";
+                                   
+                        realReplies.push({
+                            id: reply.id || `db-reply-${idx}`,
+                            sender: sender,
+                            senderName: name,
+                            status: "Replied",
+                            subject: reply.subject || "Email Reply",
+                            timestamp: format(new Date(date), "MMM dd, yyyy • p"),
+                            content: content,
+                            originalDate: date,
+                            source: "Instantly DB",
+                            details: reply
+                        });
+                    });
+                }
+            }
+
+            // Sort newest first
+            const sorted = realReplies.sort((a, b) => {
+                const dateA = new Date(a.originalDate).getTime() || 0;
+                const dateB = new Date(b.originalDate).getTime() || 0;
+                return dateB - dateA;
+            });
+            
+            setReplies(sorted);
+        } catch (e) {
+            console.error("Received emails fetch error:", e);
+        } finally {
+            setLoadingDB(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchReplies = async () => {
-            if (loadingLeads) return;
-
-            try {
-                const realReplies: any[] = [];
-
-                allLeads.forEach((lead: any, index: number) => {
-                    // Read Email_Replied column value (mapped to email_replied in leads-utils)
-                    const emailReply = lead.email_replied;
-                    if (!emailReply || emailReply === "No" || String(emailReply).trim() === "") return;
-
-                    const trimmed = String(emailReply).trim();
-                    const lines = trimmed.split("\n");
-                    const lastLine = lines[lines.length - 1].trim();
-                    const lastLineDate = new Date(lastLine);
-
-                    // Default display date is the lead's created_at
-                    let displayDate: string = lead.created_at || new Date().toISOString();
-                    let cleanContent = trimmed;
-
-                    // If last line of Email_Replied is a timestamp, use it as the reply date
-                    if (
-                        !isNaN(lastLineDate.getTime()) &&
-                        lastLine.includes("-") &&
-                        lastLine.includes(":")
-                    ) {
-                        displayDate = lastLineDate.toISOString();
-                        cleanContent = lines.slice(0, -1).join("\n").trim() || "Email Reply Received";
-                    }
-
-                    // Last email stage = what they replied to. Stages are now "Email_1" etc.
-                    const emailStages = (lead.stages_passed || []).filter((s: string) =>
-                        s.startsWith("Email_")
-                    );
-                    const lastEmailStage = emailStages.length > 0 ? emailStages[emailStages.length - 1] : "";
-
-                    // Stage name IS the column name — no remapping needed
-                    const displayRepliedTo = lastEmailStage; // e.g. "Email_1", "Email_2"
-
-                    let formattedTimestamp = "Unknown Date";
-                    try {
-                        formattedTimestamp = format(new Date(displayDate), "MMM dd, yyyy • p");
-                    } catch (_) { }
-
-                    realReplies.push({
-                        id: `${lead.id || index}-email-reply`,
-                        sender: lead.email || "No Email Provided",
-                        senderName: lead.name || "Lead",
-                        status: "Replied",
-                        subject: displayRepliedTo ? `Reply to ${displayRepliedTo}` : "Email Reply",
-                        timestamp: formattedTimestamp,
-                        content: cleanContent,
-                        originalDate: displayDate,
-                        loop: lead.source_loop || "",
-                        repliedToStep: displayRepliedTo,
-                    });
-                });
-
-                // Sort newest first by default
-                realReplies.sort(
-                    (a, b) =>
-                        new Date(b.originalDate).getTime() - new Date(a.originalDate).getTime()
-                );
-                setReplies(realReplies);
-            } catch (e) {
-                console.error("Received emails error", e);
-            }
-        };
         fetchReplies();
     }, [allLeads, loadingLeads]);
+
+    const handleRefresh = () => {
+        fetchReplies();
+    };
 
     const filteredReplies = useMemo(() => {
         let result = replies.filter((reply) => {
@@ -138,17 +175,26 @@ export default function ReceivedEmailsPage() {
     }, [replies, searchQuery, dateRange, sortBy]);
 
     return (
-        <div className="space-y-6 pb-10 max-w-5xl mx-auto relative min-h-[500px]">
+        <div className="space-y-8 pb-10 pt-6 max-w-5xl mx-auto relative min-h-[500px]">
             {loading && <SPLoader />}
 
-            {/* Header */}
-            <div className="flex items-center justify-between">
+            {/* Header section with refined spacing */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-2">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Received Emails</h1>
-                    <p className="text-slate-500">
-                        View all received email replies from your campaigns
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Received Emails</h1>
+                    <p className="text-sm text-slate-500 mt-1">
+                        View and manage all lead responses in one place
                     </p>
                 </div>
+                <Button 
+                    onClick={handleRefresh}
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 h-10 px-4 hover:bg-slate-50 transition-colors"
+                >
+                    <RefreshCw className={cn("h-4 w-4", loadingDB && "animate-spin")} />
+                    Refresh Inbox
+                </Button>
             </div>
 
             {/* Summary Card */}
@@ -250,9 +296,12 @@ function EmailReplyCard({ reply }: { reply: any }) {
                                 </h4>
                                     <Badge
                                         variant="outline"
-                                        className="text-purple-600 bg-purple-50 border-purple-100 text-[10px] uppercase font-bold"
+                                        className={cn(
+                                            "text-[10px] uppercase font-bold",
+                                            reply.source === "Legacy" ? "text-purple-600 bg-purple-50 border-purple-100" : "text-emerald-600 bg-emerald-50 border-emerald-100"
+                                        )}
                                     >
-                                        Sequence
+                                        {reply.source || "Sequence"}
                                     </Badge>
                                 {reply.repliedToStep && (
                                     <Badge

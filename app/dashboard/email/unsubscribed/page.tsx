@@ -70,14 +70,14 @@ export default function UnsubscribedPage() {
     });
 
     return (
-        <div className="space-y-8 pb-10">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-8 pb-10 pt-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
-                    <h1 className="text-2xl font-bold flex items-center gap-2">
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
                         <UserMinus className="h-6 w-6 text-rose-600" />
                         Unsubscribed Leads
                     </h1>
-                    <p className="text-slate-500">View detailed list of users who opted out of email marketing</p>
+                    <p className="text-sm text-slate-500 mt-1">View detailed list of users who opted out of email marketing</p>
                 </div>
                 <DateRangePicker onUpdate={(range: any) => setDateRange(range.range)} />
             </div>

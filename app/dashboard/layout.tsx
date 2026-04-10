@@ -376,13 +376,13 @@ function DashboardContent({
 
                 {/* Main Content */}
                 <div className="flex flex-1 flex-col overflow-hidden">
-                    <header className="flex h-14 items-center gap-4 border-border border-border bg-card px-6 lg:h-[60px]">
-                        <div className="flex flex-1 items-center justify-between">
-                            <h1 className="text-lg font-semibold text-foreground">
-                                {pathname === "/dashboard" ? "Master Overview" : activeConfig.items.find((item: any) => item.href === pathname)?.title || activeConfig.label}
-                            </h1>
+                    {currentContext === "master" && (
+                        <header className="flex h-14 items-center gap-4 border-border border-border bg-card px-6 lg:h-[60px]">
+                            <div className="flex flex-1 items-center justify-between">
+                                <h1 className="text-lg font-semibold text-foreground">
+                                    Master Overview
+                                </h1>
 
-                            {currentContext === "master" && (
                                 <div className="flex items-center gap-2">
                                     {/* Vapi Balance Button */}
                                     <Button
@@ -431,9 +431,9 @@ function DashboardContent({
                                         </div>
                                     </Button>
                                 </div>
-                            )}
-                        </div>
-                    </header>
+                            </div>
+                        </header>
+                    )}
 
                     <WalletModal
                         isOpen={walletModal.isOpen}
@@ -450,7 +450,7 @@ function DashboardContent({
                         onClose={() => setWalletModal({ ...walletModal, isOpen: false })}
                     />
 
-                    <main className="flex-1 overflow-auto bg-background p-6 relative">
+                    <main className="flex-1 overflow-auto bg-background px-6 pb-6 pt-0 relative">
                         {children}
                     </main>
                 </div>

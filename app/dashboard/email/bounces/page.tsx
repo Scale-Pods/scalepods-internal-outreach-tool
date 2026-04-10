@@ -100,18 +100,18 @@ export default function BouncedEmailsPage() {
 
     return (
         <TooltipProvider>
-            <div className="space-y-6 pb-10 relative min-h-[500px]">
+            <div className="space-y-6 pb-10 pt-6 relative min-h-[500px]">
                 {loading && <SPLoader />}
                 {/* Page Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-900">Bounced Emails</h1>
-                        <p className="text-slate-500">Real-time bounce tracking from Instantly.ai</p>
+                        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Bounced Emails</h1>
+                        <p className="text-sm text-slate-500 mt-1">Real-time bounce tracking from Instantly.ai</p>
                     </div>
                     <Button
                         onClick={fetchBounces}
                         variant="outline"
-                        className="gap-2"
+                        className="gap-2 h-10 px-4 hover:bg-slate-50 transition-colors"
                         disabled={loading}
                     >
                         <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />

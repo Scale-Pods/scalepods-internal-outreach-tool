@@ -202,12 +202,12 @@ export default function SentEmailsPage() {
     );
 
     return (
-        <div className="space-y-6 pb-10 max-w-5xl mx-auto relative min-h-[500px]">
+        <div className="space-y-6 pb-10 pt-6 max-w-5xl mx-auto relative min-h-[500px]">
             {loading && <SPLoader />}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900">Sent Emails</h1>
-                    <p className="text-slate-500">View your email outreach history</p>
+                    <p className="text-sm text-slate-500 mt-1">View your email outreach history</p>
                 </div>
             </div>
 

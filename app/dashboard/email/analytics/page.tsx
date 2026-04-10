@@ -236,12 +236,12 @@ export default function EmailAnalyticsPage() {
 
 
     return (
-        <div className="space-y-8 pb-10 relative min-h-[500px]">
+        <div className="space-y-8 pb-10 pt-6 relative min-h-[500px]">
             {/* Page Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900">Email Analytics</h1>
-                    <p className="text-slate-500">Comprehensive campaign and warm-up performance</p>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Email Analytics</h1>
+                    <p className="text-sm text-slate-500 mt-1">Comprehensive campaign and warm-up performance</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <DateRangePicker onUpdate={handleDateUpdate} />
@@ -249,6 +249,7 @@ export default function EmailAnalyticsPage() {
                         onClick={() => fetchData(dateRange?.from, dateRange?.to)}
                         variant="outline"
                         size="icon"
+                        className="h-10 w-10 hover:bg-slate-50 transition-colors"
                         disabled={loading}
                     >
                         <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
