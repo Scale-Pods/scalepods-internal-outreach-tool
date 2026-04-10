@@ -8,7 +8,7 @@ import { MapPin, Loader2, Send, CheckCircle2, Globe, Settings, Users, Image as I
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Country, State } from 'country-state-city';
-import { supabase, supabaseAdmin } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import * as XLSX from 'xlsx';
 
 import {
@@ -116,30 +116,20 @@ export default function GoogleMapsScrapper() {
     }, []);
 
     const fetchCampaigns = async () => {
-        console.log("Fetching campaigns from leads_scraper_gmap using Admin Client...");
+        console.log("Fetching campaigns from leads_scraper_gmap...");
         
         try {
-            // Use supabaseAdmin to bypass RLS
-            const { data, error } = await supabaseAdmin
+            const { data, error } = await supabase
                 .from('leads_scraper_gmap')
                 .select('*');
             
             if (error) {
-                console.error("Supabase Admin fetch failed. Error details:", error);
-                
-                // fallback to quoted table name just in case of case-sensitivity quirks
-                console.log("Retrying with quoted table name...");
-                const retry = await supabaseAdmin.from('"leads_scraper_gmap"').select('*');
-                if (retry.error) {
-                    console.error("Quoted fetch also failed:", retry.error);
-                } else {
-                    console.log(`Success with quotes! Fetched ${retry.data?.length} rows`);
-                }
+                console.error("Supabase fetch failed:", error);
                 return;
             }
 
             if (!data || data.length === 0) {
-                console.log("API returned success, but 0 rows found in 'leads_scraper_gmap'. Please verify the data is in project: ", process.env.NEXT_PUBLIC_SUPABASE_URL);
+                console.log("No rows found in 'leads_scraper_gmap'.");
                 setCampaigns([]);
                 return;
             }
