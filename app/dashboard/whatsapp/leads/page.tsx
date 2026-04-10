@@ -156,12 +156,12 @@ export default function WhatsappLeadsPage() {
     }
 
     return (
-        <div className="space-y-6 pb-10 relative min-h-[500px]">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-6 pb-10 pt-6 relative min-h-[500px]">
+            {/* Header section with refined spacing */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900">WhatsApp Leads</h1>
-                    <p className="text-slate-500 text-sm">Review leads successfully contacted via WhatsApp</p>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">WhatsApp Leads</h1>
+                    <p className="text-slate-500 text-sm mt-1">Review leads successfully contacted via WhatsApp</p>
                 </div>
                 <div className="flex items-center gap-3">
                     {(activeFilters.replyStatus.length > 0 || activeFilters.loops.length > 0 || dateRange.from || searchQuery) && (

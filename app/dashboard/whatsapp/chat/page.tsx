@@ -357,17 +357,17 @@ export default function WhatsappChatPage() {
     );
 
     return (
-        <div className="space-y-6 pb-10 relative min-h-[500px]">
+        <div className="space-y-6 pb-10 pt-6 relative min-h-[500px]">
             {loading && <SPLoader />}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900">WhatsApp Chats</h1>
-                    <p className="text-slate-500 text-sm">Real-time engagement across your leads</p>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">WhatsApp Chats</h1>
+                    <p className="text-slate-500 text-sm mt-1">Real-time engagement across your leads</p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                     <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
-                    <Button variant="outline" size="sm" onClick={() => window.location.reload()} className="gap-2 h-9">
-                        <RefreshCw className="h-4 w-4" /> Refresh
+                    <Button variant="outline" size="sm" onClick={() => window.location.reload()} className="gap-2 h-10 px-4">
+                        <RefreshCw className="h-4 w-4" /> Refresh Chat
                     </Button>
                 </div>
             </div>

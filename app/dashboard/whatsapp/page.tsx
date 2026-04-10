@@ -233,13 +233,13 @@ export default function WhatsappDashboardPage() {
     }, [leads]);
 
     return (
-        <div className="space-y-8 pb-10 relative min-h-[500px]">
+        <div className="space-y-8 pb-10 pt-6 relative min-h-[500px]">
             {loading && <SPLoader />}
-            {/* Header & Actions */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {/* Header & Actions with refined spacing */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">WhatsApp Overview</h1>
-                    <p className="text-slate-500 text-sm">Real-time engagement insights and campaign totals</p>
+                    <p className="text-slate-500 text-sm mt-1">Real-time engagement insights and campaign totals</p>
                 </div>
                 <DateRangePicker onUpdate={(range) => setDateRange(range.range)} />
             </div>
