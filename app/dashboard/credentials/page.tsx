@@ -30,31 +30,22 @@ export default function CredentialsPage() {
         }).reduce((acc: number, call: any) => acc + (call.costValue || 0), 0);
     }, [calls]);
 
-    const [senderEmails, setSenderEmails] = useState<string[]>([]);
-    const [loading, setLoading] = useState(true);
+    // All 9 project email accounts
+    const ALL_EMAILS = [
+        "adnan@scalepods.co",
+        "adnan@scalepods.org",
+        "nancy@scalepods.co",
+        "palashy@scalepods.org",
+        "raunak@scalepods.co",
+        "raunak@scalepods.tech",
+        "tanushree@scalepods.co",
+        "viraj@scalepods.co",
+        "viraj@scalepods.tech",
+    ];
+
+    const [senderEmails, setSenderEmails] = useState<string[]>(ALL_EMAILS);
+    const [loading, setLoading] = useState(false);
     const router = useRouter();
-
-    React.useEffect(() => {
-        const fetchEmails = async () => {
-            try {
-                const res = await fetch('/api/email/warmup-analytics', { method: 'POST' });
-                if (!res.ok) throw new Error("Failed to fetch analytics");
-                const data = await res.json();
-
-                // Extract emails from the warmup account objects
-                if (Array.isArray(data)) {
-                    const emails = data.map((account: any) => account.email);
-                    setSenderEmails(emails);
-                }
-            } catch (err) {
-                console.error("Error fetching sender emails:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchEmails();
-    }, []);
 
     const vapiDetails = voiceBalance?.vapi;
 
@@ -76,7 +67,7 @@ export default function CredentialsPage() {
                     iconColor="text-rose-600"
                     iconBg="bg-rose-50"
                 >
-                    <div className="grid gap-6 md:grid-cols-2">
+                    <div className="grid gap-6 md:grid-cols-3">
                         {loading ? (
                             <div className="md:col-span-2 text-slate-400 text-sm animate-pulse">Detecting active email accounts...</div>
                         ) : senderEmails.length > 0 ? (
@@ -114,7 +105,7 @@ export default function CredentialsPage() {
                         {/* UK Section */}
                         <div className="space-y-4 bg-slate-50/50 p-4 rounded-xl border border-border">
                             <ReadOnlyField label="Twilio (UK)" value="+44 (7414) 280238" />
-                            <ReadOnlyField label="Agent ID" value="918c25eb-9882-452e-86df-b4851d464852" />
+                            <ReadOnlyField label="Agent ID" value="39fb3ad9-5fdf-449c-827b-05501aeb181c" />
                         </div>
                     </div>
                 </CredentialSection>
