@@ -1,43 +1,26 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-    Users,
-    Activity,
-    MessageCircle,
-    Calendar,
-    TrendingUp,
-    BarChart3,
-    Settings,
-    Megaphone,
-    Send
+    Users, MessageCircle, TrendingUp, BarChart3, Send,
+    Reply, ArrowUpRight, CheckCheck,
+    Clock, Percent, Bot,
 } from "lucide-react";
 import {
-    PieChart,
-    Pie,
-    Cell,
-    ResponsiveContainer,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    LineChart,
-    Line
+    PieChart, Pie, Cell, ResponsiveContainer,
+    XAxis, YAxis, CartesianGrid, Tooltip,
+    LineChart, Line,
 } from "recharts";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useData } from "@/context/DataContext";
+import { cn } from "@/lib/utils";
 import {
-    Sheet,
-    SheetContent,
-    SheetDescription,
-    SheetHeader,
-    SheetTitle,
+    Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import { TotalRepliesView } from "@/components/dashboard/total-replies-view";
-
 import { SPLoader } from "@/components/sp-loader";
 
 export default function WhatsappDashboardPage() {
@@ -46,21 +29,27 @@ export default function WhatsappDashboardPage() {
     const [leads, setLeads] = useState<any[]>([]);
     const [isRepliesOpen, setIsRepliesOpen] = useState(false);
     const [metaLeads, setMetaLeads] = useState<any[]>([]);
+    const [dateRange, setDateRange] = useState<any>(undefined);
+    const loading = loadingLeads;
+
     const [stats, setStats] = useState({
         totalLeads: 0,
-        contactedLeads: 0,
+        leadsContacted: 0,
+        messagesSent: 0,
+        botMessages: 0,
         totalReplies: 0,
-        replied: 0,
-        waiting: 0,
-        nurture: 0,
-        unresponsive: 0
+        replyRate: 0,
+        readRate: 0,
+        deliveredCount: 0,
+        readCount: 0,
+        waitingCount: 0,
+        avgMessagesPerLead: 0,
     });
-    const [donutData, setDonutData] = useState<any[]>([]);
     const [trendData, setTrendData] = useState<any[]>([]);
-    const loading = loadingLeads;
-    const [dateRange, setDateRange] = useState<any>(undefined);
+    const [stageData, setStageData] = useState<any[]>([]);
+    const [statusDistribution, setStatusDistribution] = useState<any[]>([]);
 
-    // Fetch meta_lead_tracker on mount
+    // Fetch meta leads
     useEffect(() => {
         (async () => {
             try {
@@ -75,7 +64,7 @@ export default function WhatsappDashboardPage() {
         })();
     }, []);
 
-    // Helper: check if lead has replied (new schema + legacy)
+    // Helper: check if lead has replied
     const hasLeadReplied = (lead: any) => {
         for (let i = 1; i <= 25; i++) {
             const r = lead[`User_Replied_${i}`];
@@ -86,231 +75,300 @@ export default function WhatsappDashboardPage() {
         return false;
     };
 
+    // Count user replies for a lead
+    const countUserReplies = (lead: any) => {
+        let count = 0;
+        for (let i = 1; i <= 25; i++) {
+            const r = lead[`User_Replied_${i}`];
+            if (r && String(r).trim() && String(r).toLowerCase() !== 'no' && String(r).toLowerCase() !== 'none') count++;
+        }
+        return count;
+    };
+
     useEffect(() => {
-        const calculateStats = async () => {
-            if (loadingLeads) return;
+        if (loadingLeads) return;
 
-            try {
-                // Combine ICP + Meta leads that have WhatsApp activity
-                const icpWhatsapp = allLeads.filter((l: any) => {
-                    const hasWLC = l["Whatsapp Last Contacted"] && String(l["Whatsapp Last Contacted"]).trim() !== "";
-                    const hasDrips = [1, 2, 3, 4, 5].some(i => l[`Whatsapp_${i}`]);
-                    return hasWLC || hasDrips;
-                });
+        try {
+            // Filter leads with WhatsApp activity
+            const icpWhatsapp = allLeads.filter((l: any) => {
+                const hasWLC = l["Whatsapp Last Contacted"] && String(l["Whatsapp Last Contacted"]).trim() !== "";
+                const hasDrips = [1, 2, 3, 4, 5].some(i => l[`Whatsapp_${i}`]);
+                return hasWLC || hasDrips;
+            });
 
-                const metaWhatsapp = metaLeads.filter((l: any) => {
-                    const hasWLC = l["Whatsapp Last Contacted"] && String(l["Whatsapp Last Contacted"]).trim() !== "";
-                    const hasDrips = [1, 2, 3, 4, 5].some(i => l[`Whatsapp_${i}`]);
-                    return hasWLC || hasDrips;
-                });
+            const metaWhatsapp = metaLeads.filter((l: any) => {
+                const hasWLC = l["Whatsapp Last Contacted"] && String(l["Whatsapp Last Contacted"]).trim() !== "";
+                const hasDrips = [1, 2, 3, 4, 5].some(i => l[`Whatsapp_${i}`]);
+                return hasWLC || hasDrips;
+            });
 
-                const allWhatsappLeads = [...icpWhatsapp, ...metaWhatsapp];
-                setLeads(allWhatsappLeads);
+            const allWhatsappLeads = [...icpWhatsapp, ...metaWhatsapp];
+            setLeads(allWhatsappLeads);
 
-                // Date filtering using "Whatsapp Last Contacted"
-                const fromD = dateRange?.from ? new Date(dateRange.from) : null;
-                const toD = dateRange?.to ? new Date(dateRange.to) : fromD;
-                if (fromD) fromD.setHours(0, 0, 0, 0);
-                if (toD) toD.setHours(23, 59, 59, 999);
+            // Date filtering
+            const fromD = dateRange?.from ? new Date(dateRange.from) : null;
+            const toD = dateRange?.to ? new Date(dateRange.to) : fromD;
+            if (fromD) fromD.setHours(0, 0, 0, 0);
+            if (toD) toD.setHours(23, 59, 59, 999);
 
-                const filteredLeads = allWhatsappLeads.filter((lead: any) => {
-                    if (!fromD || !toD) return true;
-                    const wlc = lead["Whatsapp Last Contacted"] || lead["whatsapp_last_contacted"];
-                    if (!wlc) return false;
-                    const contactDate = new Date(wlc);
-                    return contactDate >= fromD && contactDate <= toD;
-                });
+            const filteredLeads = allWhatsappLeads.filter((lead: any) => {
+                if (!fromD || !toD) return true;
+                const wlc = lead["Whatsapp Last Contacted"] || lead["whatsapp_last_contacted"];
+                if (!wlc) return false;
+                const contactDate = new Date(wlc);
+                return contactDate >= fromD && contactDate <= toD;
+            });
 
-                const dailyGroups: Record<string, { date: string, sent: number, replied: number }> = {};
+            // Compute stats
+            const dailyGroups: Record<string, { date: string; sent: number; replied: number; bot: number }> = {};
+            const stageCounts = [0, 0, 0, 0, 0]; // Whatsapp_1 to 5
+            const statuses: Record<string, number> = { read: 0, delivered: 0, sent: 0, failed: 0 };
 
-                const finalStats = {
-                    totalLeads: filteredLeads.length,
-                    messagesSent: 0,
-                    uniqueLeadsContacted: 0,
-                    totalReplies: 0,
-                    waiting: 0,
-                    unresponsive: 0
-                };
+            let messagesSent = 0;
+            let botMessages = 0;
+            let leadsContacted = 0;
+            let totalReplies = 0;
+            let readCount = 0;
+            let deliveredCount = 0;
+            let waitingCount = 0;
 
-                filteredLeads.forEach((lead: any) => {
-                    let leadSentCount = 0;
+            filteredLeads.forEach((lead: any) => {
+                let leadSentCount = 0;
+                let leadBotCount = 0;
 
-                    // Count Whatsapp_1-5 drip messages
-                    for (let i = 1; i <= 5; i++) {
-                        if (lead[`Whatsapp_${i}`]) leadSentCount++;
+                // Whatsapp_1-5 stage messages
+                for (let i = 1; i <= 5; i++) {
+                    if (lead[`Whatsapp_${i}`]) {
+                        leadSentCount++;
+                        stageCounts[i - 1]++;
                     }
-                    // Count Bot_Replied_1-25
-                    for (let i = 1; i <= 25; i++) {
-                        if (lead[`Bot_Replied_${i}`]) leadSentCount++;
+                    // Track message status
+                    const status = String(lead[`Whatsapp_${i}_status`] || "").toLowerCase();
+                    if (status === "read") { statuses.read++; readCount++; }
+                    else if (status === "delivered") { statuses.delivered++; deliveredCount++; }
+                    else if (status === "sent") { statuses.sent++; }
+                    else if (status === "failed") { statuses.failed++; }
+                }
+
+                // Bot_Replied_1-25
+                for (let i = 1; i <= 25; i++) {
+                    if (lead[`Bot_Replied_${i}`]) { leadBotCount++; leadSentCount++; }
+                }
+
+                if (leadSentCount > 0) leadsContacted++;
+                messagesSent += leadSentCount;
+                botMessages += leadBotCount;
+
+                const isReplied = hasLeadReplied(lead);
+                if (isReplied) {
+                    totalReplies++;
+                } else if (leadSentCount > 0) {
+                    waitingCount++;
+                }
+
+                // Daily trend
+                const wlc = lead["Whatsapp Last Contacted"] || lead["whatsapp_last_contacted"];
+                if (wlc) {
+                    const d = new Date(wlc);
+                    if (!isNaN(d.getTime())) {
+                        const dStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                        if (!dailyGroups[dStr]) dailyGroups[dStr] = { date: dStr, sent: 0, replied: 0, bot: 0 };
+                        dailyGroups[dStr].sent += leadSentCount;
+                        dailyGroups[dStr].bot += leadBotCount;
+                        if (isReplied) dailyGroups[dStr].replied += 1;
                     }
+                }
+            });
 
-                    if (leadSentCount > 0) {
-                        finalStats.messagesSent += leadSentCount;
-                        finalStats.uniqueLeadsContacted++;
-                    }
+            const totalStatusMessages = statuses.read + statuses.delivered + statuses.sent;
 
-                    // Reply check
-                    const isReplied = hasLeadReplied(lead);
-                    if (isReplied) {
-                        finalStats.totalReplies++;
-                    } else if (leadSentCount > 0) {
-                        finalStats.waiting++;
-                    }
+            setStats({
+                totalLeads: filteredLeads.length,
+                leadsContacted,
+                messagesSent,
+                botMessages,
+                totalReplies,
+                replyRate: leadsContacted > 0 ? (totalReplies / leadsContacted) * 100 : 0,
+                readRate: totalStatusMessages > 0 ? (statuses.read / totalStatusMessages) * 100 : 0,
+                deliveredCount,
+                readCount,
+                waitingCount,
+                avgMessagesPerLead: leadsContacted > 0 ? Math.round((messagesSent / leadsContacted) * 10) / 10 : 0,
+            });
 
-                    // Trend data using Whatsapp Last Contacted
-                    const wlc = lead["Whatsapp Last Contacted"] || lead["whatsapp_last_contacted"];
-                    if (wlc) {
-                        const d = new Date(wlc);
-                        if (!isNaN(d.getTime())) {
-                            const dStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-                            if (!dailyGroups[dStr]) dailyGroups[dStr] = { date: dStr, sent: 0, replied: 0 };
-                            dailyGroups[dStr].sent += leadSentCount;
-                            if (isReplied) dailyGroups[dStr].replied += 1;
-                        }
-                    }
-                });
-
-                setStats({
-                    totalLeads: finalStats.totalLeads,
-                    contactedLeads: finalStats.messagesSent,
-                    totalReplies: finalStats.totalReplies,
-                    replied: finalStats.totalReplies,
-                    waiting: finalStats.waiting,
-                    nurture: 0,
-                    unresponsive: finalStats.totalLeads - finalStats.uniqueLeadsContacted
-                });
-
-                setDonutData([
-                    { name: 'Total Leads', value: finalStats.totalLeads, color: '#8b5cf6' },
-                    { name: 'Messages Sent', value: finalStats.messagesSent, color: '#3b82f6' },
-                    { name: 'Total Replies', value: finalStats.totalReplies, color: '#10b981' },
-                ]);
-
-                setTrendData(Object.values(dailyGroups)
+            setTrendData(
+                Object.values(dailyGroups)
                     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                    .slice(-7));
+                    .slice(-14)
+            );
 
-            } catch (e) {
-                console.error("Dashboard calculation error", e);
-            }
-        };
+            setStageData([
+                { stage: 'Drip 1', count: stageCounts[0], fill: '#6366f1' },
+                { stage: 'Drip 2', count: stageCounts[1], fill: '#3b82f6' },
+                { stage: 'Drip 3', count: stageCounts[2], fill: '#8b5cf6' },
+                { stage: 'Drip 4', count: stageCounts[3], fill: '#a855f7' },
+                { stage: 'Drip 5', count: stageCounts[4], fill: '#c084fc' },
+            ]);
 
-        calculateStats();
+            setStatusDistribution([
+                { name: 'Read', value: statuses.read, color: '#10b981' },
+                { name: 'Delivered', value: statuses.delivered, color: '#3b82f6' },
+                { name: 'Sent', value: statuses.sent, color: '#94a3b8' },
+                { name: 'Failed', value: statuses.failed, color: '#ef4444' },
+            ].filter(d => d.value > 0));
+
+        } catch (e) {
+            console.error("Dashboard calculation error", e);
+        }
     }, [dateRange, allLeads, loadingLeads, metaLeads]);
 
-    const repliedLeads = useMemo(() => {
-        return leads.filter(l => hasLeadReplied(l));
-    }, [leads]);
+    const repliedLeads = useMemo(() => leads.filter(l => hasLeadReplied(l)), [leads]);
 
     return (
         <div className="space-y-8 pb-10 pt-6 relative min-h-[500px]">
             {loading && <SPLoader />}
-            {/* Header & Actions with refined spacing */}
+
+            {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">WhatsApp Overview</h1>
-                    <p className="text-slate-500 text-sm mt-1">Real-time engagement insights and campaign totals</p>
+                    <p className="text-slate-500 text-sm mt-1">Real-time engagement insights across all campaigns</p>
                 </div>
                 <DateRangePicker onUpdate={(range) => setDateRange(range.range)} />
             </div>
 
-            {/* Overview Metric Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <MetricCard
+            {/* Top 4 Metric Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <TopCard
                     title="Total Leads"
-                    value={loading ? "..." : stats.totalLeads.toLocaleString()}
-                    icon={Users}
-                    theme="purple"
+                    value={loading ? "..." : stats.totalLeads}
+                    subtitle={`${stats.leadsContacted} contacted`}
+                    icon={<Users className="h-5 w-5" />}
+                    iconBg="bg-indigo-50 text-indigo-600"
                     onClick={() => router.push('/dashboard/whatsapp/leads')}
                 />
-                <MetricCard
+                <TopCard
+                    title="Messages Sent"
+                    value={loading ? "..." : stats.messagesSent}
+                    subtitle={`${stats.botMessages} bot · ${stats.messagesSent - stats.botMessages} drip`}
+                    icon={<Send className="h-5 w-5" />}
+                    iconBg="bg-blue-50 text-blue-600"
+                    onClick={() => router.push('/dashboard/whatsapp/sent')}
+                />
+                <TopCard
                     title="Total Replies"
-                    value={loading ? "..." : stats.totalReplies.toLocaleString()}
-                    icon={MessageCircle}
-                    theme="emerald"
+                    value={loading ? "..." : stats.totalReplies}
+                    subtitle={`${stats.waitingCount} still waiting`}
+                    icon={<Reply className="h-5 w-5" />}
+                    iconBg="bg-emerald-50 text-emerald-600"
                     onClick={() => setIsRepliesOpen(true)}
                 />
-                <MetricCard
-                    title="Messages Sent"
-                    value={loading ? "..." : stats.contactedLeads.toLocaleString()}
-                    icon={Send}
-                    theme="blue"
+                <TopCard
+                    title="Reply Rate"
+                    value={loading ? "..." : `${stats.replyRate.toFixed(1)}%`}
+                    subtitle={`${stats.totalReplies} of ${stats.leadsContacted} replied`}
+                    icon={<Percent className="h-5 w-5" />}
+                    iconBg="bg-violet-50 text-violet-600"
                 />
             </div>
 
-            {/* Main Section */}
+            
+
+            {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Left: Engagement Donut */}
-                <Card className="border-border shadow-sm overflow-hidden">
-                    <CardHeader className="bg-slate-50/50 border-border border-border">
-                        <div className="flex items-center gap-2">
-                            <TrendingUp className="h-5 w-5 text-slate-500" />
-                            <CardTitle className="text-sm font-bold text-slate-700 uppercase">Conversion Funnel</CardTitle>
+                {/* Activity Trend */}
+                <Card className="bg-white border-border shadow-sm">
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between mb-5">
+                            <div>
+                                <h2 className="text-base font-bold text-slate-900">Activity Trend</h2>
+                                <p className="text-xs text-slate-500 mt-0.5">Messages sent vs replies over time</p>
+                            </div>
+                            <TrendingUp className="h-4 w-4 text-slate-400" />
                         </div>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                        <div className="w-full" style={{ height: 300, minHeight: 300 }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={donutData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={65}
-                                        outerRadius={95}
-                                        paddingAngle={5}
-                                        dataKey="value"
-                                    >
-                                        {donutData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        </div>
-                        <div className="grid grid-cols-3 gap-4 mt-4">
-                            <SummaryPill label="Total Leads" value={stats.totalLeads} color="bg-purple-600" />
-                            <SummaryPill label="Messages Sent" value={stats.contactedLeads} color="bg-blue-600" />
-                            <SummaryPill label="Total Replies" value={stats.replied} color="bg-emerald-600" />
+                        {trendData.length > 0 ? (
+                            <div className="h-[240px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={trendData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                        <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                                        <Tooltip
+                                            contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '12px' }}
+                                        />
+                                        <Line type="monotone" dataKey="sent" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 3, fill: '#3b82f6', strokeWidth: 0 }} name="Sent" />
+                                        <Line type="monotone" dataKey="replied" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3, fill: '#10b981', strokeWidth: 0 }} name="Replied" />
+                                        <Line type="monotone" dataKey="bot" stroke="#8b5cf6" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Bot" />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        ) : (
+                            <div className="h-[240px] flex items-center justify-center text-sm text-slate-400">
+                                No activity data for the selected period
+                            </div>
+                        )}
+                        <div className="flex justify-center gap-6 mt-3">
+                            <ChartLegend color="bg-blue-500" label="Sent" />
+                            <ChartLegend color="bg-emerald-500" label="Replied" />
+                            <ChartLegend color="bg-violet-500" label="Bot" dashed />
                         </div>
                     </CardContent>
                 </Card>
 
-                {/* Right: Activity Trend Line Chart */}
-                <Card className="border-border shadow-sm overflow-hidden">
-                    <CardHeader className="bg-slate-50/50 border-border border-border">
-                        <div className="flex items-center gap-2">
-                            <BarChart3 className="h-5 w-5 text-slate-500" />
-                            <CardTitle className="text-sm font-bold text-slate-700 uppercase">Activity Trend</CardTitle>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                        <div className="w-full" style={{ height: 300, minHeight: 300 }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={trendData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 'bold' }} dy={10} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                                    <Line type="monotone" dataKey="sent" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', strokeWidth: 0 }} activeDot={{ r: 6 }} />
-                                    <Line type="monotone" dataKey="replied" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', strokeWidth: 0 }} activeDot={{ r: 6 }} />
-                                </LineChart>
-                            </ResponsiveContainer>
-                        </div>
-                        <div className="flex justify-center gap-8 mt-4">
-                            <div className="flex items-center gap-2">
-                                <div className="h-1 w-4 bg-blue-600 rounded-full" />
-                                <span className="text-xs font-bold text-slate-500 uppercase tracking-tight">Messages Sent</span>
+                {/* Message Status Distribution */}
+                <Card className="bg-white border-border shadow-sm">
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between mb-5">
+                            <div>
+                                <h2 className="text-base font-bold text-slate-900">Message Delivery</h2>
+                                <p className="text-xs text-slate-500 mt-0.5">Read, delivered &amp; sent status breakdown</p>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <div className="h-1 w-4 bg-emerald-600 rounded-full" />
-                                <span className="text-xs font-bold text-slate-500 uppercase tracking-tight">Replies Received</span>
-                            </div>
+                            <BarChart3 className="h-4 w-4 text-slate-400" />
                         </div>
+                        {statusDistribution.length > 0 ? (
+                            <>
+                                <div className="h-[200px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={statusDistribution}
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={55}
+                                                outerRadius={80}
+                                                paddingAngle={4}
+                                                dataKey="value"
+                                            >
+                                                {statusDistribution.map((entry, index) => (
+                                                    <Cell key={index} fill={entry.color} strokeWidth={0} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }} />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 mt-2">
+                                    {statusDistribution.map((item, idx) => (
+                                        <div key={idx} className="flex items-center gap-2.5 p-2.5 bg-slate-50 rounded-lg">
+                                            <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-bold text-slate-700">{item.value}</p>
+                                                <p className="text-[10px] text-slate-500">{item.name}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="h-[240px] flex items-center justify-center text-sm text-slate-400">
+                                No message status data available
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
+
+            
 
             {/* Replies Sheet */}
             <Sheet open={isRepliesOpen} onOpenChange={setIsRepliesOpen}>
@@ -328,53 +386,84 @@ export default function WhatsappDashboardPage() {
     );
 }
 
-function MetricCard({ title, value, icon: Icon, theme, desc, onClick }: any) {
-    const themes: any = {
-        purple: { bg: "bg-purple-50", text: "text-purple-600", border: "border-purple-100", iconBg: "bg-purple-100/50" },
-        blue: { bg: "bg-blue-50", text: "text-blue-600", border: "border-borderlue-100", iconBg: "bg-blue-100/50" },
-        emerald: { bg: "bg-emerald-50", text: "text-emerald-600", border: "border-bordermerald-100", iconBg: "bg-emerald-100/50" },
-        orange: { bg: "bg-orange-50", text: "text-orange-600", border: "border-orange-100", iconBg: "bg-orange-100/50" },
-    };
-
-    const t = themes[theme] || themes.purple;
-
+/* ─── Top Metric Card ─── */
+function TopCard({ title, value, subtitle, icon, iconBg, onClick }: {
+    title: string; value: number | string; subtitle?: string;
+    icon: React.ReactNode; iconBg: string; onClick?: () => void;
+}) {
     return (
         <Card
-            className={`border ${t.border} shadow-sm bg-white overflow-hidden ${onClick ? 'cursor-pointer hover:shadow-md hover:border-border transition-all active:scale-[0.98]' : ''}`}
+            className={cn(
+                "border-border bg-white shadow-sm transition-all",
+                onClick && "cursor-pointer hover:shadow-md"
+            )}
             onClick={onClick}
         >
-            <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-xl ${t.iconBg} ${t.text}`}>
-                        <Icon className="h-6 w-6" />
-                    </div>
-                    <div>
-                        <h3 className="text-3xl font-black text-slate-900 tracking-tight">{value}</h3>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{title}</p>
-                        <p className="text-[10px] text-slate-400 mt-1 italic">{desc}</p>
-                    </div>
+            <CardContent className="p-5 flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                    <h3 className="text-2xl font-bold text-slate-900">{value}</h3>
+                    <p className="text-sm font-semibold text-slate-800 mt-0.5">{title}</p>
+                    {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
+                </div>
+                <div className={cn("p-3 rounded-xl shrink-0", iconBg)}>
+                    {icon}
                 </div>
             </CardContent>
         </Card>
     );
 }
 
-function SummaryPill({ label, value, color }: any) {
+/* ─── Smaller Insight Card ─── */
+function InsightCard({ label, value, icon, color, bg }: {
+    label: string; value: number | string; icon: React.ReactNode; color: string; bg: string;
+}) {
     return (
-        <div className={`p-4 rounded-xl flex flex-col items-center justify-center text-white ${color} shadow-sm`}>
-            <span className="text-2xl font-black">{value}</span>
-            <span className="text-[10px] uppercase font-bold opacity-90 text-center leading-tight tracking-wider">{label}</span>
-        </div>
+        <Card className="border-border bg-white shadow-sm">
+            <CardContent className="p-4 flex flex-col gap-1.5">
+                <div className={cn("p-1.5 rounded-lg w-fit", bg, color)}>{icon}</div>
+                <h4 className="text-xl font-bold text-slate-900">{value}</h4>
+                <p className="text-[11px] font-medium text-slate-500">{label}</p>
+            </CardContent>
+        </Card>
     );
 }
 
-function StatusCard({ title, value, borderColor, accentColor }: any) {
+/* ─── Quick Action Card ─── */
+function ActionCard({ title, description, icon, onClick, color }: {
+    title: string; description: string; icon: React.ReactNode; onClick: () => void; color: string;
+}) {
+    const colorMap: Record<string, { bg: string; iconBg: string; text: string; hover: string }> = {
+        indigo: { bg: 'bg-white', iconBg: 'bg-indigo-50', text: 'text-indigo-600', hover: 'hover:border-indigo-200' },
+        emerald: { bg: 'bg-white', iconBg: 'bg-emerald-50', text: 'text-emerald-600', hover: 'hover:border-emerald-200' },
+        violet: { bg: 'bg-white', iconBg: 'bg-violet-50', text: 'text-violet-600', hover: 'hover:border-violet-200' },
+    };
+    const c = colorMap[color] || colorMap.indigo;
+
     return (
-        <Card className={`bg-white border-l-4 ${borderColor} border-y border-r border-border rounded-xl shadow-sm hover:shadow-md transition-all`}>
-            <CardContent className="p-5">
-                <p className={`text-[10px] font-black uppercase tracking-widest ${accentColor} mb-2`}>{title}</p>
-                <h3 className="text-2xl font-black text-slate-900">{value}</h3>
+        <Card
+            className={cn("border-border shadow-sm cursor-pointer transition-all hover:shadow-md", c.bg, c.hover)}
+            onClick={onClick}
+        >
+            <CardContent className="p-5 flex items-center gap-4">
+                <div className={cn("p-3 rounded-xl shrink-0", c.iconBg, c.text)}>{icon}</div>
+                <div className="min-w-0">
+                    <h4 className="text-sm font-bold text-slate-900">{title}</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+                </div>
+                <ArrowUpRight className="h-4 w-4 text-slate-400 shrink-0 ml-auto" />
             </CardContent>
         </Card>
+    );
+}
+
+/* ─── Chart Legend ─── */
+function ChartLegend({ color, label, dashed }: { color: string; label: string; dashed?: boolean }) {
+    return (
+        <div className="flex items-center gap-1.5">
+            <div className={cn("h-[3px] w-4 rounded-full", color, dashed && "opacity-60")}
+                style={dashed ? { background: `repeating-linear-gradient(90deg, currentColor 0 3px, transparent 3px 6px)` } : {}}
+            />
+            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{label}</span>
+        </div>
     );
 }
