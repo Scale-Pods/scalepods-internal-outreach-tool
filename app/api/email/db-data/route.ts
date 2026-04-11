@@ -4,7 +4,6 @@ import { supabaseAdmin } from '@/lib/supabase';
 export async function GET() {
     try {
         // Fetch Campaign Analytics
-        // The user mentioned the first row contains definitions, so we'll fetch all and handle it in frontend or here.
         const { data: campaignAnalytics, error: campaignError } = await supabaseAdmin
             .from('instantly_campaign_analytics')
             .select('*');
@@ -13,26 +12,27 @@ export async function GET() {
             console.error('Campaign Analytics Error:', campaignError);
         }
 
-        // Fetch Lead Replies
+        // Fetch Lead Replies ordered by reply_timestamp (actual column name)
         const { data: leadReplies, error: repliesError } = await supabaseAdmin
             .from('instantly_lead_replies')
             .select('*')
-            .order('timestamp', { ascending: false }); // Assuming 'timestamp' exists as it's common for replies
+            .order('reply_timestamp', { ascending: false });
 
         if (repliesError) {
-            // Fallback to created_at if timestamp doesn't exist
+            console.error('Lead Replies Error (reply_timestamp):', repliesError);
+            // Fallback to created_at if reply_timestamp order fails
             const { data: fallbackReplies, error: fallbackError } = await supabaseAdmin
                 .from('instantly_lead_replies')
                 .select('*')
                 .order('created_at', { ascending: false });
-            
+
             if (!fallbackError) {
                 return NextResponse.json({
                     campaignAnalytics: campaignAnalytics || [],
                     leadReplies: fallbackReplies || []
                 });
             }
-            console.error('Lead Replies Error:', repliesError);
+            console.error('Lead Replies Fallback Error:', fallbackError);
         }
 
         return NextResponse.json({
