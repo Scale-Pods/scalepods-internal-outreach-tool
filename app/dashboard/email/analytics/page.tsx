@@ -55,6 +55,33 @@ interface WarmupData {
     history?: HistoryData[];
 }
 
+// All 9 email accounts to always display
+const ALL_TARGET_EMAILS = [
+    "adnan@scalepods.co",
+    "adnan@scalepods.org",
+    "nancy@scalepods.co",
+    "palashy@scalepods.org",
+    "raunak@scalepods.co",
+    "raunak@scalepods.tech",
+    "tanushree@scalepods.co",
+    "viraj@scalepods.co",
+    "viraj@scalepods.tech",
+];
+
+const EMPTY_WARMUP: WarmupData = {
+    email: "",
+    total_sent: 0,
+    landed_inbox: 0,
+    landed_spam: 0,
+    received: 0,
+    health_score: 0,
+    health_label: "0%",
+    inbox_rate: 0,
+    spam_rate: 0,
+    status: "Poor",
+    history: [],
+};
+
 export default function EmailAnalyticsPage() {
     const { leads: allLeads, loadingLeads } = useData();
     const [warmupData, setWarmupData] = useState<WarmupData[]>([]);
@@ -99,7 +126,13 @@ export default function EmailAnalyticsPage() {
                 console.error("General analytics fetch failed");
             }
 
-            setWarmupData(warmupJson);
+            // Merge API response with all 9 target emails — fill missing ones with empty data
+            const apiEmails = new Set((warmupJson || []).map((w: WarmupData) => w.email));
+            const missingAccounts: WarmupData[] = ALL_TARGET_EMAILS
+                .filter(email => !apiEmails.has(email))
+                .map(email => ({ ...EMPTY_WARMUP, email, status: "Poor" as const }));
+
+            setWarmupData([...warmupJson, ...missingAccounts].sort((a: WarmupData, b: WarmupData) => a.email.localeCompare(b.email)));
             setGeneralData(generalJson);
 
             // Fetch DB Analytics
@@ -340,7 +373,7 @@ export default function EmailAnalyticsPage() {
 
             {/* Warm-up Analytics Section */}
             <div className="space-y-4">
-                <h2 className="text-xl font-bold text-slate-900">Warm-up Health</h2>
+                <h2 className="text-xl font-bold text-slate-900">Warm-up Health <span className="text-sm font-medium text-slate-400 ml-2">({warmupData.length} accounts)</span></h2>
                 {!loading && warmupData.length === 0 && !error && (
                     <Alert>
                         <AlertCircle className="h-4 w-4" />
