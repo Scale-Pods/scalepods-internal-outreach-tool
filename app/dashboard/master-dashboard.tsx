@@ -54,6 +54,7 @@ export default function MasterDashboard() {
 
     const { leads: allLeads, calls: allCalls, loadingLeads, loadingCalls, refreshAll, maqsamBalance, loadingBalances } = useData();
     const [leads, setLeads] = useState<any[]>([]);
+    const [metaLeads, setMetaLeads] = useState<any[]>([]);
     const [acquisitionChartData, setAcquisitionChartData] = useState<any[]>([]);
     const [stats, setStats] = useState({
         totalLeads: 0,
@@ -65,6 +66,21 @@ export default function MasterDashboard() {
         totalVoiceCalls: 0
     });
     const loading = loadingLeads || loadingCalls;
+
+    // Fetch meta_lead_tracker leads
+    useEffect(() => {
+        (async () => {
+            try {
+                const res = await fetch('/api/leads/meta');
+                if (res.ok) {
+                    const data = await res.json();
+                    setMetaLeads(data.leads || []);
+                }
+            } catch (err) {
+                console.error('Failed to fetch meta_lead_tracker:', err);
+            }
+        })();
+    }, []);
 
     const handleDateUpdate = ({ range, label }: { range: any, label?: string }) => {
         if (label) {
@@ -304,7 +320,7 @@ export default function MasterDashboard() {
 
                 <MetricCard
                     title="Total Leads"
-                    value={loading ? "..." : stats.totalLeads.toLocaleString()}
+                    value={loading ? "..." : (stats.totalLeads + metaLeads.length).toLocaleString()}
                     change="Real-time"
                     isUp={true}
                     icon={<Users className="h-6 w-6" />}
@@ -312,6 +328,7 @@ export default function MasterDashboard() {
                     bg="bg-blue-50"
                     border="border-borderlue-100"
                     onClick={() => router.push('/dashboard/leads')}
+                    subtitle={`ICP: ${stats.totalLeads} + Meta: ${metaLeads.length}`}
                 />
                 <MetricCard
                     title="Total Emails Sent"

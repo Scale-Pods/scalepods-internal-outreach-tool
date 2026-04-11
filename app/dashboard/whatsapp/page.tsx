@@ -34,6 +34,8 @@ export default function WhatsappDashboardPage() {
 
     const [stats, setStats] = useState({
         totalLeads: 0,
+        icpLeadCount: 0,
+        metaLeadCount: 0,
         leadsContacted: 0,
         messagesSent: 0,
         botMessages: 0,
@@ -103,6 +105,8 @@ export default function WhatsappDashboardPage() {
             });
 
             const allWhatsappLeads = [...icpWhatsapp, ...metaWhatsapp];
+            const icpCount = icpWhatsapp.length;
+            const metaCount = metaWhatsapp.length;
             setLeads(allWhatsappLeads);
 
             // Date filtering
@@ -184,6 +188,8 @@ export default function WhatsappDashboardPage() {
 
             setStats({
                 totalLeads: filteredLeads.length,
+                icpLeadCount: icpCount,
+                metaLeadCount: metaCount,
                 leadsContacted,
                 messagesSent,
                 botMessages,
@@ -242,7 +248,7 @@ export default function WhatsappDashboardPage() {
                 <TopCard
                     title="Total Leads"
                     value={loading ? "..." : stats.totalLeads}
-                    subtitle={`${stats.leadsContacted} contacted`}
+                    subtitle={`ICP: ${stats.icpLeadCount} + Meta: ${stats.metaLeadCount}`}
                     icon={<Users className="h-5 w-5" />}
                     iconBg="bg-indigo-50 text-indigo-600"
                     onClick={() => router.push('/dashboard/whatsapp/leads')}
@@ -250,7 +256,6 @@ export default function WhatsappDashboardPage() {
                 <TopCard
                     title="Messages Sent"
                     value={loading ? "..." : stats.messagesSent}
-                    subtitle={`${stats.botMessages} bot · ${stats.messagesSent - stats.botMessages} drip`}
                     icon={<Send className="h-5 w-5" />}
                     iconBg="bg-blue-50 text-blue-600"
                     onClick={() => router.push('/dashboard/whatsapp/sent')}
@@ -258,7 +263,6 @@ export default function WhatsappDashboardPage() {
                 <TopCard
                     title="Total Replies"
                     value={loading ? "..." : stats.totalReplies}
-                    subtitle={`${stats.waitingCount} still waiting`}
                     icon={<Reply className="h-5 w-5" />}
                     iconBg="bg-emerald-50 text-emerald-600"
                     onClick={() => setIsRepliesOpen(true)}
@@ -266,7 +270,6 @@ export default function WhatsappDashboardPage() {
                 <TopCard
                     title="Reply Rate"
                     value={loading ? "..." : `${stats.replyRate.toFixed(1)}%`}
-                    subtitle={`${stats.totalReplies} of ${stats.leadsContacted} replied`}
                     icon={<Percent className="h-5 w-5" />}
                     iconBg="bg-violet-50 text-violet-600"
                 />
