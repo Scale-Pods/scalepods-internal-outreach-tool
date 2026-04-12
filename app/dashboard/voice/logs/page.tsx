@@ -113,7 +113,6 @@ export default function VoiceLogsPage() {
     const [providerFilter, setProviderFilter] = useState("all");
     const [phoneFilter, setPhoneFilter] = useState("");
     const [sortBy, setSortBy] = useState("newest");
-    const [costModalOpen, setCostModalOpen] = useState(false);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -219,10 +218,6 @@ export default function VoiceLogsPage() {
                         <p className="text-slate-500 text-sm mt-1">Comprehensive history of AI voice interactions</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <Button variant="outline" className="text-slate-600 border-border h-10 shadow-sm" onClick={() => setCostModalOpen(true)}>
-                            <Info className="h-4 w-4 mr-2" />
-                            Cost Info
-                        </Button>
                         <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
                         <Button variant="outline" className="h-10 px-4 shadow-sm" onClick={handleRefresh} disabled={loading}>
                             <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
@@ -335,67 +330,6 @@ export default function VoiceLogsPage() {
             </Card>
 
             <CallDetailsModal open={modalOpen} onOpenChange={setModalOpen} call={selectedCall} />
-
-            <Dialog open={costModalOpen} onOpenChange={setCostModalOpen}>
-                <DialogContent className="sm:max-w-[500px] bg-white border-border shadow-xl overflow-hidden p-0">
-                    <DialogHeader className="p-6 bg-slate-50 border-b border-border">
-                        <DialogTitle className="flex items-center gap-2 text-xl font-bold text-slate-900">
-                            <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
-                                <Info className="h-5 w-5" />
-                            </div>
-                            How Costing is Calculated
-                        </DialogTitle>
-                        <DialogDescription className="text-slate-500">
-                            Understanding our automated billing and rate matching logic.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="p-6 space-y-6">
-                        <div className="space-y-4">
-                            <div className="flex gap-4">
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-sm">1</div>
-                                <div>
-                                    <h4 className="font-bold text-slate-800 text-sm mb-1">Normalization</h4>
-                                    <p className="text-xs text-slate-500 leading-relaxed">System cleans phone numbers by removing all symbols and spaces, ensuring consistent lookup against our global rate database.</p>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-4">
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-sm">2</div>
-                                <div>
-                                    <h4 className="font-bold text-slate-800 text-sm mb-1">Longest-Prefix Matching</h4>
-                                    <p className="text-xs text-slate-500 leading-relaxed">We use high-precision matching. If a number matches multiple regions (e.g. UAE General vs Dubai Fixed), we prioritize the most specific prefix for maximum accuracy.</p>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-4">
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-sm">3</div>
-                                <div>
-                                    <h4 className="font-bold text-slate-800 text-sm mb-1">Per-Minute Computation</h4>
-                                    <p className="text-xs text-slate-500 leading-relaxed">Duration is tracked in seconds and converted to minutes. For outbound calls, the matched rate is applied. Inbound calls are always computed at $0.02.</p>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-4">
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center font-bold text-emerald-600 text-sm">✓</div>
-                                <div>
-                                    <h4 className="font-bold text-emerald-800 text-sm mb-1">Billing Confirmation</h4>
-                                    <p className="text-xs text-emerald-600/80 leading-relaxed italic">All rates are pulled directly from your official billing schedule (found in the PDF below).</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <DialogFooter className="p-6 bg-slate-50 border-t border-border">
-                        <a href="/billing-plan.pdf" download className="w-full">
-                            <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-200">
-                                <Download className="h-4 w-4 mr-2" />
-                                Download Billing Plan PDF
-                            </Button>
-                        </a>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }
