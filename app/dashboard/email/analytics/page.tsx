@@ -15,7 +15,8 @@ import {
     ShieldCheck,
     AlertCircle,
     Activity,
-    Users
+    Users,
+    Info
 } from "lucide-react";
 import React, { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
@@ -41,50 +42,8 @@ interface HistoryData {
     spam: number;
 }
 
-interface WarmupData {
-    email: string;
-    total_sent: number;
-    landed_inbox: number;
-    landed_spam: number;
-    received: number;
-    health_score: number;
-    health_label: string;
-    inbox_rate: number;
-    spam_rate: number;
-    status: "Healthy" | "Medium" | "Poor";
-    history?: HistoryData[];
-}
-
-// All 9 email accounts to always display
-const ALL_TARGET_EMAILS = [
-    "adnan@scalepods.co",
-    "adnan@scalepods.org",
-    "nancy@scalepods.co",
-    "palashy@scalepods.org",
-    "raunak@scalepods.co",
-    "raunak@scalepods.tech",
-    "tanushree@scalepods.co",
-    "viraj@scalepods.co",
-    "viraj@scalepods.tech",
-];
-
-const EMPTY_WARMUP: WarmupData = {
-    email: "",
-    total_sent: 0,
-    landed_inbox: 0,
-    landed_spam: 0,
-    received: 0,
-    health_score: 0,
-    health_label: "0%",
-    inbox_rate: 0,
-    spam_rate: 0,
-    status: "Poor",
-    history: [],
-};
-
 export default function EmailAnalyticsPage() {
     const { leads: allLeads, loadingLeads } = useData();
-    const [warmupData, setWarmupData] = useState<WarmupData[]>([]);
     const [generalData, setGeneralData] = useState<any>(null);
     const [loadingLocal, setLoadingLocal] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -104,15 +63,6 @@ export default function EmailAnalyticsPage() {
             const startDate = start ? start.toISOString().split('T')[0] : '';
             const endDate = end ? end.toISOString().split('T')[0] : '';
 
-            // Fetch Warmup Data
-            const warmupRes = await fetch('/api/email/warmup-analytics', { method: 'POST' });
-            let warmupJson = [];
-            if (warmupRes.ok) {
-                warmupJson = await warmupRes.json();
-            } else {
-                console.error("Warmup fetch failed");
-            }
-
             // Fetch General Analytics Data
             const queryParams = new URLSearchParams();
             if (startDate) queryParams.append('start_date', startDate);
@@ -126,13 +76,6 @@ export default function EmailAnalyticsPage() {
                 console.error("General analytics fetch failed");
             }
 
-            // Merge API response with all 9 target emails — fill missing ones with empty data
-            const apiEmails = new Set((warmupJson || []).map((w: WarmupData) => w.email));
-            const missingAccounts: WarmupData[] = ALL_TARGET_EMAILS
-                .filter(email => !apiEmails.has(email))
-                .map(email => ({ ...EMPTY_WARMUP, email, status: "Poor" as const }));
-
-            setWarmupData([...warmupJson, ...missingAccounts].sort((a: WarmupData, b: WarmupData) => a.email.localeCompare(b.email)));
             setGeneralData(generalJson);
 
             // Fetch DB Analytics
@@ -267,6 +210,12 @@ export default function EmailAnalyticsPage() {
     const openRate = totalSent > 0 ? ((totalOpens / totalSent) * 100).toFixed(2) : "0.00";
     const replyRate = totalLeads > 0 ? ((totalReplies / totalLeads) * 100).toFixed(2) : "0.00";
 
+    // Calculate total leads from Campaign DB
+    const totalCampaignLeads = dbCampaigns.slice(1).reduce((acc: number, campaign: any) => {
+        // Try common field names for leads in Instantly
+        const count = Number(campaign.leads_count) || Number(campaign.leads) || Number(campaign.total_leads) || Number(campaign.leads_contacted) || Number(campaign.contacted) || 0;
+        return acc + count;
+    }, 0);
 
     return (
         <div className="space-y-8 pb-10 pt-6 relative min-h-[500px]">
@@ -301,35 +250,46 @@ export default function EmailAnalyticsPage() {
             {/* Database Campaigns Section */}
             {dbCampaigns.length > 1 && (
                 <div className="space-y-4">
-                    <h2 className="text-xl font-bold text-slate-900">Instantly Campaign Analytics (DB)</h2>
-                    <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-sm">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-border">
-                                <tr>
-                                    {Object.keys(dbCampaigns[1] || {}).filter(k => k !== 'id' && k !== 'created_at').map(key => (
-                                        <th key={key} className="px-6 py-4 font-bold relative group">
-                                            <span>{key.replace(/_/g, ' ')}</span>
-                                            {dbCampaigns[0][key] && (
-                                                <div className="absolute hidden group-hover:block z-50 w-48 p-2 mt-1 -ml-4 bg-slate-900 text-white text-[10px] normal-case rounded-md shadow-xl border border-slate-700 font-medium">
-                                                    {dbCampaigns[0][key]}
+                    <h2 className="text-xl font-bold text-slate-900 mb-6">Instantly Campaign Analytics</h2>
+                    <div className="flex flex-col gap-6 w-full">
+                        {dbCampaigns.slice(1).map((campaign, idx) => {
+                            const name = campaign.campaign_name || `Campaign #${idx + 1}`;
+                            
+                            return (
+                                <Card key={idx} className="bg-white border-border shadow-sm flex flex-col hover:shadow-md transition-shadow w-full">
+                                    <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 rounded-t-xl">
+                                        <h3 className="font-bold text-slate-900 truncate text-sm" title={name}>{name}</h3>
+                                        <Badge variant="outline" className="text-[10px] bg-white">Campaign</Badge>
+                                    </div>
+                                    <CardContent className="p-4 flex-1 bg-white">
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3">
+                                            {Object.entries(campaign)
+                                                .filter(([k]) => k !== 'id' && k !== 'created_at' && k !== 'updated_at' && k !== 'campaign_name' && k !== 'campaign_id' && k !== 'workspace_id' && k !== 'account_id')
+                                                .map(([key, val]: any) => (
+                                                <div key={key} className="flex flex-col gap-1.5 p-3 rounded-xl border border-slate-100 bg-slate-50/70 relative group hover:bg-slate-50 transition-colors">
+                                                    <div className="flex items-start justify-between gap-1">
+                                                        <span className="text-[9px] uppercase font-bold text-slate-500 tracking-wider leading-snug">
+                                                            {key.replace(/_/g, ' ')}
+                                                        </span>
+                                                        {dbCampaigns[0][key] && (
+                                                            <div className="flex-shrink-0 mt-0.5">
+                                                                <Info className="h-3 w-3 text-slate-400 cursor-help" />
+                                                                <div className="absolute hidden group-hover:block z-50 w-48 p-2 mt-2 -right-2 bg-slate-900 text-white text-[10px] normal-case rounded shadow-xl border border-slate-700 font-medium pointer-events-none">
+                                                                    {dbCampaigns[0][key]}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-base font-black text-slate-800 truncate" title={String(val)}>
+                                                        {typeof val === 'boolean' || val === 'true' || val === 'false' ? (String(val) === 'true' ? 'Yes' : 'No') : (typeof val === 'number' ? val.toLocaleString() : (val || '---'))}
+                                                    </span>
                                                 </div>
-                                            )}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border">
-                                {dbCampaigns.slice(1).map((campaign, idx) => (
-                                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                                        {Object.entries(campaign).filter(([k]) => k !== 'id' && k !== 'created_at').map(([key, val]: any) => (
-                                            <td key={key} className="px-6 py-4 text-slate-600 font-medium whitespace-nowrap">
-                                                {typeof val === 'number' ? val.toLocaleString() : (val || '---')}
-                                            </td>
-                                        ))}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                            ))}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )
+                        })}
                     </div>
                 </div>
             )}
@@ -363,7 +323,8 @@ export default function EmailAnalyticsPage() {
                     />
                     <MetricCard
                         label="Total Leads"
-                        value={totalLeads.toLocaleString()}
+                        value={totalCampaignLeads > 0 ? totalCampaignLeads.toLocaleString() : totalLeads.toLocaleString()}
+                        subtext={totalCampaignLeads > 0 ? "From Campaigns" : "Global Leads"}
                         icon={Users}
                         iconBg="bg-slate-50"
                         iconColor="text-slate-600"
@@ -371,150 +332,7 @@ export default function EmailAnalyticsPage() {
                 </div>
             </div>
 
-            {/* Warm-up Analytics Section */}
-            <div className="space-y-4">
-                <h2 className="text-xl font-bold text-slate-900">Warm-up Health <span className="text-sm font-medium text-slate-400 ml-2">({warmupData.length} accounts)</span></h2>
-                {!loading && warmupData.length === 0 && !error && (
-                    <Alert>
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>No Warm-up Data</AlertTitle>
-                        <AlertDescription>No warm-up data found for the configured emails.</AlertDescription>
-                    </Alert>
-                )}
 
-                <div className="grid gap-8">
-                    {warmupData.map((account) => (
-                        <div key={account.email} className="space-y-4">
-                            <Card className="overflow-hidden border-border">
-                                <div className="border-border border-border bg-slate-50/50 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold">
-                                            {account.email.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <h3 className="font-semibold text-slate-900">{account.email}</h3>
-                                            <p className="text-xs text-slate-500">Warm-up Status</p>
-                                        </div>
-                                    </div>
-                                    <StatusBadge status={account.status} score={account.health_score} />
-                                </div>
-
-                                <CardContent className="p-6">
-                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
-                                        <MiniMetric
-                                            label="Health Score"
-                                            value={`${account.health_score}/100`}
-                                            subtext={account.health_label}
-                                            icon={Activity}
-                                            color="text-indigo-600"
-                                            bg="bg-indigo-50"
-                                        />
-                                        <MiniMetric
-                                            label="Inbox Rate"
-                                            value={`${account.inbox_rate}%`}
-                                            icon={CheckCircle2}
-                                            color="text-emerald-600"
-                                            bg="bg-emerald-50"
-                                        />
-                                        <MiniMetric
-                                            label="Spam Rate"
-                                            value={`${account.spam_rate}%`}
-                                            icon={AlertTriangle}
-                                            color="text-rose-600"
-                                            bg="bg-rose-50"
-                                        />
-                                        <MiniMetric
-                                            label="Warmup Emails Sent"
-                                            value={account.total_sent}
-                                            icon={Send}
-                                            color="text-blue-600"
-                                            bg="bg-blue-50"
-                                        />
-                                        <MiniMetric
-                                            label="Landed Inbox"
-                                            value={account.landed_inbox}
-                                            icon={ShieldCheck}
-                                            color="text-emerald-600"
-                                            bg="bg-emerald-50"
-                                        />
-                                        <MiniMetric
-                                            label="Landed Spam"
-                                            value={account.landed_spam}
-                                            icon={AlertCircle}
-                                            color="text-amber-600"
-                                            bg="bg-amber-50"
-                                        />
-                                    </div>
-
-                                    {/* Graph Section */}
-                                    {account.history && account.history.length > 0 ? (
-                                        <div className="h-[400px] w-full mt-4">
-                                            <h4 className="text-sm font-semibold text-slate-500 mb-4">Daily Performance</h4>
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <AreaChart data={account.history} margin={{ top: 20, right: 60, left: 10, bottom: 30 }}>
-                                                    <defs>
-                                                        <linearGradient id={`colorInbox-${account.email}`} x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
-                                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                                        </linearGradient>
-                                                        <linearGradient id={`colorSent-${account.email}`} x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
-                                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                                        </linearGradient>
-                                                    </defs>
-                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                                    <XAxis
-                                                        dataKey="date"
-                                                        axisLine={false}
-                                                        tickLine={false}
-                                                        tick={{ fontSize: 12, fill: '#64748b' }}
-                                                        tickFormatter={(str) => {
-                                                            const date = new Date(str);
-                                                            return `${date.getMonth() + 1}/${date.getDate()}`;
-                                                        }}
-                                                    />
-                                                    <YAxis
-                                                        axisLine={false}
-                                                        tickLine={false}
-                                                        tick={{ fontSize: 12, fill: '#64748b' }}
-                                                    />
-                                                    <Tooltip
-                                                        contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                                        cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }}
-                                                    />
-                                                    <Legend iconType="circle" />
-                                                    <Area
-                                                        type="monotone"
-                                                        dataKey="sent"
-                                                        name="Emails Sent"
-                                                        stroke="#3b82f6"
-                                                        fillOpacity={1}
-                                                        fill={`url(#colorSent-${account.email})`}
-                                                        strokeWidth={2}
-                                                    />
-                                                    <Area
-                                                        type="monotone"
-                                                        dataKey="inbox"
-                                                        name="Landed in Inbox"
-                                                        stroke="#10b981"
-                                                        fillOpacity={1}
-                                                        fill={`url(#colorInbox-${account.email})`}
-                                                        strokeWidth={2}
-                                                    />
-                                                </AreaChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                    ) : (
-                                        <div className="h-[200px] w-full flex items-center justify-center bg-slate-50 rounded-lg border border-dashed border-border">
-                                            <p className="text-sm text-slate-400">No historical data available</p>
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        </div>
-                    ))}
-                </div>
-            </div>
 
             {loading && (
                 <SPLoader fullScreen={false} />
@@ -523,35 +341,7 @@ export default function EmailAnalyticsPage() {
     );
 }
 
-function StatusBadge({ status, score }: { status: string, score: number }) {
-    let colorClass = "bg-slate-100 text-slate-700 hover:bg-slate-100";
-    if (status === "Healthy") colorClass = "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-bordermerald-200";
-    else if (status === "Medium") colorClass = "bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200";
-    else if (status === "Poor") colorClass = "bg-rose-100 text-rose-700 hover:bg-rose-100 border-rose-200";
 
-    return (
-        <Badge variant="outline" className={cn("px-3 py-1 text-sm font-medium border", colorClass)}>
-            {status} ({score}%)
-        </Badge>
-    );
-}
-
-function MiniMetric({ label, value, subtext, icon: Icon, color, bg }: any) {
-    return (
-        <div className="flex flex-col gap-1 p-3 rounded-xl bg-white border border-border shadow-sm">
-            <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{label}</span>
-                <div className={cn("p-1.5 rounded-full", bg, color)}>
-                    <Icon className="h-3 w-3" />
-                </div>
-            </div>
-            <div className="flex items-baseline gap-1">
-                <span className="text-xl font-bold text-slate-900">{value}</span>
-                {subtext && <span className="text-xs text-slate-500">{subtext}</span>}
-            </div>
-        </div>
-    );
-}
 
 function MetricCard({ label, value, subtext, icon: Icon, color, iconBg, iconColor }: any) {
     return (

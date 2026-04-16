@@ -12,7 +12,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Mail, ChevronDown, ChevronUp, Reply, Search, RefreshCw, Sparkles, Clock, User, Send } from "lucide-react";
+import { Mail, ChevronDown, ChevronUp, Reply, Search, RefreshCw, Sparkles, Clock, User, Send, Copy, Check } from "lucide-react";
 import React, { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -65,54 +65,15 @@ export default function ReceivedEmailsPage() {
     const loading = loadingLeads || loadingDB;
 
     const fetchReplies = async () => {
-        if (loadingLeads && replies.length === 0) return;
-
         try {
             setLoadingDB(true);
             const realReplies: NormalizedReply[] = [];
 
-            // 1. Process legacy leads table replies
-            allLeads.forEach((lead: any, index: number) => {
-                const emailReply = lead.email_replied;
-                if (!emailReply || emailReply === "No" || String(emailReply).trim() === "") return;
-
-                const trimmed = String(emailReply).trim();
-                const lines = trimmed.split("\n");
-                const lastLine = lines[lines.length - 1].trim();
-                const lastLineDate = new Date(lastLine);
-
-                let displayDate: string = lead.created_at || new Date().toISOString();
-                let cleanContent = trimmed;
-
-                if (!isNaN(lastLineDate.getTime()) && lastLine.includes("-") && lastLine.includes(":")) {
-                    displayDate = lastLineDate.toISOString();
-                    cleanContent = lines.slice(0, -1).join("\n").trim() || "Email Reply Received";
-                }
-
-                const emailStages = (lead.stages_passed || []).filter((s: string) => s.startsWith("Email_"));
-                const lastEmailStage = emailStages.length > 0 ? emailStages[emailStages.length - 1] : "";
-
-                realReplies.push({
-                    id: `${lead.id || index}-legacy`,
-                    leadEmail: lead.email || "No Email Provided",
-                    senderEmail: lead.sender_email || "",
-                    subject: lastEmailStage ? `Reply to ${lastEmailStage}` : "Email Reply",
-                    replyContent: cleanContent,
-                    originalEmailSent: "",
-                    timestamp: format(new Date(displayDate), "MMM dd, yyyy • p"),
-                    originalDate: displayDate,
-                    relativeTime: formatDistanceToNow(new Date(displayDate), { addSuffix: true }),
-                    aiInterestScore: null,
-                    campaignId: null,
-                    threadId: null,
-                    source: "Legacy",
-                });
-            });
-
-            // 2. Fetch from instantly_lead_replies table
+            // Fetch from instantly_lead_replies table
             const dbRes = await fetch('/api/email/db-data');
             if (dbRes.ok) {
                 const { leadReplies } = await dbRes.json();
+
                 if (Array.isArray(leadReplies)) {
                     leadReplies.forEach((reply: InstantlyReply) => {
                         const dateStr = reply.reply_timestamp || reply.created_at || new Date().toISOString();
@@ -155,7 +116,7 @@ export default function ReceivedEmailsPage() {
 
     useEffect(() => {
         fetchReplies();
-    }, [allLeads, loadingLeads]);
+    }, []);
 
     const handleRefresh = () => {
         fetchReplies();
@@ -342,6 +303,57 @@ function getScoreConfig(score: number | null) {
     return { bg: "bg-red-50", text: "text-red-600", border: "border-red-200", label: "Low Interest" };
 }
 
+function CopyButton({ text }: { text: string }) {
+    const [copied, setCopied] = useState(false);
+    return (
+        <button
+            onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(text);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            }}
+            className="p-1.5 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-700 transition-colors shadow-sm"
+            title="Copy to clipboard"
+        >
+            {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+    );
+}
+
+const stripHtml = (html: string) => {
+    if (!html) return '';
+    return html.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ');
+};
+
+function IdButton({ title, idStr }: { title: string, idStr: string }) {
+    const [visible, setVisible] = useState(false);
+    
+    if (visible) {
+        return (
+            <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-border rounded-lg shadow-sm">
+                <div className="flex flex-col min-w-0 max-w-[200px]">
+                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{title}</span>
+                    <span className="text-[10px] font-mono text-slate-600 truncate bg-slate-100 px-1 py-0.5 rounded select-all" title={idStr}>{idStr}</span>
+                </div>
+                <CopyButton text={idStr} />
+            </div>
+        );
+    }
+
+    return (
+        <button
+            onClick={(e) => {
+                e.stopPropagation();
+                setVisible(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-border text-[10px] font-bold text-slate-600 rounded-lg hover:bg-slate-100 hover:text-slate-800 transition-all shadow-sm shrink-0 uppercase tracking-wider"
+        >
+            <span>Reveal {title}</span>
+        </button>
+    );
+}
+
 function EmailReplyCard({ reply }: { reply: NormalizedReply }) {
     const [isOpen, setIsOpen] = useState(false);
     const scoreConfig = getScoreConfig(reply.aiInterestScore);
@@ -409,7 +421,7 @@ function EmailReplyCard({ reply }: { reply: NormalizedReply }) {
                         {/* Preview when collapsed */}
                         {!isOpen && (
                             <p className="text-sm text-slate-400 truncate max-w-lg mt-1.5">
-                                {reply.replyContent.substring(0, 100)}...
+                                {stripHtml(reply.replyContent).substring(0, 100)}...
                             </p>
                         )}
                     </div>
@@ -423,71 +435,43 @@ function EmailReplyCard({ reply }: { reply: NormalizedReply }) {
             <CollapsibleContent>
                 <div className="px-5 pb-5 pt-0">
                     <div className="pl-[64px] space-y-4 border-t border-border pt-4">
-                        {/* Metadata grid */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
-                            {reply.leadEmail && (
-                                <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
-                                    <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                    <div className="min-w-0">
-                                        <span className="font-semibold text-slate-500 block">Lead Email</span>
-                                        <span className="text-slate-700 truncate block">{reply.leadEmail}</span>
+                        <div className="flex flex-col md:flex-row gap-4 justify-between items-start">
+                            {/* Metadata grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs w-full max-w-xl">
+                                {reply.leadEmail && (
+                                    <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                                        <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                        <div className="min-w-0">
+                                            <span className="font-semibold text-slate-500 block">Lead Email</span>
+                                            <span className="text-slate-700 truncate block">{reply.leadEmail}</span>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                            {reply.senderEmail && (
-                                <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
-                                    <Send className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                    <div className="min-w-0">
-                                        <span className="font-semibold text-slate-500 block">Sender (Our Side)</span>
-                                        <span className="text-slate-700 truncate block">{reply.senderEmail}</span>
+                                )}
+                                {reply.senderEmail && (
+                                    <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                                        <Send className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                        <div className="min-w-0">
+                                            <span className="font-semibold text-slate-500 block">Sender (Our Side)</span>
+                                            <span className="text-slate-700 truncate block">{reply.senderEmail}</span>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                            {reply.campaignId && (
-                                <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
-                                    <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                    <div className="min-w-0">
-                                        <span className="font-semibold text-slate-500 block">Campaign ID</span>
-                                        <span className="text-slate-700 truncate block font-mono text-[10px]">{reply.campaignId}</span>
-                                    </div>
-                                </div>
-                            )}
-                            {reply.threadId && (
-                                <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
-                                    <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                    <div className="min-w-0">
-                                        <span className="font-semibold text-slate-500 block">Thread ID</span>
-                                        <span className="text-slate-700 truncate block font-mono text-[10px]">{reply.threadId}</span>
-                                    </div>
-                                </div>
-                            )}
-                            {reply.aiInterestScore !== null && reply.aiInterestScore !== undefined && scoreConfig && (
-                                <div className={cn("flex items-center gap-2 p-2.5 rounded-lg border", scoreConfig.bg, scoreConfig.border)}>
-                                    <Sparkles className={cn("h-3.5 w-3.5 shrink-0", scoreConfig.text)} />
-                                    <div className="min-w-0">
-                                        <span className="font-semibold text-slate-500 block">AI Interest Score</span>
-                                        <span className={cn("font-bold block", scoreConfig.text)}>{reply.aiInterestScore}% – {scoreConfig.label}</span>
-                                    </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
+
+                            {/* Buttons on the right side */}
+                            <div className="flex flex-wrap gap-2 shrink-0 items-start md:justify-end max-w-full">
+                                {reply.campaignId && <IdButton title="Campaign" idStr={reply.campaignId} />}
+                                {reply.threadId && <IdButton title="Thread" idStr={reply.threadId} />}
+                            </div>
                         </div>
 
-                        {/* Original email sent (what we sent to the lead) */}
-                        {reply.originalEmailSent && (
-                            <div className="space-y-1.5">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Our Email (Sent to Lead)</p>
-                                <div className="p-4 bg-blue-50/60 rounded-lg border border-blue-100 text-sm text-slate-600 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
-                                    {reply.originalEmailSent}
-                                </div>
-                            </div>
-                        )}
-
                         {/* Reply content */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 pt-2">
                             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Lead&apos;s Reply</p>
-                            <div className="p-4 bg-slate-50 rounded-lg border border-border text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
-                                {reply.replyContent}
-                            </div>
+                            <div 
+                                className="p-4 bg-slate-50 rounded-lg border border-border text-sm text-slate-700 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto"
+                                dangerouslySetInnerHTML={{ __html: reply.replyContent }}
+                            />
                         </div>
                     </div>
                 </div>

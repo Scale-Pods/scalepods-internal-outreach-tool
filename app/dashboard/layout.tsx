@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search } from "lucide-react";
+import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import {
@@ -209,6 +209,7 @@ function DashboardContent({
                 { title: "Bounces", href: "/dashboard/email/bounces", icon: AlertCircle },
                 { title: "Unsubscribed", href: "/dashboard/email/unsubscribed", icon: UserMinus },
                 { title: "Analytics", href: "/dashboard/email/analytics", icon: BarChart2 },
+                { title: "Warmup", href: "/dashboard/email/warmup", icon: Activity },
             ]
         },
         whatsapp: {

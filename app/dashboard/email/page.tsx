@@ -18,6 +18,7 @@ import { SPLoader } from "@/components/sp-loader";
 import { format } from "date-fns";
 
 interface CampaignMetrics {
+    campaignId: string;
     campaignName: string;
     status: string;
     leadsCount: number;
@@ -102,6 +103,7 @@ export default function EmailDashboardPage() {
                     const bounced = Number(row.bounced_count) || 0;
 
                     return {
+                        campaignId: row.campaign_id || '',
                         campaignName: row.campaign_name || 'Unnamed Campaign',
                         status: row.campaign_status === '1' || row.campaign_status === 1 ? 'Active'
                             : row.campaign_status === '2' || row.campaign_status === 2 ? 'Paused'
@@ -255,8 +257,8 @@ export default function EmailDashboardPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
                     title="Total Leads"
-                    value={localData.leadsContacted}
-                    subtitle={`${allLeads.length} in ICP Tracker`}
+                    value={metrics.totalLeads}
+                    subtitle={campaigns.length > 0 ? `Campaign ID: ${campaigns.map(c => c.campaignId).filter(Boolean).join(', ')}` : "No Campaigns"}
                     icon={<Users className="h-5 w-5" />}
                     iconBg="bg-indigo-50 text-indigo-600"
                     onClick={() => router.push('/dashboard/email/sent')}
@@ -412,8 +414,8 @@ export default function EmailDashboardPage() {
                                                 <p className="text-[10px] text-slate-500 truncate">{reply.reply_subject || "Email Reply"}</p>
                                             </div>
                                         </div>
-                                        <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                                            {reply.clean_reply_text || "(No content)"}
+                                        <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed" title={reply.clean_reply_text ? reply.clean_reply_text.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ').trim() : "(No content)"}>
+                                            {reply.clean_reply_text ? reply.clean_reply_text.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ').trim() : "(No content)"}
                                         </p>
                                         <div className="flex items-center gap-2 flex-wrap">
                                             {score !== null && score !== undefined && (
