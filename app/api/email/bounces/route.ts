@@ -60,7 +60,17 @@ export async function GET() {
         }
 
         // Filter for specific emails
-        const targetEmails = ["info@ScalePods.me", "sales@ScalePods.me"];
+        const targetEmails = [
+            "adnan@scalepods.co",
+            "adnan@scalepods.org",
+            "nancy@scalepods.co",
+            "palashy@scalepods.org",
+            "raunak@scalepods.co",
+            "raunak@scalepods.tech",
+            "tanushree@scalepods.co",
+            "viraj@scalepods.co",
+            "viraj@scalepods.tech"
+        ];
         const filteredAccounts = accounts.filter((acc: any) => targetEmails.includes(acc.email));
 
         if (filteredAccounts.length === 0) {

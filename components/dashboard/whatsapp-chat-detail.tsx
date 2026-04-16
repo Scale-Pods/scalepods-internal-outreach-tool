@@ -49,10 +49,10 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
         const dataSource = sourceTable === 'meta_lead_tracker' ? metaLeads : allLeads;
 
         const found = dataSource.find((l: any) => {
-            if (String(l.id).toLowerCase() === searchVal) return true;
-            const phone = l.phone || l.Phone || '';
+            if (l.id && String(l.id).toLowerCase() === searchVal) return true;
+            const phone = String(l.phone || l.Phone || l.company_phone_number || '');
             if (phone) {
-                const lPhoneReplaced = String(phone).replace(/\D/g, '');
+                const lPhoneReplaced = phone.replace(/\D/g, '');
                 const searchReplaced = searchVal.replace(/\D/g, '');
                 if (searchReplaced && lPhoneReplaced === searchReplaced) return true;
             }
@@ -202,8 +202,8 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
         );
     }
 
-    const leadName = lead.name || lead.Name || 'Unknown';
-    const leadPhone = lead.phone || lead.Phone || '';
+    const leadPhone = String(lead.phone || lead.Phone || lead.company_phone_number || '');
+    const leadName = lead.name || lead.Name || lead.full_name || leadPhone || 'Unknown';
     const leadEmail = lead.email || lead.Email || '';
     const leadLoop = lead.source_loop || lead.Source_Loop || lead.Loop || '';
 

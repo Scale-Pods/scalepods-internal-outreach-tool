@@ -242,8 +242,8 @@ export default function WhatsappChatPage() {
     const filteredLeads = useMemo(() => {
         return leads.filter(l => {
             const lead = l as any;
-            const leadName = (lead.name || lead.Name || '').toLowerCase();
-            const leadPhone = lead.phone || lead.Phone || '';
+            const leadName = (lead.name || lead.Name || lead.full_name || '').toLowerCase();
+            const leadPhone = String(lead.phone || lead.Phone || lead.company_phone_number || '');
             const matchesSearch = leadName.includes(searchQuery.toLowerCase()) ||
                 leadPhone.includes(searchQuery);
 
@@ -608,9 +608,12 @@ export default function WhatsappChatPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-border">
-                                        {paginatedLeads.map((lead) => (
-                                            <CustomerRow key={lead.id} lead={lead} onClick={() => setSelectedLeadId(lead.id)} loopMap={loopMap} />
-                                        ))}
+                                        {paginatedLeads.map((lead: any, idx) => {
+                                            const uniqueId = String(lead.id || lead.phone || lead.Phone || lead.company_phone_number || `meta_${idx}`);
+                                            return (
+                                                <CustomerRow key={uniqueId} lead={lead} onClick={() => setSelectedLeadId(uniqueId)} loopMap={loopMap} />
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </TooltipProvider>
@@ -780,8 +783,8 @@ function CustomerRow({ lead: leadRaw, onClick, loopMap = {} }: { lead: Consolida
         return d.toLocaleString([], { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
-    const displayName = lead.name || lead.Name || 'Unknown';
-    const displayPhone = lead.phone || lead.Phone || '';
+    const displayPhone = lead.phone || lead.Phone || lead.company_phone_number || '';
+    const displayName = lead.name || lead.Name || lead.full_name || displayPhone || 'Unknown';
     // Resolve Loop from master_leads_unique via phone lookup
     const phoneNormalized = String(displayPhone).replace(/\D/g, '');
     const displayLoop = loopMap[phoneNormalized] || lead.source_loop || lead.Source_Loop || lead.Loop || '';
@@ -851,41 +854,33 @@ function CustomerRow({ lead: leadRaw, onClick, loopMap = {} }: { lead: Consolida
 
 function MessageStatusBadge({ index, status, fallbackTimestamp }: { index: number, status: string, fallbackTimestamp?: string | null }) {
     if (!status) return null;
-    const parts = status.split(' - ');
-    const statusText = parts[0].trim();
-    // Use embedded timestamp from status string, or fallback to separate TS field
-    let rawTimestamp = parts.length > 1 ? parts[1].trim() : null;
-    if (!rawTimestamp && fallbackTimestamp) rawTimestamp = String(fallbackTimestamp).trim();
+    
+    let mainStatus = "SENT";
+    const statusLower = status.toLowerCase();
+    if (statusLower.includes("read")) mainStatus = "READ";
+    else if (statusLower.includes("delivered")) mainStatus = "DELIVERED";
+    else if (statusLower.includes("failed")) mainStatus = "FAILED";
+    else if (statusLower.includes("sent")) mainStatus = "SENT";
+    else mainStatus = status.split(" ")[0].toUpperCase();
 
-    const formatTooltipDate = (dateStr: string) => {
-        // Try dd/mm/yyyy format first
-        const d = new Date(dateStr.replace(/(\d{1,2})\/(\d{1,2})\/(\d{4})/, '$3-$2-$1'));
-        const finalDate = isNaN(d.getTime()) ? new Date(dateStr) : d;
-        if (isNaN(finalDate.getTime())) return dateStr;
-        const now = new Date();
-        if (finalDate.toDateString() === now.toDateString()) return finalDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        return finalDate.toLocaleString([], { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    };
-
-    const formatted = statusText.charAt(0).toUpperCase() + statusText.slice(1).toLowerCase();
     let badgeClass = "bg-slate-100 text-slate-600 border-border";
-    if (formatted.includes("Delivered")) badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-100";
-    if (formatted.includes("Read")) badgeClass = "bg-blue-50 text-blue-700 border-blue-100";
-    if (formatted.includes("Failed")) badgeClass = "bg-red-50 text-red-700 border-red-100";
-    if (formatted.includes("Sent")) badgeClass = "bg-amber-50 text-amber-700 border-amber-100";
+    if (mainStatus === "DELIVERED") badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-100";
+    if (mainStatus === "READ") badgeClass = "bg-blue-50 text-blue-700 border-blue-100";
+    if (mainStatus === "FAILED") badgeClass = "bg-red-50 text-red-700 border-red-100";
+    if (mainStatus === "SENT") badgeClass = "bg-amber-50 text-amber-700 border-amber-100";
 
     return (
         <TooltipProvider>
-            <Tooltip>
+            <Tooltip delayDuration={300}>
                 <TooltipTrigger asChild>
                     <div className="flex items-center gap-1.5 w-full justify-center cursor-help">
                         <span className="text-[9px] text-slate-400 font-mono select-none">{index}</span>
-                        <Badge variant="outline" className={`h-5 px-1.5 text-[9px] font-bold uppercase tracking-wider ${badgeClass}`}>{formatted}</Badge>
+                        <Badge variant="outline" className={`h-5 px-1.5 text-[9px] font-bold uppercase tracking-wider ${badgeClass}`}>{mainStatus}</Badge>
                     </div>
                 </TooltipTrigger>
-                {rawTimestamp && (
-                    <TooltipContent side="top" className="bg-slate-800/40 backdrop-blur-md text-white text-[10px] border-none px-2 py-1 shadow-xl">{formatTooltipDate(rawTimestamp)}</TooltipContent>
-                )}
+                <TooltipContent side="top" className="bg-slate-800 backdrop-blur-md text-white text-[10px] border-none px-3 py-2 shadow-xl max-w-[250px] whitespace-normal">
+                    {status}
+                </TooltipContent>
             </Tooltip>
         </TooltipProvider>
     );
