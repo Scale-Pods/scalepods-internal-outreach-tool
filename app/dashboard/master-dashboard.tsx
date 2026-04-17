@@ -35,7 +35,6 @@ import {
     Legend
 } from 'recharts';
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { TotalRepliesView } from "@/components/dashboard/total-replies-view";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
@@ -48,7 +47,6 @@ import { useData } from "@/context/DataContext";
 
 export default function MasterDashboard() {
     const [isRepliesModalOpen, setIsRepliesModalOpen] = useState(false);
-    const [isRepliesExpanded, setIsRepliesExpanded] = useState(false);
     const [dateLabel, setDateLabel] = useState("Last 7 days");
     const [dateRange, setDateRange] = useState<any>(undefined);
 
@@ -259,7 +257,8 @@ export default function MasterDashboard() {
                     if (hasVoice) voiceCount++;
 
                     const hasEmailReply = lead.email_replied && lead.email_replied !== "No" && lead.email_replied !== "none";
-                    let hasWPReply = lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none";
+                    const hasTrack = lead["WTS_Reply_Track"] && lead["WTS_Reply_Track"] !== "No" && lead["WTS_Reply_Track"] !== "none";
+                    let hasWPReply = hasTrack || (lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none");
                     if (!hasWPReply) {
                         for (let i = 1; i <= 10; i++) {
                             const r = lead[`W.P_Replied_${i}`];
@@ -373,79 +372,10 @@ export default function MasterDashboard() {
                     color="text-indigo-600"
                     bg="bg-indigo-50"
                     border="border-indigo-100"
-                    onClick={() => setIsRepliesModalOpen(true)}
-                    action={<Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-slate-400 hover:text-slate-600"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setIsRepliesExpanded(!isRepliesExpanded);
-                        }}
-                    >
-                        {isRepliesExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                    </Button>}
                 />
             </div>
 
-            {/* Expanded View Section */}
-            {isRepliesExpanded && (
-                <div className="bg-white border border-border rounded-xl p-6 shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h2 className="text-lg font-bold text-slate-900">Total Replies Details</h2>
-                            <p className="text-sm text-slate-500">Detailed view of all replies across channels</p>
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={() => setIsRepliesExpanded(false)}>
-                            <X className="h-4 w-4 mr-2" />
-                            Close
-                        </Button>
-                    </div>
-                    <TotalRepliesView leads={leads.filter((l: any) => {
-                        const hasEmail = l.email_replied && l.email_replied !== "No" && l.email_replied !== "none";
-                        const hasLegacyWP = l.whatsapp_replied && l.whatsapp_replied !== "No" && l.whatsapp_replied !== "none";
-                        const hasReplyFlag = l.replied === "Yes";
 
-                        let hasExtendedWP = false;
-                        for (let i = 1; i <= 10; i++) {
-                            const r = l[`W.P_Replied_${i}`];
-                            if (r && String(r).toLowerCase() !== "no" && String(r).toLowerCase() !== "none") {
-                                hasExtendedWP = true;
-                                break;
-                            }
-                        }
-
-                        return hasEmail || hasLegacyWP || hasExtendedWP || hasReplyFlag;
-                    })} />
-                </div>
-            )}
-
-            {/* Replies Modal */}
-            <Dialog open={isRepliesModalOpen} onOpenChange={setIsRepliesModalOpen}>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>Total Replies - Detailed View</DialogTitle>
-                    </DialogHeader>
-                    <div className="py-4">
-                        <TotalRepliesView leads={leads.filter((l: any) => {
-                            const hasEmail = l.email_replied && l.email_replied !== "No" && l.email_replied !== "none";
-                            const hasLegacyWP = l.whatsapp_replied && l.whatsapp_replied !== "No" && l.whatsapp_replied !== "none";
-                            const hasReplyFlag = l.replied === "Yes";
-
-                            let hasExtendedWP = false;
-                            for (let i = 1; i <= 10; i++) {
-                                const r = l[`W.P_Replied_${i}`];
-                                if (r && String(r).toLowerCase() !== "no" && String(r).toLowerCase() !== "none") {
-                                    hasExtendedWP = true;
-                                    break;
-                                }
-                            }
-
-                            return hasEmail || hasLegacyWP || hasExtendedWP || hasReplyFlag;
-                        })} />
-                    </div>
-                </DialogContent>
-            </Dialog>
 
             {/* Charts Row 1: Lead Acquisition & Service Distribution */}
             <div className="grid gap-6 lg:grid-cols-3">

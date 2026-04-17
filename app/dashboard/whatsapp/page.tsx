@@ -20,7 +20,6 @@ import { cn } from "@/lib/utils";
 import {
     Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
-import { TotalRepliesView } from "@/components/dashboard/total-replies-view";
 import { SPLoader } from "@/components/sp-loader";
 
 export default function WhatsappDashboardPage() {
@@ -291,8 +290,7 @@ export default function WhatsappDashboardPage() {
                     value={loading ? "..." : stats.totalReplies}
                     subtitle={`ICP: ${stats.icpRepliedCount} + Meta: ${stats.metaRepliedCount}`}
                     icon={<Reply className="h-5 w-5" />}
-                    iconBg="bg-emerald-50 text-emerald-600"
-                    onClick={() => setIsRepliesOpen(true)}
+                    iconBg="bg-indigo-50 text-indigo-600"
                 />
                 <TopCard
                     title="Reply Rate"
@@ -400,18 +398,7 @@ export default function WhatsappDashboardPage() {
 
             
 
-            {/* Replies Sheet */}
-            <Sheet open={isRepliesOpen} onOpenChange={setIsRepliesOpen}>
-                <SheetContent side="right" className="sm:max-w-[800px] w-[90vw] overflow-y-auto">
-                    <SheetHeader className="mb-6">
-                        <SheetTitle className="text-2xl font-bold">Recent WhatsApp Replies</SheetTitle>
-                        <SheetDescription>
-                            A detailed breakdown of all leads who have engaged with your campaigns.
-                        </SheetDescription>
-                    </SheetHeader>
-                    <TotalRepliesView leads={repliedLeads} />
-                </SheetContent>
-            </Sheet>
+
         </div>
     );
 }
