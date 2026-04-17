@@ -29,8 +29,9 @@ export default function WhatsappDashboardPage() {
     const [leads, setLeads] = useState<any[]>([]);
     const [isRepliesOpen, setIsRepliesOpen] = useState(false);
     const [metaLeads, setMetaLeads] = useState<any[]>([]);
+    const [loadingMeta, setLoadingMeta] = useState(true);
     const [dateRange, setDateRange] = useState<any>(undefined);
-    const loading = loadingLeads;
+    const loading = loadingLeads || loadingMeta;
 
     const [stats, setStats] = useState({
         totalLeads: 0,
@@ -40,6 +41,8 @@ export default function WhatsappDashboardPage() {
         messagesSent: 0,
         botMessages: 0,
         totalReplies: 0,
+        icpRepliedCount: 0,
+        metaRepliedCount: 0,
         replyRate: 0,
         readRate: 0,
         deliveredCount: 0,
@@ -54,6 +57,7 @@ export default function WhatsappDashboardPage() {
     // Fetch meta leads
     useEffect(() => {
         (async () => {
+            setLoadingMeta(true);
             try {
                 const res = await fetch('/api/leads/meta');
                 if (res.ok) {
@@ -62,19 +66,26 @@ export default function WhatsappDashboardPage() {
                 }
             } catch (err) {
                 console.error('Failed to fetch meta_lead_tracker:', err);
+            } finally {
+                setLoadingMeta(false);
             }
         })();
     }, []);
 
     // Helper: check if lead has replied
+    // ICP tracker → whatsapp_replied | Meta tracker → WTS_Reply_Track
     const hasLeadReplied = (lead: any) => {
-        for (let i = 1; i <= 25; i++) {
-            const r = lead[`User_Replied_${i}`];
-            if (r && String(r).trim() && String(r).toLowerCase() !== 'no' && String(r).toLowerCase() !== 'none') return true;
+        const isValid = (v: any) =>
+            v && String(v).trim() !== "" &&
+            String(v).toLowerCase() !== "no" &&
+            String(v).toLowerCase() !== "none" &&
+            String(v).toLowerCase() !== "false";
+
+        if (lead._source === 'meta') {
+            return isValid(lead["WTS_Reply_Track"]);
         }
-        if (lead.whatsapp_replied && String(lead.whatsapp_replied).toLowerCase() !== "no" && String(lead.whatsapp_replied).toLowerCase() !== "none") return true;
-        if (lead.Replied && String(lead.Replied).toLowerCase() !== "no" && String(lead.Replied).toLowerCase() !== "none") return true;
-        return false;
+        // ICP (default)
+        return isValid(lead.whatsapp_replied);
     };
 
     // Count user replies for a lead
@@ -88,22 +99,31 @@ export default function WhatsappDashboardPage() {
     };
 
     useEffect(() => {
-        if (loadingLeads) return;
+        if (loadingLeads || loadingMeta) return;
 
         try {
-            // Filter leads with WhatsApp activity
-            const icpWhatsapp = allLeads.filter((l: any) => {
-                const hasWLC = l["Whatsapp Last Contacted"] && String(l["Whatsapp Last Contacted"]).trim() !== "";
-                const hasDrips = [1, 2, 3, 4, 5].some(i => l[`Whatsapp_${i}`]);
-                return hasWLC || hasDrips;
-            });
+            // Filter ICP leads with WhatsApp activity OR a WTS_Reply_Track value
+            const icpWhatsapp = allLeads
+                .filter((l: any) => {
+                    const hasWLC = l["Whatsapp Last Contacted"] && String(l["Whatsapp Last Contacted"]).trim() !== "";
+                    const hasDrips = [1, 2, 3, 4, 5].some(i => l[`Whatsapp_${i}`]);
+                    const hasTrack = l["WTS_Reply_Track"] && String(l["WTS_Reply_Track"]).trim() !== "" &&
+                        String(l["WTS_Reply_Track"]).toLowerCase() !== "no";
+                    return hasWLC || hasDrips || hasTrack;
+                })
+                .map((l: any) => ({ ...l, _source: 'icp' }));
 
-            const metaWhatsapp = metaLeads.filter((l: any) => {
-                const hasWLC = l["Whatsapp Last Contacted"] && String(l["Whatsapp Last Contacted"]).trim() !== "";
-                const hasDrips = [1, 2, 3, 4, 5].some(i => l[`Whatsapp_${i}`]);
-                return hasWLC || hasDrips;
-            });
-
+            // Filter Meta leads with WhatsApp activity OR a WTS_Reply_Track value
+            const metaWhatsapp = metaLeads
+                .filter((l: any) => {
+                    const hasWLC = l["Whatsapp Last Contacted"] && String(l["Whatsapp Last Contacted"]).trim() !== "";
+                    const hasDrips = [1, 2, 3, 4, 5].some(i => l[`Whatsapp_${i}`]);
+                    const hasTrack = l["WTS_Reply_Track"] && String(l["WTS_Reply_Track"]).trim() !== "" &&
+                        String(l["WTS_Reply_Track"]).toLowerCase() !== "no";
+                    return hasWLC || hasDrips || hasTrack;
+                })
+                .map((l: any) => ({ ...l, _source: 'meta' }));
+            
             const allWhatsappLeads = [...icpWhatsapp, ...metaWhatsapp];
             const icpCount = icpWhatsapp.length;
             const metaCount = metaWhatsapp.length;
@@ -135,6 +155,8 @@ export default function WhatsappDashboardPage() {
             let readCount = 0;
             let deliveredCount = 0;
             let waitingCount = 0;
+            let icpRepliedCount = 0;
+            let metaRepliedCount = 0;
 
             filteredLeads.forEach((lead: any) => {
                 let leadSentCount = 0;
@@ -166,6 +188,8 @@ export default function WhatsappDashboardPage() {
                 const isReplied = hasLeadReplied(lead);
                 if (isReplied) {
                     totalReplies++;
+                    if (lead._source === 'icp') icpRepliedCount++;
+                    else if (lead._source === 'meta') metaRepliedCount++;
                 } else if (leadSentCount > 0) {
                     waitingCount++;
                 }
@@ -194,6 +218,8 @@ export default function WhatsappDashboardPage() {
                 messagesSent,
                 botMessages,
                 totalReplies,
+                icpRepliedCount,
+                metaRepliedCount,
                 replyRate: leadsContacted > 0 ? (totalReplies / leadsContacted) * 100 : 0,
                 readRate: totalStatusMessages > 0 ? (statuses.read / totalStatusMessages) * 100 : 0,
                 deliveredCount,
@@ -263,6 +289,7 @@ export default function WhatsappDashboardPage() {
                 <TopCard
                     title="Total Replies"
                     value={loading ? "..." : stats.totalReplies}
+                    subtitle={`ICP: ${stats.icpRepliedCount} + Meta: ${stats.metaRepliedCount}`}
                     icon={<Reply className="h-5 w-5" />}
                     iconBg="bg-emerald-50 text-emerald-600"
                     onClick={() => setIsRepliesOpen(true)}
