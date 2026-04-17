@@ -16,14 +16,6 @@ import { useData } from "@/context/DataContext";
 import { cn } from "@/lib/utils";
 import { SPLoader } from "@/components/sp-loader";
 import { format } from "date-fns";
-import { TotalRepliesView } from "@/components/dashboard/total-replies-view";
-import {
-    Sheet,
-    SheetContent,
-    SheetDescription,
-    SheetHeader,
-    SheetTitle,
-} from "@/components/ui/sheet";
 
 interface CampaignMetrics {
     campaignId: string;
@@ -82,9 +74,7 @@ export default function EmailDashboardPage() {
     const [localData, setLocalData] = useState({
         totalEmails: 0, emailCounts: [0, 0, 0, 0, 0, 0],
         leadsContacted: 0, repliedLeads: 0,
-        icpRepliedLeads: [] as any[]
     });
-    const [isRepliesOpen, setIsRepliesOpen] = useState(false);
 
     const loading = loadingLeads || loadingDB;
 
@@ -170,7 +160,6 @@ export default function EmailDashboardPage() {
         let total = 0;
         let contacted = 0;
         let replied = 0;
-        const icpRepliedLeads: any[] = [];
         const counts = [0, 0, 0, 0, 0, 0];
         filteredLeads.forEach((lead: any) => {
             let hasEmailStage = false;
@@ -181,22 +170,11 @@ export default function EmailDashboardPage() {
                 if (num >= 1 && num <= 6) { counts[num - 1]++; total++; }
             });
             if (hasEmailStage) contacted++;
-            
-            // Strictly check email replies
-            const rep = lead.email_replied || "No";
-            if (String(rep).trim().toLowerCase() !== "no" && String(rep).trim().toLowerCase() !== "none" && String(rep).trim() !== "") {
-                replied++;
-                icpRepliedLeads.push({ ...lead, _source: 'icp' });
-            }
+            const rep = lead.replied || lead.email_replied || "No";
+            if (String(rep).toLowerCase() === "yes") replied++;
         });
 
-        setLocalData({ 
-            totalEmails: total, 
-            emailCounts: counts, 
-            leadsContacted: contacted, 
-            repliedLeads: replied,
-            icpRepliedLeads
-        });
+        setLocalData({ totalEmails: total, emailCounts: counts, leadsContacted: contacted, repliedLeads: replied });
     }, [allLeads, loadingLeads, dateRange]);
 
     // Aggregate metrics across all campaigns
@@ -297,8 +275,8 @@ export default function EmailDashboardPage() {
                     title="Total Replies"
                     value={loading ? "..." : dbReplyCount}
                     icon={<Reply className="h-5 w-5" />}
-                    iconBg="bg-emerald-50 text-emerald-700"
-                    onClick={() => setIsRepliesOpen(true)}
+                    iconBg="bg-emerald-50 text-emerald-600"
+                    onClick={() => router.push('/dashboard/email/received')}
                 />
                 <MetricCard
                     title="Reply Rate"
@@ -459,18 +437,6 @@ export default function EmailDashboardPage() {
                     </div>
                 </div>
             )}
-            {/* Replies Sheet */}
-            <Sheet open={isRepliesOpen} onOpenChange={setIsRepliesOpen}>
-                <SheetContent side="right" className="sm:max-w-[800px] w-[90vw] overflow-y-auto">
-                    <SheetHeader className="mb-6">
-                        <SheetTitle className="text-2xl font-bold">Recent Email Replies</SheetTitle>
-                        <SheetDescription>
-                            A detailed breakdown of leads who have replied via email.
-                        </SheetDescription>
-                    </SheetHeader>
-                    <TotalRepliesView leads={localData.icpRepliedLeads} limitMode="Email" />
-                </SheetContent>
-            </Sheet>
         </div>
     );
 }
