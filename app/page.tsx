@@ -20,7 +20,7 @@ export default function LandingPage() {
             <header className="fixed top-0 w-full z-50 border-border border-white/5 bg-black/50 backdrop-blur-xl">
                 <div className="container mx-auto px-6 h-20 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <div className="relative w-12 h-12 flex-shrink-0">
+                        <div className="relative w-40 h-40 flex-shrink-0">
                             <Image
                                 src="/SP_logo.png"
                                 alt="ScalePods Logo"
@@ -29,9 +29,7 @@ export default function LandingPage() {
                                 priority
                             />
                         </div>
-                        <span className="text-2xl font-black tracking-tight text-white uppercase">
-                            ScalePods
-                        </span>
+                        
                     </div>
 
                     <div className="flex items-center gap-4">

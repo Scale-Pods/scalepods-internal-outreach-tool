@@ -381,9 +381,7 @@ function DashboardContent({
                     {currentContext === "master" && (
                         <header className="flex h-14 items-center gap-4 border-border border-border bg-card px-6 lg:h-[60px]">
                             <div className="flex flex-1 items-center justify-between">
-                                <h1 className="text-lg font-semibold text-foreground">
-                                    Master Overview
-                                </h1>
+                                <div />
 
                                 <div className="flex items-center gap-2">
                                     {/* Vapi Balance Button */}

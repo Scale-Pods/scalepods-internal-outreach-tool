@@ -17,15 +17,22 @@ import {
     Minimize2,
     X,
     Expand,
-    Wallet
+    Wallet,
+    Info
 } from "lucide-react";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
     AreaChart,
     Area,
     XAxis,
     YAxis,
     CartesianGrid,
-    Tooltip,
+    Tooltip as ChartTooltip,
     ResponsiveContainer,
     BarChart,
     Bar,
@@ -309,13 +316,15 @@ export default function MasterDashboard() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">Master Overview</h1>
-                    <p className="text-slate-500">Holistic view of all your marketing channels performance.</p>
+                    <p className="text-sm text-slate-500">Holistic view of all your marketing channels performance.</p>
                 </div>
-                <DateRangePicker onUpdate={handleDateUpdate} />
+                <div className="shrink-0">
+                    <DateRangePicker onUpdate={handleDateUpdate} />
+                </div>
             </div>
 
             {/* Top Metric Cards */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
 
                 <MetricCard
                     title="Total Leads"
@@ -391,8 +400,8 @@ export default function MasterDashboard() {
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent className="pt-4">
-                        <div className="w-full" style={{ height: 350, minHeight: 350 }}>
+                    <CardContent className="pt-2">
+                        <div className="w-full" style={{ height: 240, minHeight: 240 }}>
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={acquisitionChartData}>
                                     <defs>
@@ -404,7 +413,7 @@ export default function MasterDashboard() {
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
                                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                                    <Tooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }} />
+                                    <ChartTooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }} />
                                     <Area type="monotone" dataKey="leads" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorLeads)" />
                                 </AreaChart>
                             </ResponsiveContainer>
@@ -422,8 +431,8 @@ export default function MasterDashboard() {
                             <CardTitle className="text-lg">Response Performance!</CardTitle>
                         </div>
                     </CardHeader>
-                    <CardContent className="pt-4 flex flex-col items-center justify-center">
-                        <div className="w-full" style={{ height: 300, minHeight: 300 }}>
+                    <CardContent className="pt-2 flex flex-col items-center justify-center">
+                        <div className="w-full" style={{ height: 220, minHeight: 220 }}>
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                     <Pie
@@ -439,7 +448,7 @@ export default function MasterDashboard() {
                                             <Cell key={`cell-${index}`} fill={entry.color} />
                                         ))}
                                     </Pie>
-                                    <Tooltip />
+                                    <ChartTooltip />
                                     <Legend verticalAlign="bottom" height={36} />
                                 </PieChart>
                             </ResponsiveContainer>
@@ -469,20 +478,33 @@ function MetricCard({ title, value, change, isUp, icon, color, bg, border, onCli
             className={`bg-white border ${border} shadow-sm overflow-hidden relative group hover:shadow-md transition-all duration-300 ${onClick ? 'cursor-pointer' : ''}`}
             onClick={onClick}
         >
-            <CardContent className="p-6">
+            <CardContent className="p-4">
                 <div className="flex items-start justify-between relative z-10">
                     <div className="flex-1">
-                        <div className="flex items-center justify-between mr-2">
-                            <p className="text-sm font-semibold text-slate-500 mb-1">{title}</p>
-                            {subtitle && <p className="text-xs text-slate-400 mb-2">{subtitle}</p>}
+                        <div className="flex items-center justify-between mr-2 mb-1">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{title}</p>
+                            {subtitle && (
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <div className="p-1 hover:bg-slate-50 rounded-full cursor-help">
+                                                <Info className="h-3.5 w-3.5 text-slate-300" />
+                                            </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p className="text-xs font-medium">{subtitle}</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            )}
                             {action && <div className="z-20">{action}</div>}
                         </div>
-                        <h3 className="text-3xl font-bold text-slate-900">{value}</h3>
-                        <div className={`flex items-center gap-1 mt-2 text-xs font-bold ${isUp ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        <h3 className="text-2xl font-bold text-slate-900 tracking-tight">{value}</h3>
+                        <div className={`flex items-center gap-1 mt-1 text-[10px] font-bold ${isUp ? 'text-emerald-600' : 'text-rose-600'}`}>
                             {change}
                         </div>
                     </div>
-                    <div className={`p-4 rounded-2xl ${bg} ${color} shadow-sm`}>
+                    <div className={`p-3 rounded-xl ${bg} ${color} shadow-sm`}>
                         {icon}
                     </div>
                 </div>

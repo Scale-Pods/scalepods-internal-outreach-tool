@@ -10,6 +10,8 @@ import { login, signup, forgotPassword } from '@/app/actions/auth';
 
 type AuthMode = 'login' | 'forgot';
 
+import Image from 'next/image';
+
 export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: AuthMode, onSuccess?: () => void }) {
     const [mode, setMode] = useState<AuthMode>(defaultMode);
     const router = useRouter();
@@ -30,16 +32,27 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
     const successMessage = forgotState?.message;
 
     return (
-        <div className="w-full max-w-sm mx-auto space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            <div className="space-y-2 text-center">
-                <h1 className="text-3xl font-bold tracking-tighter text-white">
-                    {mode === 'login' && 'Welcome Back'}
-                    {mode === 'forgot' && 'Reset Password'}
-                </h1>
-                <p className="text-zinc-400 text-sm">
-                    {mode === 'login' && 'Enter your credentials to access your dashboard'}
-                    {mode === 'forgot' && 'Enter your email to receive reset instructions'}
-                </p>
+        <div className="w-full max-w-sm mx-auto space-y-8 animate-in fade-in zoom-in-95 duration-300">
+            <div className="flex flex-col items-center justify-center space-y-6 text-center">
+                <div className="relative w-48 h-48 flex-shrink-0">
+                    <Image
+                        src="/SP_logo.png"
+                        alt="ScalePods Logo"
+                        fill
+                        className="object-contain drop-shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                        priority
+                    />
+                </div>
+                <div className="space-y-2">
+                    <h1 className="text-4xl font-black tracking-tight text-white">
+                        {mode === 'login' && 'Welcome Back'}
+                        {mode === 'forgot' && 'Reset Password'}
+                    </h1>
+                    <p className="text-zinc-500 text-sm font-medium">
+                        {mode === 'login' && 'Enter your credentials to access your dashboard'}
+                        {mode === 'forgot' && 'Enter your email to receive reset instructions'}
+                    </p>
+                </div>
             </div>
 
             {error && (
@@ -72,18 +85,7 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
 
                 {mode !== 'forgot' && (
                     <div className="space-y-2">
-                        <div className="flex items-center justify-between px-1">
-                            <Label htmlFor="password" className="text-zinc-300 text-xs font-bold uppercase tracking-wider">Password</Label>
-                            {mode === 'login' && (
-                                <button
-                                    type="button"
-                                    onClick={() => setMode('forgot')}
-                                    className="text-[10px] font-bold text-zinc-500 hover:text-emerald-400 uppercase tracking-tight transition-colors"
-                                >
-                                    Forgot Password?
-                                </button>
-                            )}
-                        </div>
+                        
                         <div className="relative group">
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
                             <Input
