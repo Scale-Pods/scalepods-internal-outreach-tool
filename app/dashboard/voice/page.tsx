@@ -1,56 +1,37 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Phone, Clock, DollarSign, TrendingUp, Calendar as CalendarIcon, Timer, Loader2, RefreshCw } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Phone, Clock, DollarSign, Timer, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SPLoader } from "@/components/sp-loader";
 import React, { useEffect, useState } from "react";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import {
-    BarChart,
-    Bar,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-    AreaChart,
-    Area
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    AreaChart, Area
 } from "recharts";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format, parseISO, startOfDay, getHours, subDays } from "date-fns";
+import { format, startOfDay, getHours, subDays } from "date-fns";
 import { calculateDuration, formatDuration, cn } from "@/lib/utils";
 import { useData } from "@/context/DataContext";
 
 export default function VoiceDashboardPage() {
     const [providerFilter, setProviderFilter] = useState("vapi");
     const [stats, setStats] = useState({
-        totalCalls: 0,
-        totalDuration: 0,
-        avgDuration: 0,
-        totalCost: 0,
-        avgCost: 0,
-        successRate: 0,
-        completedCalls: 0,
-        vapiBalance: 0,
-        lifetimeCostVapi: 0
+        totalCalls: 0, totalDuration: 0, avgDuration: 0, totalCost: 0, avgCost: 0,
+        successRate: 0, completedCalls: 0, vapiBalance: 0, lifetimeCostVapi: 0
     });
     const [dailyVolume, setDailyVolume] = useState<any[]>([]);
     const [hourlyDistribution, setHourlyDistribution] = useState<any[]>([]);
     const [loadingLocal, setLoadingLocal] = useState(false);
     const [dateRange, setDateRange] = useState<any>({
-        from: subDays(new Date(), 7),
-        to: new Date(),
+        from: subDays(new Date(), 7), to: new Date(),
     });
 
     const { calls: globalCalls, loadingCalls, voiceBalance, refreshAll } = useData();
 
     useEffect(() => {
         if (voiceBalance) {
-            setStats(prev => ({
-                ...prev,
-                vapiBalance: voiceBalance.vapi?.balance || 0
-            }));
+            setStats(prev => ({ ...prev, vapiBalance: voiceBalance.vapi?.balance || 0 }));
             setLoadingLocal(false);
         }
     }, [voiceBalance]);
@@ -60,134 +41,72 @@ export default function VoiceDashboardPage() {
     useEffect(() => {
         if (loading) return;
 
-        let totalDuration = 0;
-        let totalCost = 0;
-        let completed = 0;
-        let successCount = 0;
-
+        let totalDuration = 0, totalCost = 0, successCount = 0;
         const dayMap = new Map();
         const hourMap = new Array(24).fill(0);
+        let lifetimeCostVapiSum = 0;
 
-        // Filter by date range and provider
+        globalCalls.forEach((call: any) => {
+            let cost = 0;
+            if (typeof call.cost === 'string') cost = parseFloat(call.cost.replace(/[^\d.]/g, '')) || 0;
+            else if (typeof call.cost === 'number') cost = call.cost;
+            if (call.source === 'vapi') lifetimeCostVapiSum += (call.breakdown?.agent !== undefined) ? call.breakdown.agent : cost;
+        });
+
         const filteredCalls = globalCalls.filter((call: any) => {
             if (providerFilter !== "all" && call.source !== providerFilter) return false;
             if (!dateRange?.from) return true;
-
-            // Get date from Vapi or ElevenLabs
             const dateStr = call.startedAt || (call.start_time_unix_secs ? new Date(call.start_time_unix_secs * 1000).toISOString() : null);
             if (!dateStr) return false;
-
             const callDate = new Date(dateStr);
-            const from = startOfDay(new Date(dateRange.from));
-            const to = new Date(dateRange.to || dateRange.from);
-            to.setHours(23, 59, 59, 999);
-
-            const isMatch = callDate >= from && callDate <= to;
-            return isMatch;
-        });
-
-        // Debug log to confirm counts
-        // console.log(`Global Calls: ${globalCalls.length}, Filtered: ${filteredCalls.length} (Range: ${dateRange.from.toLocaleDateString()} - ${dateRange.to?.toLocaleDateString()})`);
-
-
-        let lifetimeCostVapiSum = 0;
-
-        // Separate calculation for lifetime totals (ignoring date filter)
-        globalCalls.forEach((call: any) => {
-            let cost = 0;
-            if (typeof call.cost === 'string') {
-                cost = parseFloat(call.cost.replace(/[^\d.]/g, '')) || 0;
-            } else if (typeof call.cost === 'number') {
-                cost = call.cost;
-            }
-
-            if (call.source === 'vapi') {
-                // Sum the specific agent part for credits
-                lifetimeCostVapiSum += (call.breakdown?.agent !== undefined) ? call.breakdown.agent : cost;
-            }
+            return callDate >= startOfDay(new Date(dateRange.from)) && callDate <= endOfDay(new Date(dateRange.to || dateRange.from));
         });
 
         filteredCalls.forEach((call: any) => {
             const status = call.status;
-            const startedAtDate = call.startedAt ? new Date(call.startedAt) : null;
-            const duration = call.durationSeconds || 0;
+            const startedAtDate = call.startedAt ? new Date(call.startedAt) : (call.start_time_unix_secs ? new Date(call.start_time_unix_secs * 1000) : null);
+            const duration = call.durationSeconds || calculateDuration(call) || 0;
 
             let cost = 0;
-            if (typeof call.cost === 'string') {
-                const numericStr = call.cost.replace(/[^\d.]/g, '');
-                cost = parseFloat(numericStr) || 0;
-            } else if (typeof call.cost === 'number') {
-                cost = call.cost;
-            }
+            if (typeof call.cost === 'string') cost = parseFloat(call.cost.replace(/[^\d.]/g, '')) || 0;
+            else if (typeof call.cost === 'number') cost = call.cost;
 
-            if (status === 'done' || status === 'ended' || status === 'completed' || status === 'success' || status === 'answered') {
-                completed++;
-                successCount++;
-            }
-
+            if (['done', 'ended', 'completed', 'success', 'answered'].includes(status)) successCount++;
             totalDuration += duration;
             totalCost += cost;
 
             if (startedAtDate) {
                 const dayKey = format(startedAtDate, 'yyyy-MM-dd');
                 const displayKey = format(startedAtDate, 'MMM dd');
-
-                if (!dayMap.has(dayKey)) {
-                    dayMap.set(dayKey, { count: 0, display: displayKey });
-                }
+                if (!dayMap.has(dayKey)) dayMap.set(dayKey, { count: 0, display: displayKey });
                 dayMap.get(dayKey).count++;
-
-                const hour = getHours(startedAtDate);
-                hourMap[hour]++;
+                hourMap[getHours(startedAtDate)]++;
             }
         });
 
-        const totalCalls = filteredCalls.length;
-        const avgDuration = totalCalls > 0 ? totalDuration / totalCalls : 0;
-        const avgCost = totalCalls > 0 ? totalCost / totalCalls : 0;
-        const successRate = totalCalls > 0 ? (successCount / totalCalls) * 100 : 0;
-
         setStats(prev => ({
-            ...prev,
-            totalCalls,
-            totalDuration,
-            avgDuration,
-            totalCost,
-            avgCost,
-            successRate,
-            completedCalls: completed,
+            ...prev, totalCalls: filteredCalls.length, totalDuration, avgDuration: filteredCalls.length > 0 ? totalDuration / filteredCalls.length : 0,
+            totalCost, avgCost: filteredCalls.length > 0 ? totalCost / filteredCalls.length : 0,
+            successRate: filteredCalls.length > 0 ? (successCount / filteredCalls.length) * 100 : 0,
             lifetimeCostVapi: lifetimeCostVapiSum
         }));
 
-        const dailyData = Array.from(dayMap.entries())
-            .map(([dayKey, data]) => ({ dayKey, name: data.display, calls: data.count }))
-            .sort((a, b) => a.dayKey.localeCompare(b.dayKey));
-
-        setDailyVolume(dailyData);
-
-        const hourlyData = hourMap.map((calls, hour) => ({
-            name: `${hour.toString().padStart(2, '0')}:00`,
-            calls
-        })).filter((_, i) => i % 3 === 0);
-
-        setHourlyDistribution(hourlyData);
+        setDailyVolume(Array.from(dayMap.entries()).map(([dayKey, data]) => ({ dayKey, name: data.display, calls: data.count })).sort((a, b) => a.dayKey.localeCompare(b.dayKey)));
+        setHourlyDistribution(hourMap.map((calls, hour) => ({ name: `${hour.toString().padStart(2, '0')}:00`, calls })).filter((_, i) => i % 3 === 0));
     }, [globalCalls, dateRange, providerFilter, loading]);
-    // Added providerFilter here
 
     return (
-        <div className="space-y-8 pb-10 pt-6 relative min-h-[500px]">
+        <div className="h-full flex flex-col overflow-hidden bg-white p-6 space-y-6">
             {loading && <SPLoader />}
-            {/* Header Section with refined spacing */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
+
+            {/* Header */}
+            <div className="flex items-center justify-between shrink-0 mb-1">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Voice Agent Overview</h1>
                     <p className="text-slate-500 text-sm mt-1">Monitor and analyze AI voice agent performance</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 px-3 h-10 border border-border rounded-md bg-white text-sm font-medium text-slate-700 shadow-sm">
-                        <Phone className="h-4 w-4 text-blue-600" />
-                        <span>Vapi AI</span>
-                    </div>
+                    
                     <Button
                         variant="outline"
                         className="flex items-center gap-2 border-border text-slate-600 hover:bg-slate-50 transition-colors h-10 px-4"
@@ -201,29 +120,12 @@ export default function VoiceDashboardPage() {
                 </div>
             </div>
 
-            {/* Metrics Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <MetricCard
-                    title="Total Executions"
-                    value={`${stats.totalCalls} calls`}
-                    icon={<Phone className="h-5 w-5 text-slate-600" />}
-                />
-                <MetricCard
-                    title="Total Duration"
-                    value={formatDuration(stats.totalDuration)}
-                    icon={<Clock className="h-5 w-5 text-slate-600" />}
-                />
-                <MetricCard
-                    title="Average Duration"
-                    value={`${Math.round(stats.avgDuration)}s`}
-                    icon={<Timer className="h-5 w-5 text-slate-600" />}
-                />
-                <MetricCard
-                    title="Vapi Credits Used"
-                    value={`$${(stats as any).lifetimeCostVapi.toFixed(2)}`}
-                    badge="Total Used"
-                    icon={<DollarSign className="h-5 w-5 text-blue-600" />}
-                />
+            {/* Metric Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
+                <DenseMetricCard title="Total Executions" value={`${stats.totalCalls} calls`} icon={<Phone className="h-5 w-5" />} color="text-indigo-600" bg="bg-indigo-50" />
+                <DenseMetricCard title="Total Duration" value={formatDuration(stats.totalDuration)} icon={<Clock className="h-5 w-5" />} color="text-slate-600" bg="bg-slate-50" />
+                <DenseMetricCard title="Avg Duration" value={`${Math.round(stats.avgDuration)}s`} icon={<Timer className="h-5 w-5" />} color="text-violet-600" bg="bg-violet-50" />
+                <DenseMetricCard title="Vapi Utilization" value={`$${stats.lifetimeCostVapi.toFixed(2)}`} icon={<DollarSign className="h-5 w-5" />} color="text-blue-600" bg="bg-blue-50" />
             </div>
 
             {/* Charts Section */}
@@ -272,25 +174,23 @@ export default function VoiceDashboardPage() {
     );
 }
 
-function MetricCard({ title, value, badge, icon }: any) {
+function DenseMetricCard({ title, value, icon, color, bg }: any) {
     return (
-        <Card className="bg-white border-border text-slate-900 shadow-sm relative group hover:shadow-md transition-all duration-300">
-            <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                    <div>
-                        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-                        <h3 className="text-2xl font-bold text-slate-900">{value}</h3>
-                        {badge && (
-                            <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded textxs font-medium bg-emerald-50 text-emerald-600 border border-bordermerald-100">
-                                {badge}
-                            </div>
-                        )}
-                    </div>
-                    <div className="p-3 bg-slate-50 rounded-xl border border-border group-hover:bg-slate-100 transition-colors">
-                        {icon}
-                    </div>
+        <Card className="border-slate-50 shadow-none bg-slate-50/50">
+            <CardContent className="p-5 flex items-center justify-between">
+                <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">{title}</p>
+                    <h3 className="text-xl font-bold text-slate-900 leading-none">{value}</h3>
+                </div>
+                <div className={`p-3 rounded-xl shadow-sm ${bg} ${color}`}>
+                    {icon}
                 </div>
             </CardContent>
         </Card>
     );
+}
+function endOfDay(date: Date) {
+    const d = new Date(date);
+    d.setHours(23, 59, 59, 999);
+    return d;
 }

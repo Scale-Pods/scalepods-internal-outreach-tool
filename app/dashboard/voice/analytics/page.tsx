@@ -1,27 +1,16 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Phone, Clock, DollarSign, CheckCircle, Search, Loader2, PhoneIncoming, PhoneOutgoing } from "lucide-react";
-import { calculateDuration, formatDuration } from "@/lib/utils";
+import { Phone, Clock, DollarSign, CheckCircle, PhoneIncoming } from "lucide-react";
+import { calculateDuration, formatDuration, cn } from "@/lib/utils";
 import { SPLoader } from "@/components/sp-loader";
 import {
-    BarChart,
-    Bar,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-    LineChart,
-    Line,
-    AreaChart,
-    Area,
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    LineChart, Line,
 } from "recharts";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useState, useEffect } from "react";
-import { format, parseISO, startOfDay, subDays } from "date-fns";
+import { format, startOfDay, subDays } from "date-fns";
 import { useData } from "@/context/DataContext";
 
 export default function VoiceAnalyticsPage() {
@@ -36,51 +25,32 @@ export default function VoiceAnalyticsPage() {
         to: new Date(),
     });
 
-    // Processed Data States
     const [volumeData, setVolumeData] = useState<any[]>([]);
     const [durationData, setDurationData] = useState<any[]>([]);
-    const [costData, setCostData] = useState<any[]>([]);
     const [stats, setStats] = useState({
-        totalCalls: 0,
-        avgDuration: 0,
-        totalCost: 0,
-        successRate: 0,
-        typesData: [],
-        vapiBalance: 0,
-        inboundDuration: 0,
-        outboundDuration: 0,
-        pickUpRate: 0,
-        completionRate: 0,
-        positiveRate: 0,
+        totalCalls: 0, avgDuration: 0, totalCost: 0, successRate: 0,
+        typesData: [], vapiBalance: 0, inboundDuration: 0, outboundDuration: 0,
+        pickUpRate: 0, completionRate: 0, positiveRate: 0, lifetimeVapiUsed: 0,
     });
 
     useEffect(() => {
         if (voiceBalance) {
-            setStats(prev => ({
-                ...prev,
-                vapiBalance: voiceBalance.vapi?.balance || 0
-            }));
+            setStats(prev => ({ ...prev, vapiBalance: voiceBalance.vapi?.balance || 0 }));
         }
     }, [voiceBalance]);
 
     useEffect(() => {
         if (loadingCalls) return;
 
-        // Filter by date range if set
         const filteredCalls = globalCalls.filter((call: any) => {
             if (providerFilter !== "all" && call.source !== providerFilter) return false;
-
             if (!dateRange?.from) return true;
-
-            // Normalize startedAt for filtering
             const dateStr = call.startedAt || (call.start_time_unix_secs ? new Date(call.start_time_unix_secs * 1000).toISOString() : null);
             if (!dateStr) return false;
-
             const callDate = new Date(dateStr);
             const from = startOfDay(new Date(dateRange.from));
             const to = startOfDay(new Date(dateRange.to || dateRange.from));
             to.setHours(23, 59, 59, 999);
-
             return callDate >= from && callDate <= to;
         });
 
@@ -90,29 +60,17 @@ export default function VoiceAnalyticsPage() {
 
     const processAnalytics = (data: any[]) => {
         const totalCalls = data.length;
-        let totalDuration = 0;
-        let totalCredits = 0;
-        let successCount = 0;
-
+        let totalDuration = 0, totalCredits = 0, successCount = 0;
         const dayMap = new Map();
-        const durationBuckets = { '0-30s': 0, '30s-1m': 0, '1m-2m': 0, '2m-5m': 0, '5m+': 0 };
-        const typesMap = new Map();
+        const durationBuckets = { '0-30s': 0, '30s-1m': 0, '1-2m': 0, '2-5m': 0, '5m+': 0 };
+        let inboundSum = 0, outboundSum = 0;
 
-        let inboundSum = 0;
-        let outboundSum = 0;
-
-        // Lifetime calculations (all time)
         let lifetimeVapiUsedSum = 0;
-        globalCalls.forEach(call => {
+        globalCalls.forEach((call: any) => {
             let cost = 0;
-            if (typeof call.cost === 'string') {
-                cost = parseFloat(call.cost.replace(/[^\d.]/g, '')) || 0;
-            } else if (typeof call.cost === 'number') {
-                cost = call.cost;
-            }
-
+            if (typeof call.cost === 'string') cost = parseFloat(call.cost.replace(/[^\d.]/g, '')) || 0;
+            else if (typeof call.cost === 'number') cost = call.cost;
             if (call.source === 'vapi') {
-                // Specifically sum the agent/Vapi portion for credits metric
                 lifetimeVapiUsedSum += (call.breakdown?.agent !== undefined) ? call.breakdown.agent : cost;
             }
         });
@@ -123,55 +81,34 @@ export default function VoiceAnalyticsPage() {
             const dur = calculateDuration(call);
 
             let cost = 0;
-            if (typeof call.cost === 'string') {
-                cost = parseFloat(call.cost.replace(/[^\d.]/g, '')) || 0;
-            } else if (typeof call.cost === 'number') {
-                cost = call.cost;
-            }
+            if (typeof call.cost === 'string') cost = parseFloat(call.cost.replace(/[^\d.]/g, '')) || 0;
+            else if (typeof call.cost === 'number') cost = call.cost;
 
-            if (call.status === 'done' || call.status === 'ended' || call.status === 'completed' || call.status === 'success' || call.status === 'answered') {
-                successCount++;
-            }
-
+            if (['done', 'ended', 'completed', 'success', 'answered'].includes(call.status)) successCount++;
             totalDuration += dur;
             totalCredits += cost;
 
             const raw = call.raw || call;
             const directionProp = (raw.telephony?.direction || raw.direction || "").toLowerCase();
             const isInbound = call.isInbound === true || directionProp.includes('inbound') || directionProp.includes('incoming');
-            const isWebCall = (typeof call.type === 'string' && call.type.toLowerCase() === 'web call') || (call.phone === 'Website/API');
-
-            if (isInbound) {
-                inboundSum += dur;
-            } else {
-                outboundSum += dur;
-            }
-
-            const typeLabel = isInbound ? 'Inbound' : (isWebCall ? 'Web Call' : 'Outbound');
-            typesMap.set(typeLabel, (typesMap.get(typeLabel) || 0) + 1);
+            if (isInbound) inboundSum += dur; else outboundSum += dur;
 
             const dayObj = dayMap.get(time) || { calls: 0, credits: 0 };
-            dayMap.set(time, {
-                calls: dayObj.calls + 1,
-                credits: dayObj.credits + cost
-            });
+            dayMap.set(time, { calls: dayObj.calls + 1, credits: dayObj.credits + cost });
 
             if (dur < 30) durationBuckets['0-30s']++;
             else if (dur < 60) durationBuckets['30s-1m']++;
-            else if (dur < 120) durationBuckets['1m-2m']++;
-            else if (dur < 300) durationBuckets['2m-5m']++;
+            else if (dur < 120) durationBuckets['1-2m']++;
+            else if (dur < 300) durationBuckets['2-5m']++;
             else durationBuckets['5m+']++;
         });
 
         setStats(prev => ({
             ...prev,
-            totalCalls,
-            avgDuration: totalCalls > 0 ? totalDuration / totalCalls : 0,
+            totalCalls, avgDuration: totalCalls > 0 ? totalDuration / totalCalls : 0,
             totalCost: totalCredits,
             successRate: totalCalls > 0 ? Math.round((successCount / totalCalls) * 100) : 0,
-            typesData: Array.from(typesMap.entries()) as any,
-            inboundDuration: inboundSum,
-            outboundDuration: outboundSum,
+            inboundDuration: inboundSum, outboundDuration: outboundSum,
             lifetimeVapiUsed: lifetimeVapiUsedSum,
             pickUpRate: totalCalls > 0 ? (data.filter((c: any) => calculateDuration(c) > 18).length / totalCalls) * 100 : 0,
             completionRate: totalCalls > 0 ? (data.filter((c: any) => {
@@ -180,31 +117,26 @@ export default function VoiceAnalyticsPage() {
             }).length / totalCalls) * 100 : 0,
             positiveRate: (() => {
                 if (totalCalls === 0 || !leads || leads.length === 0) return 0;
-                
-                const positiveCount = leads.filter((l: any) => 
-                    l.voice_sentiment === 'Expression of Interest' || 
+                const positiveCount = leads.filter((l: any) =>
+                    l.voice_sentiment === 'Expression of Interest' ||
                     l.voice_sentiment === 'Callback- Plan Postponed' ||
-                    l.voice2_sentiment === 'Expression of Interest' || 
+                    l.voice2_sentiment === 'Expression of Interest' ||
                     l.voice2_sentiment === 'Callback- Plan Postponed'
                 ).length;
-                
                 return (positiveCount / totalCalls) * 100;
             })()
         }));
 
         const sortedDays = Array.from(dayMap.entries()).sort((a, b) => {
-            const dateA = new Date(`${a[0]} ${new Date().getFullYear()}`).getTime();
-            const dateB = new Date(`${b[0]} ${new Date().getFullYear()}`).getTime();
-            return dateA - dateB;
+            return new Date(`${a[0]} ${new Date().getFullYear()}`).getTime() - new Date(`${b[0]} ${new Date().getFullYear()}`).getTime();
         });
 
         setVolumeData(sortedDays.map(([name, obj]) => ({ name, value: obj.calls })));
         setDurationData(Object.entries(durationBuckets).map(([name, value]) => ({ name, value })));
-        setCostData(sortedDays.map(([name, obj]) => ({ name, value: obj.credits })));
     };
 
     return (
-        <div className="space-y-6 pb-10 pt-6 relative min-h-[500px]">
+        <div className="h-full flex flex-col overflow-hidden bg-white p-6 space-y-6">
             {loading && <SPLoader />}
             {/* Header section with refined spacing */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
@@ -264,15 +196,15 @@ export default function VoiceAnalyticsPage() {
                 />
             </div>
 
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Charts Section - Fixed to fit screen */}
+            <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-6 pb-2">
                 {/* Call Volume Trends */}
-                <Card className="border-border">
-                    <CardHeader>
-                        <CardTitle className="text-lg">Call Volume Trends</CardTitle>
+                <Card className="border-border flex flex-col overflow-hidden">
+                    <CardHeader className="py-2 shrink-0">
+                        <CardTitle className="text-base">Call Volume Trends</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="w-full h-[300px]">
+                    <CardContent className="flex-1 min-h-0 p-4 pt-0">
+                        <div className="w-full h-full min-h-[150px]">
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={volumeData.length ? volumeData : [{ name: 'No data', value: 0 }]}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -287,12 +219,12 @@ export default function VoiceAnalyticsPage() {
                 </Card>
 
                 {/* Call Duration Distribution */}
-                <Card className="border-border">
-                    <CardHeader>
-                        <CardTitle className="text-lg">Duration Distribution</CardTitle>
+                <Card className="border-border flex flex-col overflow-hidden">
+                    <CardHeader className="py-2 shrink-0">
+                        <CardTitle className="text-base">Duration Distribution</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="w-full h-[300px]">
+                    <CardContent className="flex-1 min-h-0 p-4 pt-0">
+                        <div className="w-full h-full min-h-[150px]">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={durationData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -305,18 +237,16 @@ export default function VoiceAnalyticsPage() {
                         </div>
                     </CardContent>
                 </Card>
-
-                
             </div>
         </div>
     );
 }
 
-function StatCard({ title, value, change, icon, color, bg, isNegative }: any) {
+function StatCard({ title, value, change, isNegative, icon, color, bg }: any) {
     return (
-        <Card className="border-border">
+        <Card className="border-border shadow-sm bg-white overflow-hidden group hover:shadow-md transition-all">
             <CardContent className="p-6">
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between">
                     <div>
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-tighter">{title}</p>
                         <h3 className="text-2xl font-bold text-slate-950 mt-1">{value}</h3>
@@ -324,7 +254,9 @@ function StatCard({ title, value, change, icon, color, bg, isNegative }: any) {
                             {change} {isNegative ? '↓' : '↑'}
                         </span>
                     </div>
-                    <div className={`p-4 rounded-2xl ${bg} ${color}`}>{icon}</div>
+                    <div className={cn("p-3 rounded-xl transition-colors shrink-0", bg, color)}>
+                        {icon}
+                    </div>
                 </div>
             </CardContent>
         </Card>
