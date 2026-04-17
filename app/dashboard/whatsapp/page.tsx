@@ -271,7 +271,7 @@ export default function WhatsappDashboardPage() {
             {/* Top 4 Metric Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <TopCard
-                    title="Total Leads"
+                    title="Total Whatsapp Reachouts"
                     value={loading ? "..." : stats.totalLeads}
                     subtitle={`ICP: ${stats.icpLeadCount} + Meta: ${stats.metaLeadCount}`}
                     icon={<Users className="h-5 w-5" />}
