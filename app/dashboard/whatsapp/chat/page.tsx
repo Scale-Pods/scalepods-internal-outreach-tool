@@ -206,6 +206,9 @@ export default function WhatsappChatPage() {
             if (loadingLeads) return;
             const wpLeads = allLeads.filter(l => {
                 const lead = l as any;
+                // Strictly filter by table source
+                if (lead._table && lead._table !== 'icp_tracker') return false;
+
                 // Check Whatsapp_1-5 fields (icp_tracker schema)
                 for (let i = 1; i <= 5; i++) {
                     if (lead[`Whatsapp_${i}`]) return true;
@@ -226,6 +229,7 @@ export default function WhatsappChatPage() {
         } else {
             // meta_lead_tracker — show all leads that have any Whatsapp_ field
             const wpLeads = metaLeads.filter((lead: any) => {
+                if (lead._table && lead._table !== 'meta_lead_tracker') return false;
                 for (let i = 1; i <= 5; i++) {
                     if (lead[`Whatsapp_${i}`]) return true;
                 }
@@ -285,9 +289,17 @@ export default function WhatsappChatPage() {
             const matchesMessageStatus = activeFilters.messageStatus.length === 0 ||
                 activeFilters.messageStatus.some(status => {
                     const target = status.toLowerCase();
+                    // New schema: Whatsapp_X_status
+                    for (let i = 1; i <= 5; i++) {
+                        if ((lead[`Whatsapp_${i}_status`] || "").toLowerCase().includes(target)) return true;
+                    }
+                    // New schema: Bot_Replied_Status_X
+                    for (let i = 1; i <= 25; i++) {
+                        if ((lead[`Bot_Replied_Status_${i}`] || "").toLowerCase().includes(target)) return true;
+                    }
+                    // Legacy: W.P_X TS
                     for (let i = 1; i <= 12; i++) {
-                        const s = (lead[`W.P_${i} TS`] || "").toLowerCase();
-                        if (s.includes(target)) return true;
+                        if ((lead[`W.P_${i} TS`] || "").toLowerCase().includes(target)) return true;
                     }
                     return false;
                 });
@@ -323,77 +335,65 @@ export default function WhatsappChatPage() {
         let sentCount = 0;
         let repliedCount = 0;
         let failedCount = 0;
-
         filteredLeads.forEach(l => {
             const lead = l as any;
-
-            // Count failed (legacy)
-            for (let i = 1; i <= 12; i++) {
-                const ts = (lead[`W.P_${i} TS`] || "").toLowerCase();
-                if (ts.includes("failed")) failedCount++;
+            let leadSentCount = 0;
+            
+            // --- Count Sent ---
+            // Preference to new schema 1-5, then Bot Replies, then legacy
+            for (let i = 1; i <= 5; i++) { if (lead[`Whatsapp_${i}`] && String(lead[`Whatsapp_${i}`]).trim()) leadSentCount++; }
+            for (let i = 1; i <= 25; i++) { if (lead[`Bot_Replied_${i}`] && String(lead[`Bot_Replied_${i}`]).trim()) leadSentCount++; }
+            
+            // Only add legacy counts if new schema didn't yield much (avoid double counting same drip)
+            if (leadSentCount === 0) {
+                for (let i = 1; i <= 12; i++) { if (lead[`W.P_${i}`] && String(lead[`W.P_${i}`]).trim()) leadSentCount++; }
             }
+            
+            sentCount += leadSentCount;
 
-            // Count bot outgoing messages — new schema + legacy
-            // New: Whatsapp_1-5
+
+            // --- Count Failed ---
             for (let i = 1; i <= 5; i++) {
-                if (lead[`Whatsapp_${i}`]) sentCount++;
+                if (String(lead[`Whatsapp_${i}_status`] || "").toLowerCase().includes("failed")) failedCount++;
             }
-            // New: Bot_Replied_1-25
             for (let i = 1; i <= 25; i++) {
-                if (lead[`Bot_Replied_${i}`]) sentCount++;
+                if (String(lead[`Bot_Replied_Status_${i}`] || "").toLowerCase().includes("failed")) failedCount++;
             }
-            // Legacy W.P_ fields
             for (let i = 1; i <= 12; i++) {
-                if (lead[`W.P_${i}`] || lead.stage_data?.[`WhatsApp ${i}`]) sentCount++;
-            }
-            if (lead["W.P_FollowUp"] || lead.stage_data?.["WhatsApp FollowUp"]) sentCount++;
-            for (let i = 1; i <= 10; i++) {
-                if (lead[`W.P_FollowUp_${i}`]) sentCount++;
+                if (String(lead[`W.P_${i} TS`] || "").toLowerCase().includes("failed")) failedCount++;
             }
 
-            // Replied check — new schema + legacy
-            let leadReplied = false;
-            // New: User_Replied_1-25
+            // --- Count Replied ---
+            let hasReplied = false;
             for (let i = 1; i <= 25; i++) {
                 const r = lead[`User_Replied_${i}`];
                 if (r && String(r).trim() && String(r).toLowerCase() !== 'no' && String(r).toLowerCase() !== 'none') {
-                    leadReplied = true;
+                    hasReplied = true;
                     break;
                 }
             }
-            // Legacy
-            if (!leadReplied && lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none") {
-                leadReplied = true;
+            if (!hasReplied && lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none") {
+                hasReplied = true;
             }
-            if (!leadReplied) {
+            if (!hasReplied) {
                 for (let i = 1; i <= 10; i++) {
                     const r = lead[`W.P_Replied_${i}`];
                     if (r && String(r).toLowerCase() !== "no" && String(r).toLowerCase() !== "none") {
-                        leadReplied = true;
+                        hasReplied = true;
                         break;
                     }
                 }
             }
-            if (leadReplied) repliedCount++;
+            if (hasReplied) repliedCount++;
         });
 
         const uniqueSentCount = filteredLeads.filter(l => {
             const lead = l as any;
-            // New schema
-            for (let i = 1; i <= 5; i++) {
-                if (lead[`Whatsapp_${i}`]) return true;
-            }
-            for (let i = 1; i <= 25; i++) {
-                if (lead[`Bot_Replied_${i}`]) return true;
-            }
-            // Legacy
-            for (let i = 1; i <= 12; i++) {
-                if (lead[`W.P_${i}`] || lead.stage_data?.[`WhatsApp ${i}`]) return true;
-            }
+            for (let i = 1; i <= 5; i++) { if (lead[`Whatsapp_${i}`]) return true; }
+            for (let i = 1; i <= 25; i++) { if (lead[`Bot_Replied_${i}`]) return true; }
+            for (let i = 1; i <= 12; i++) { if (lead[`W.P_${i}`] || lead.stage_data?.[`WhatsApp ${i}`]) return true; }
             if (lead["W.P_FollowUp"] || lead.stage_data?.["WhatsApp FollowUp"]) return true;
-            for (let i = 1; i <= 10; i++) {
-                if (lead[`W.P_FollowUp_${i}`]) return true;
-            }
+            for (let i = 1; i <= 10; i++) { if (lead[`W.P_FollowUp_${i}`]) return true; }
             return false;
         }).length;
 
@@ -549,8 +549,7 @@ export default function WhatsappChatPage() {
                                 <FilterOption label="Sent" checked={pendingFilters.messageStatus.includes("Sent")} onCheckedChange={() => toggleFilter('messageStatus', "Sent")} />
                                 <FilterOption label="Failed" checked={pendingFilters.messageStatus.includes("Failed")} onCheckedChange={() => toggleFilter('messageStatus', "Failed")} />
                                 <FilterOption label="Delivered" checked={pendingFilters.messageStatus.includes("Delivered")} onCheckedChange={() => toggleFilter('messageStatus', "Delivered")} />
-                                <FilterOption label="Deleted" checked={pendingFilters.messageStatus.includes("Deleted")} onCheckedChange={() => toggleFilter('messageStatus', "Deleted")} />
-                            </FilterSection>
+                                </FilterSection>
 
                             <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white h-9" size="sm" onClick={handleApplyFilters}>Apply Filters</Button>
                         </CardContent>
@@ -573,9 +572,7 @@ export default function WhatsappChatPage() {
                                 <div className="space-y-3">
                                     <StatusBar label="Sent" value={stats.sentCount} total={stats.sentCount || 1} color="bg-blue-400" />
                                     <StatusBar label="Replied" value={stats.repliedCount} total={stats.sentCount || 1} color="bg-emerald-500" />
-                                    {stats.failedCount > 0 && (
-                                        <StatusBar label="Failed" value={stats.failedCount} total={stats.sentCount || 1} color="bg-rose-500" />
-                                    )}
+                                    <StatusBar label="Failed" value={stats.failedCount} total={stats.sentCount || 1} color="bg-rose-500" />
                                 </div>
                             </CardContent>
                         </Card>
@@ -706,14 +703,16 @@ function CustomerRow({ lead: leadRaw, onClick, loopMap = {} }: { lead: Consolida
     const lead = leadRaw as any;
     const latestDate = getLeadLatestActivity(lead);
 
-    // Count sent messages — check new schema (Whatsapp_1-5 + Bot_Replied_1-25) and legacy W.P_ fields
+    // Count sent messages — coordinated with stats logic
     let sentCount = 0;
-    for (let i = 1; i <= 5; i++) { if (lead[`Whatsapp_${i}`]) sentCount++; }
-    for (let i = 1; i <= 25; i++) { if (lead[`Bot_Replied_${i}`]) sentCount++; }
-    // Legacy W.P_ fields
-    for (let i = 1; i <= 12; i++) { if (lead[`W.P_${i}`] || lead.stage_data?.[`WhatsApp ${i}`]) sentCount++; }
-    if (lead["W.P_FollowUp"] || lead.stage_data?.["WhatsApp FollowUp"]) sentCount++;
-    for (let i = 1; i <= 10; i++) { if (lead[`W.P_FollowUp_${i}`]) sentCount++; }
+    // Preference to new schema 1-5, then Bot Replies, then legacy
+    for (let i = 1; i <= 5; i++) { if (lead[`Whatsapp_${i}`] && String(lead[`Whatsapp_${i}`]).trim()) sentCount++; }
+    for (let i = 1; i <= 25; i++) { if (lead[`Bot_Replied_${i}`] && String(lead[`Bot_Replied_${i}`]).trim()) sentCount++; }
+    
+    // Only add legacy counts if new schema didn't yield much (avoid double counting same drip)
+    if (sentCount === 0) {
+        for (let i = 1; i <= 12; i++) { if (lead[`W.P_${i}`] && String(lead[`W.P_${i}`]).trim()) sentCount++; }
+    }
 
     // Get latest Bot_Replied_Status (new schema) — find the last bot message's status + timestamp
     let latestBotStatus: string | null = null;
@@ -785,9 +784,8 @@ function CustomerRow({ lead: leadRaw, onClick, loopMap = {} }: { lead: Consolida
 
     const displayPhone = lead.phone || lead.Phone || lead.company_phone_number || '';
     const displayName = lead.name || lead.Name || lead.full_name || displayPhone || 'Unknown';
-    // Resolve Loop from master_leads_unique via phone lookup
-    const phoneNormalized = String(displayPhone).replace(/\D/g, '');
-    const displayLoop = loopMap[phoneNormalized] || lead.source_loop || lead.Source_Loop || lead.Loop || '';
+    // Use _table source for Loop column as requested
+    const displayLoop = lead._table === 'icp_tracker' ? 'ICP Tracker' : 'Meta Lead';
 
     return (
         <tr className="hover:bg-slate-50 transition-colors cursor-pointer group" onClick={onClick}>
@@ -857,9 +855,9 @@ function MessageStatusBadge({ index, status, fallbackTimestamp }: { index: numbe
     
     let mainStatus = "SENT";
     const statusLower = status.toLowerCase();
-    if (statusLower.includes("read")) mainStatus = "READ";
+    if (statusLower.includes("failed")) mainStatus = "FAILED";
+    else if (statusLower.includes("read")) mainStatus = "READ";
     else if (statusLower.includes("delivered")) mainStatus = "DELIVERED";
-    else if (statusLower.includes("failed")) mainStatus = "FAILED";
     else if (statusLower.includes("sent")) mainStatus = "SENT";
     else mainStatus = status.split(" ")[0].toUpperCase();
 

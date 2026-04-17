@@ -257,9 +257,9 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                                     const label = raw.split(' - ')[0].trim();
                                     const formatted = label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
                                     let cls = 'bg-emerald-500/30 text-emerald-100';
-                                    if (formatted.includes('Read')) cls = 'bg-blue-400/40 text-blue-100';
                                     if (formatted.includes('Failed')) cls = 'bg-red-400/40 text-red-100';
-                                    if (formatted.includes('Sent')) cls = 'bg-white/20 text-emerald-50';
+                                    else if (formatted.includes('Read')) cls = 'bg-blue-400/40 text-blue-100';
+                                    else if (formatted.includes('Sent')) cls = 'bg-white/20 text-emerald-50';
                                     tsPill = (
                                         <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${cls}`}>
                                             {formatted}
