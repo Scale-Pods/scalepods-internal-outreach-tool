@@ -20,7 +20,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Users, AlertCircle, Loader2, RefreshCw, Mail, MessageCircle, ChevronLeft, ChevronRight, Search, Filter } from "lucide-react";
+import { Users, AlertCircle, Loader2, RefreshCw, Mail, MessageCircle, ChevronLeft, ChevronRight, Search, Filter, Mic, Info, CheckCircle2, XCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,30 +29,192 @@ import { SPLoader } from "@/components/sp-loader";
 import { useMemo } from "react";
 import { useData } from "@/context/DataContext";
 
+// Styled HTML wrapper for email previews
+const EmailContentStyle = () => (
+    <style dangerouslySetInnerHTML={{ __html: `
+        .email-prose {
+            font-size: 11px;
+            line-height: 1.6;
+            color: #334155;
+        }
+        .email-prose h1, .email-prose h2, .email-prose h3 {
+            font-weight: bold;
+            margin-top: 8px;
+            margin-bottom: 4px;
+        }
+        .email-prose p {
+            margin-bottom: 8px;
+        }
+        .email-prose hr {
+            margin: 8px 0;
+            border: 0;
+            border-top: 1px solid #e2e8f0;
+        }
+        .email-prose a {
+            color: #2563eb;
+            text-decoration: underline;
+        }
+    `}} />
+);
+
 interface Lead {
-    id?: string;
+    id: string;
     name: string;
     phone: string;
     email: string;
     replied: string;
+    current_loop: string;
+    source_loop: string;
+    stages_passed: string[];
+    stage_data: Record<string, any>;
+    _table?: string;
     email_replied?: string;
     whatsapp_replied?: string;
-    current_loop: string;
-    stages_passed: string[];
-    lead_id?: string;
-    current_week?: string;
-    display_loop?: string;
-    source_loop?: string;
-    country_code?: string;
+    last_contacted?: string;
+}
+
+function LeadOverviewDialog({ lead, isOpen, onClose }: { lead: Lead, isOpen: boolean, onClose: () => void }) {
+    const { calls } = useData();
+    const leadCalls = calls.filter(c => {
+        const p1 = String(c.phone || c.customer_number || "").replace(/\D/g, '');
+        const p2 = String(lead.phone || "").replace(/\D/g, '');
+        return p1 && p2 && (p1 === p2 || p1.endsWith(p2) || p2.endsWith(p1));
+    });
+
+    const hasWA = lead.stages_passed.some(s => s.toLowerCase().includes('whatsapp'));
+    const hasEmail = lead.stages_passed.some(s => s.toLowerCase().includes('email'));
+    const hasVoice = leadCalls.length > 0 || lead.stages_passed.some(s => s.toLowerCase().includes('voice'));
+
+    return (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-w-2xl bg-white border-zinc-200">
+                <DialogHeader>
+                    <div className="flex items-center justify-between pr-6">
+                        <div className="flex items-center gap-3">
+                            <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-lg">
+                                {lead.name.charAt(0)}
+                            </div>
+                            <div>
+                                <DialogTitle className="text-xl font-bold text-slate-900">{lead.name}</DialogTitle>
+                                <p className="text-slate-500 text-sm flex items-center gap-2">
+                                    {lead.email} • {lead.phone}
+                                </p>
+                            </div>
+                        </div>
+                        <Badge variant="outline" className={`h-6 ${lead._table === 'meta_lead_tracker' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
+                            {lead._table === 'meta_lead_tracker' ? 'Meta Ads' : 'ICP Tracker'}
+                        </Badge>
+                    </div>
+                </DialogHeader>
+
+                <div className="grid grid-cols-3 gap-4 mt-6">
+                    {/* Channel Cards */}
+                    <div className={`p-4 rounded-xl border transition-all ${hasEmail ? 'bg-blue-50/50 border-blue-200 shadow-sm' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                            <Mail className={`h-4 w-4 ${hasEmail ? 'text-blue-600' : 'text-slate-400'}`} />
+                            {hasEmail ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <XCircle className="h-3 w-3 text-slate-300" />}
+                        </div>
+                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Email</h4>
+                        <p className="text-sm font-semibold mt-1">{hasEmail ? 'Contacted' : 'Not Sent'}</p>
+                    </div>
+
+                    <div className={`p-4 rounded-xl border transition-all ${hasWA ? 'bg-emerald-50/50 border-emerald-200 shadow-sm' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                            <MessageCircle className={`h-4 w-4 ${hasWA ? 'text-emerald-600' : 'text-slate-400'}`} />
+                            {hasWA ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <XCircle className="h-3 w-3 text-slate-300" />}
+                        </div>
+                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">WhatsApp</h4>
+                        <p className="text-sm font-semibold mt-1">{hasWA ? 'Contacted' : 'Not Sent'}</p>
+                    </div>
+
+                    <div className={`p-4 rounded-xl border transition-all ${hasVoice ? 'bg-purple-50/50 border-purple-200 shadow-sm' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                            <Mic className={`h-4 w-4 ${hasVoice ? 'text-purple-600' : 'text-slate-400'}`} />
+                            {hasVoice ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <XCircle className="h-3 w-3 text-slate-300" />}
+                        </div>
+                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Voice</h4>
+                        <p className="text-sm font-semibold mt-1">{hasVoice ? `${leadCalls.length} Call(s)` : 'No Calls'}</p>
+                    </div>
+                </div>
+
+                <div className="mt-6 space-y-4">
+                    <h3 className="text-sm font-bold text-slate-900 border-b pb-2">Recent Communication Detail</h3>
+                    
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                        {lead.stages_passed.length === 0 && leadCalls.length === 0 && (
+                            <div className="text-center py-6 text-slate-400 text-sm italic">
+                                No contact logs found for this lead.
+                            </div>
+                        )}
+                        
+                        {lead.stages_passed.slice().reverse().map((stage, i) => {
+                            const val = lead.stage_data?.[stage];
+                            const isEmail = stage.toLowerCase().includes('email');
+                            const isWA = stage.toLowerCase().includes('whatsapp');
+                            
+                            return (
+                                <div key={i} className="flex gap-3 p-3 rounded-lg bg-slate-50 border border-slate-100 group">
+                                    <div className="pt-0.5">
+                                        {isEmail && <Mail className="h-4 w-4 text-blue-500" />}
+                                        {isWA && <MessageCircle className="h-4 w-4 text-emerald-500" />}
+                                        {!isEmail && !isWA && <Info className="h-4 w-4 text-slate-400" />}
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-xs font-bold text-slate-700">{stage}</span>
+                                            <span className="text-[10px] text-slate-400">Completed</span>
+                                        </div>
+                                        <div className="text-[11px] text-slate-600 leading-relaxed overflow-hidden">
+                                            {isEmail && typeof val === 'string' && val.includes('<') ? (
+                                                <div 
+                                                    className="email-prose max-h-[120px] overflow-y-auto pr-2 custom-scrollbar" 
+                                                    dangerouslySetInnerHTML={{ __html: val }} 
+                                                />
+                                            ) : (
+                                                <div className="italic">
+                                                    {typeof val === 'string' ? val : 'Data logged in system'}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        {leadCalls.map((call, i) => (
+                            <div key={`call-${i}`} className="flex gap-3 p-3 rounded-lg bg-purple-50/30 border border-purple-100">
+                                <Mic className="h-4 w-4 text-purple-500 pt-0.5" />
+                                <div className="flex-1">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className="text-xs font-bold text-purple-700">Voice AI Interaction</span>
+                                        <span className="text-[10px] text-purple-400">{new Date(call.startedAt).toLocaleDateString()}</span>
+                                    </div>
+                                    <div className="text-xs text-slate-600">
+                                        {call.analysis?.structuredData?.sentiment || "Call session completed"} • {Math.round(call.durationSeconds || 0)}s
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                
+                <div className="flex justify-end mt-4">
+                    <Button variant="ghost" className="text-slate-500 hover:text-slate-900 font-bold text-xs" onClick={onClose}>
+                        CLOSE OVERVIEW
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
 }
 
 // USA Stages (Day 0: WA+Email, Day 2: WA, Day 3: Voice1, Day 3: Voice2, Day 5: Email, Day 7: Email)
 const USA_STAGES = [
-    { id: 1, label: "Day 0: WhatsApp & Email", criteria: ["WhatsApp 1", "Email 1"] }, // Both required? Usually implies "Contacted"
+    { id: 1, label: "Day 0: WhatsApp & Email", criteria: ["WhatsApp 1", "Email 1"] },
     { id: 2, label: "Day 2: WhatsApp", criteria: ["WhatsApp 2"] },
     { id: 3, label: "Day 3: Voice Call 1", criteria: ["Voice 1"] },
     { id: 4, label: "Day 4: Voice Call 2", criteria: ["Voice 2"] },
-    { id: 5, label: "Day 5: Email", criteria: ["Email 2"] }, // Mapping to next available email
+    { id: 5, label: "Day 5: Email", criteria: ["Email 2"] },
     { id: 6, label: "Day 7: Email", criteria: ["Email 3"] }
 ];
 
@@ -62,57 +224,19 @@ const GLOBAL_STAGES = [
     { id: 2, label: "Day 2: WhatsApp", criteria: ["WhatsApp 2"] },
     { id: 3, label: "Day 3: Voice Call 1", criteria: ["Voice 1"] },
     { id: 4, label: "Day 4: Voice Call 2", criteria: ["Voice 2"] },
-    { id: 5, label: "Day 5: WhatsApp", criteria: ["WhatsApp 3" /*, "Email 2"*/] }, // Email removed for Global
-    { id: 6, label: "Day 7: WhatsApp", criteria: ["WhatsApp 4" /*, "Email 3"*/] }  // Email removed for Global
+    { id: 5, label: "Day 5: WhatsApp", criteria: ["WhatsApp 3"] },
+    { id: 6, label: "Day 7: WhatsApp", criteria: ["WhatsApp 4"] }
 ];
 
 const isUSALead = (phone: string) => {
     if (!phone) return false;
     const clean = phone.replace(/\D/g, '');
-    // standard USA format: 10 digits (no country code) or 11 digits starting with 1
     return (clean.length === 10) || (clean.length === 11 && clean.startsWith('1'));
 };
 
 const getStagesForLead = (lead: Lead) => {
     return isUSALead(lead.phone) ? USA_STAGES : GLOBAL_STAGES;
 };
-
-const calculateProgress = (lead: Lead) => {
-    const stages = getStagesForLead(lead);
-    const stagesPassed = lead.stages_passed || [];
-
-    // Check match count
-    let completed = 0;
-
-    // For Nurture, we might be in Week 1, 2, or 4.
-    // The requirement says "same loop only", so the stages are the same for each week.
-    // However, the data might be stored as "Email 1", "Email 2" etc which might overlap.
-    // Effectively, we just check if the specific criteria for that "Day" has been met in the current context.
-
-    stages.forEach(stage => {
-        // Broad check: if ANY of the criteria is met.
-        // For "WhatsApp & Email", strictly speaking we might want both, but usually leads data marks stages as they happen.
-        // Let's assume if ANY criteria in the list is found, that stage step is done. (OR logic)
-        // If strict AND logic is needed for Day 0 (WA AND Email), we can adjust.
-        // Given data structure usually has "Email 1" AND "WhatsApp 1", we can check if ALL are present for multi-criteria.
-
-        const isMet = stage.criteria.every(c => stagesPassed.includes(c)); // Strict AND for Day 0
-        if (isMet) completed++;
-
-        // Fallback for "WhatsApp & Email": if only one sent, is it 50% of step? 
-        // Let's keep it simple: if criteria has multiple, require all? 
-        // User request: "Day 0 whatsapp and email". If only WA sent, Day 0 incomplete.
-    });
-
-    // Special handling for Nurture Week scaling?
-    // "In Nurture loop week 1, week 2 and week 4 same loop only"
-    // This implies the structure repeats. 
-    // If we are in Nurture, we can show progress WITHIN the current week.
-
-    return Math.round((completed / stages.length) * 100);
-};
-
-
 
 function ProgressBreakdown({ lead }: { lead: Lead }) {
     const stages = getStagesForLead(lead);
@@ -224,11 +348,13 @@ export default function LeadsPage() {
     const [statusFilter, setStatusFilter] = useState("all");
     const [regionFilter, setRegionFilter] = useState("all");
     const [channelFilter, setChannelFilter] = useState("all");
+    const [sourceFilter, setSourceFilter] = useState("all");
+    const [selectedLeadForOverview, setSelectedLeadForOverview] = useState<Lead | null>(null);
 
     // Reset page on view or filter change
     useEffect(() => {
         setCurrentPage(1);
-    }, [view, templateFilter, searchQuery, loopFilter, statusFilter, regionFilter, channelFilter]);
+    }, [view, templateFilter, searchQuery, loopFilter, statusFilter, regionFilter, channelFilter, sourceFilter]);
 
 
     const loading = view === "leads" ? loadingLeads : false;
@@ -269,8 +395,9 @@ export default function LeadsPage() {
 
             // Loop Filter
             if (loopFilter !== "all") {
-                const source = (lead.source_loop === 'nr_wf' || lead.source_loop === 'Intro') ? 'intro' : lead.source_loop;
-                if (source !== loopFilter) return false;
+                const s = (lead.source_loop || "").toLowerCase();
+                const mapped = (s === 'nr_wf' || s === 'intro') ? 'intro' : s;
+                if (!mapped.includes(loopFilter.toLowerCase())) return false;
             }
 
             // Status Filter
@@ -289,15 +416,30 @@ export default function LeadsPage() {
 
             // Channel Filter
             if (channelFilter !== "all") {
-                const hasEmail = lead.email && lead.email !== "No Email";
-                const hasWP = !!lead.phone;
+                const hasEmail = lead.email && lead.email !== "No Email" && lead.email.trim() !== "";
+                const hasWP = lead.phone && lead.phone.trim() !== "";
                 if (channelFilter === "email" && !hasEmail) return false;
                 if (channelFilter === "whatsapp" && !hasWP) return false;
             }
 
+            // Source Filter
+            if (sourceFilter !== "all") {
+                const table = (lead._table || "").toLowerCase();
+                if (sourceFilter === 'meta' && !table.includes('meta')) return false;
+                if (sourceFilter === 'icp' && !table.includes('icp')) return false;
+            }
+
             return true;
+        }).sort((a, b) => {
+            // Sort by: contacted leads first (those with stages_passed)
+            const aContacted = a.stages_passed.length > 0 ? 1 : 0;
+            const bContacted = b.stages_passed.length > 0 ? 1 : 0;
+            if (aContacted !== bContacted) return bContacted - aContacted;
+            
+            // Secondary sort: Recency
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
-    }, [leads, searchQuery, loopFilter, statusFilter, regionFilter, channelFilter]);
+    }, [leads, searchQuery, loopFilter, statusFilter, regionFilter, channelFilter, sourceFilter]);
 
 
     if (error) {
@@ -314,6 +456,7 @@ export default function LeadsPage() {
 
     return (
         <div className="space-y-6 relative min-h-[500px]">
+            <EmailContentStyle />
             {loading && leads.length === 0 && <SPLoader />}
             <div className="flex items-center justify-between">
                 <div>
@@ -414,7 +557,18 @@ export default function LeadsPage() {
                                 </SelectContent>
                             </Select>
 
-                            {(searchQuery || loopFilter !== "all" || statusFilter !== "all" || regionFilter !== "all" || channelFilter !== "all") && (
+                            <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                                <SelectTrigger className="w-[140px] h-10 bg-white">
+                                    <SelectValue placeholder="Source" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Sources</SelectItem>
+                                    <SelectItem value="meta">Meta Ads</SelectItem>
+                                    <SelectItem value="icp">ICP Tracker</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            {(searchQuery || loopFilter !== "all" || statusFilter !== "all" || regionFilter !== "all" || channelFilter !== "all" || sourceFilter !== "all") && (
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -425,6 +579,7 @@ export default function LeadsPage() {
                                         setStatusFilter("all");
                                         setRegionFilter("all");
                                         setChannelFilter("all");
+                                        setSourceFilter("all");
                                     }}
                                 >
                                     Clear
@@ -467,39 +622,43 @@ export default function LeadsPage() {
                                         </TableRow>
                                     ) : (
                                         filteredLeads.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((lead, index) => {
+                                            const isMeta = lead._table === 'meta_lead_tracker';
                                             return (
-                                                <TableRow key={index} className="hover:bg-slate-50/50 transition-colors">
-                                                    <TableCell className="font-medium text-slate-900">{lead.name}</TableCell>
-                                                    <TableCell className="text-slate-600">{lead.phone}</TableCell>
+                                                <TableRow key={index} className="hover:bg-slate-50/50 transition-colors cursor-pointer group" onClick={() => setSelectedLeadForOverview(lead)}>
+                                                    <TableCell className="font-bold text-slate-900">
+                                                        <div className="flex flex-col">
+                                                            <span>{lead.name}</span>
+                                                            <Badge variant="outline" className={`mt-1 h-4 w-fit px-1 text-[8px] uppercase tracking-tighter ${isMeta ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-purple-50 text-purple-600 border-purple-100'}`}>
+                                                                {isMeta ? 'Meta Ads' : 'ICP Tracker'}
+                                                            </Badge>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-slate-600 font-mono text-xs">{lead.phone}</TableCell>
                                                     <TableCell className="text-center">
-                                                        <div className="flex flex-col items-center gap-1.5">
+                                                        <div className="flex flex-col items-center gap-1.5 opacity-80">
                                                             {lead.email && lead.email !== "No Email" && (
-                                                                <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-borderlue-100 text-[12px] font-medium h-5 px-1.5 w-full justify-center">
-                                                                    Email
-                                                                </Badge>
+                                                                <Mail className="h-3.5 w-3.5 text-blue-500" />
                                                             )}
                                                             {lead.phone && (
-                                                                <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-bordermerald-100 text-[12px] font-medium h-5 px-1.5 w-full justify-center">
-                                                                    WhatsApp
-                                                                </Badge>
+                                                                <MessageCircle className="h-3.5 w-3.5 text-emerald-500" />
                                                             )}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell className={`text-sm ${lead.email === "No Email" ? "text-slate-300 italic" : "text-slate-600"}`}>
+                                                    <TableCell className={`text-xs ${lead.email === "No Email" ? "text-slate-300 italic" : "text-slate-600 font-medium"}`}>
                                                         {lead.email === "No Email" ? "No Email" : lead.email}
                                                     </TableCell>
                                                     <TableCell>
-                                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-borderlue-200 uppercase text-[10px] font-bold tracking-wider">
-                                                            {lead.source_loop === 'followup' ? 'FOLLOW UP' : lead.source_loop === 'nr_wf' || lead.source_loop === 'Intro' ? 'INTRO' : (lead.display_loop || lead.current_loop || lead.source_loop || "").toUpperCase()}
+                                                        <Badge variant="outline" className="bg-white text-slate-500 hover:bg-slate-50 border-slate-200 uppercase text-[9px] font-bold tracking-widest px-1.5">
+                                                            {lead.source_loop?.toUpperCase() || 'CAMPAIGN'}
                                                         </Badge>
                                                     </TableCell>
                                                     <TableCell>
                                                         <Badge variant={(lead.replied === "Yes" || (lead.email_replied && lead.email_replied !== "No") || (lead.whatsapp_replied && lead.whatsapp_replied !== "No")) ? "default" : "secondary"}
-                                                            className={(lead.replied === "Yes" || (lead.email_replied && lead.email_replied !== "No") || (lead.whatsapp_replied && lead.whatsapp_replied !== "No")) ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-bordermerald-200 shadow-none font-bold capitalize" : "capitalize text-slate-500 bg-slate-100"}>
+                                                            className={(lead.replied === "Yes" || (lead.email_replied && lead.email_replied !== "No") || (lead.whatsapp_replied && lead.whatsapp_replied !== "No")) ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-emerald-200 shadow-none font-bold capitalize text-[10px]" : "capitalize text-slate-400 bg-slate-50 border-slate-200 text-[10px]"}>
                                                             {(lead.email_replied && lead.email_replied !== "No") ? "Replied" : (lead.whatsapp_replied && lead.whatsapp_replied !== "No") ? "Replied" : lead.replied === "No" ? "Sent" : lead.replied}
                                                         </Badge>
                                                     </TableCell>
-                                                    <TableCell>
+                                                    <TableCell onClick={(e) => e.stopPropagation()}>
                                                         <ProgressBreakdown lead={lead} />
                                                     </TableCell>
                                                 </TableRow>
@@ -591,6 +750,14 @@ export default function LeadsPage() {
                     )}
                 </CardContent>
             </Card>
+
+            {selectedLeadForOverview && (
+                <LeadOverviewDialog
+                    lead={selectedLeadForOverview}
+                    isOpen={!!selectedLeadForOverview}
+                    onClose={() => setSelectedLeadForOverview(null)}
+                />
+            )}
         </div>
     );
 }

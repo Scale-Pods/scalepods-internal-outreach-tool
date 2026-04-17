@@ -85,7 +85,16 @@ export async function GET() {
     };
 
     try {
-        const leads = await fetchTable("icp_tracker");
+        const [icpLeads, metaLeads] = await Promise.all([
+            fetchTable("icp_tracker"),
+            fetchTable("meta_lead_tracker")
+        ]);
+
+        // Tag sources before returning
+        const leads = [
+            ...icpLeads.map(l => ({ ...l, _table: 'icp_tracker' })),
+            ...metaLeads.map(l => ({ ...l, _table: 'meta_lead_tracker' }))
+        ];
 
         return NextResponse.json({
             leads

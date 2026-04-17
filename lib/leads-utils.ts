@@ -39,14 +39,27 @@ function getVal(obj: any, keys: string[]) {
 }
 
 export function consolidateLeads(data: any): ConsolidatedLead[] {
-    // If the input is { leads: [] } or just the array itself
     const rawLeads = Array.isArray(data) ? data : (data?.leads || []);
-    
+
     return rawLeads.map((l: any, idx: number) => {
         const stages: string[] = [];
         const stage_data: Record<string, any> = {};
 
-        // 1. Unified mapping for all 6 Email stages from icp_tracker
+        // Track source
+        const _table = l._table || (l.full_name ? 'meta_lead_tracker' : 'icp_tracker');
+
+        // 1. WhatsApp Stages (icp_tracker: Whatsapp_1, meta_lead_tracker: W.P_1)
+        for (let i = 1; i <= 25; i++) {
+            const keys = [`Whatsapp_${i}`, `W.P_${i}`, `WhatsApp ${i}`];
+            const val = getVal(l, keys);
+            if (val !== undefined && val !== null && String(val).trim() !== "") {
+                const stageKey = `WhatsApp ${i}`;
+                stages.push(stageKey);
+                stage_data[stageKey] = val;
+            }
+        }
+
+        // 2. Email Stages (Email_1 to Email_6)
         for (let i = 1; i <= 6; i++) {
             const key = `Email_${i}`;
             const val = l[key];
@@ -56,69 +69,55 @@ export function consolidateLeads(data: any): ConsolidatedLead[] {
             }
         }
 
-        // 2. WhatsApp stages from icp_tracker (1-5)
-        for (let i = 1; i <= 5; i++) {
-            const key = `Whatsapp_${i}`;
-            const statusKey = `Whatsapp_${i}_status`;
+        // 3. Voice Stages
+        for (let i = 1; i <= 3; i++) {
+            const key = `Voice_${i}`;
             const val = l[key];
-            const status = l[statusKey];
-            
             if (val !== undefined && val !== null && String(val).trim() !== "") {
                 stages.push(key);
                 stage_data[key] = val;
-                if (status) {
-                    stage_data[statusKey] = status;
-                }
             }
         }
 
-        // 3. Normalized values using getVal (to handle spaces and case differences)
-        const leadId = getVal(l, ["id", "id", "Person ID", "Lead ID"]) || `lead-${idx}`;
-        const name = String(getVal(l, ["Full Name", "Name"]) || "Unknown Lead");
-        const email = String(getVal(l, ["Email"]) || "No Email");
-        const phone = String(getVal(l, ["Phone", "Company Phone Number"]) || "");
-        
-        // Use designated last contacted fields from icp_tracker
-        const lastContacted = getVal(l, ["Whatsapp Last Contacted", "Voice Last Contacted", "Email Last Contacted", "Last Contacted"]);
-        
-        // Use "SENDERS  EMAIL" (double space possibility handled via getVal normalization if needed)
-        const sender = getVal(l, ["SENDERS  EMAIL", "Senders email", "Sender Email"]);
-        
-        // Replied/Unsubscribed checks (including WhatsApp-specific ones from icp_tracker)
-        let repliedStatus = String(getVal(l, ["Replied", "whatsapp_replied", "Email_Replied"]) || "No");
-        
-        // If not explicitly "Yes/No", check if any Whatsapp_i_status contains "Replied"
-        if (repliedStatus === "No") {
-            for (let i = 1; i <= 5; i++) {
-                const s = l[`Whatsapp_${i}_status`];
-                if (s && String(s).toLowerCase().includes('replied')) {
-                    repliedStatus = "Yes";
+        // 4. Common Fields
+        const leadId = getVal(l, ["id", "Person ID", "Lead ID"]) || `lead-${idx}`;
+        const name = String(getVal(l, ["Full Name", "full_name", "Name", "name"]) || "Unknown Lead");
+        const email = String(getVal(l, ["Email", "email"]) || "No Email");
+        const phone = String(getVal(l, ["Phone", "phone", "phone_number", "Phone Number", "whatsapp_number", "Company Phone Number"]) || "");
+
+        // Replied logic (Meta uses WTS_Reply_Track or W.P_Replied_X)
+        const emailReplied = l.email_replied || l.Email_Replied;
+        const wpReplied = l.whatsapp_replied || l.WTS_Reply_Track;
+
+        let hasReplied = (emailReplied && String(emailReplied).toLowerCase() !== 'no' && String(emailReplied).toLowerCase() !== 'none') ||
+            (wpReplied && String(wpReplied).toLowerCase() !== 'no' && String(wpReplied).toLowerCase() !== 'none');
+
+        if (!hasReplied) {
+            for (let i = 1; i <= 25; i++) {
+                const r = l[`W.P_Replied_${i}`] || l[`Whatsapp_${i}_replied`] || l[`User_Replied_${i}`];
+                if (r && String(r).toLowerCase() !== 'no' && String(r).toLowerCase() !== 'none') {
+                    hasReplied = true;
                     break;
                 }
             }
         }
 
-        const unsubscribed = String(getVal(l, ["Unsubscribed"]) || "No");
-
         return {
+            ...l,
             id: String(leadId),
             lead_id: leadId,
             name,
             phone,
             email,
-            replied: repliedStatus,
-            current_loop: "Campaign",
-            source_loop: "Campaign",
+            replied: hasReplied ? "Yes" : "No",
+            current_loop: l.current_loop || "Campaign",
+            source_loop: l.source_loop || (l.ad_id ? 'Meta Ads' : 'Campaign'),
             stages_passed: stages,
             stage_data,
-            created_at: getVal(l, ["created_at"]) || new Date().toISOString(),
-            updated_at: getVal(l, ["updated_at"]),
-            last_contacted: lastContacted,
-            sender_email: sender,
-            email_replied: repliedStatus,
-            whatsapp_replied: repliedStatus,
-            unsubscribed,
-            ...l // spread original data for additional fields
+            created_at: l.created_at || new Date().toISOString(),
+            updated_at: l.updated_at,
+            last_contacted: getVal(l, ["Last Contacted", "whatsapp_last_contacted", "Email Last Contacted"]),
+            _table
         };
     });
 }
