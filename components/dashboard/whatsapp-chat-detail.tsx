@@ -277,7 +277,7 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                                                 <span className={`text-[10px] font-bold uppercase tracking-wide ${msg.type === 'user' ? 'text-slate-400' : 'text-emerald-100'}`}>
                                                     {msg.label}
                                                 </span>
-                                                {tsPill}
+                                                {msg.label !== "Whatsapp 1" && tsPill}
                                             </div>
                                             <p className="text-sm leading-relaxed whitespace-pre-wrap font-sans">
                                                 {msg.content}
