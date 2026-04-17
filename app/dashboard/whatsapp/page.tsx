@@ -331,7 +331,7 @@ export default function WhatsappDashboardPage() {
         <div className="h-full flex flex-col overflow-hidden bg-slate-50/50 p-6 space-y-6">
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
                 <div>
-                    <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">WhatsApp Dashboard</h1>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">WhatsApp Dashboard</h1>
                     <p className="text-sm font-medium text-slate-500">Real-time engagement & health analytics</p>
                 </div>
                 <DateRangePicker onUpdate={(range) => setDateRange(range.range)} />
@@ -572,12 +572,7 @@ function DeliveryStatusDetailedCard({ allLeads }: { allLeads: any[] }) {
     const [localSource, setLocalSource] = useState<"icp" | "meta">("icp");
     
     const cardStats = useMemo(() => {
-        const filtered = allLeads.filter(l => {
-                            const table = (l._table || "").toLowerCase();
-                            if (localSource === 'icp') return table === 'icp_tracker';
-                            if (localSource === 'meta') return table === 'meta_lead_tracker';
-                            return false;
-                        });
+        const filtered = allLeads.filter(l => l._source === localSource);
 
         let sent = 0;
         let replied = 0;
