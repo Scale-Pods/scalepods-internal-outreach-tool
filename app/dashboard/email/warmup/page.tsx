@@ -4,6 +4,7 @@ import { SPLoader } from "@/components/sp-loader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
     RefreshCw,
     Send,
@@ -13,7 +14,7 @@ import {
     AlertCircle,
     Activity,
 } from "lucide-react";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import {
     AreaChart,
@@ -119,19 +120,20 @@ export default function WarmupAnalyticsPage() {
     const selectedAccount = warmupData.find(a => a.email === selectedEmail) || warmupData[0] || null;
 
     return (
-        <div className="space-y-8 pb-10 pt-6 relative min-h-[500px]">
+        <div className="space-y-3 pb-10 pt-2 relative min-h-[500px] px-2 md:px-0">
             {/* Page Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4 mb-1">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Warm-up Analytics</h1>
-                    <p className="text-sm text-slate-500 mt-1">Monitor email account health and deliverability</p>
+                    <h1 className="text-xl font-bold text-slate-900 tracking-tight">Warm-up Analytics</h1>
+                    <p className="text-[11px] text-slate-500">Monitor email account health and deliverability</p>
                 </div>
-                <div className="flex flex-col md:flex-row md:items-center gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <Select value={selectedEmail} onValueChange={setSelectedEmail}>
-                        <SelectTrigger className="w-[280px]">
+                        <SelectTrigger className="w-full sm:w-[240px] h-9 text-xs">
                             <SelectValue placeholder="Select email account" />
                         </SelectTrigger>
                         <SelectContent>
+                            
                             {ALL_TARGET_EMAILS.map((email) => (
                                 <SelectItem key={email} value={email}>
                                     {email}
@@ -139,14 +141,16 @@ export default function WarmupAnalyticsPage() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <button
+                    <Button
                         onClick={() => fetchData()}
                         disabled={loading}
-                        className="flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 text-sm font-medium hover:bg-slate-50 transition-colors"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 px-3 text-xs font-semibold gap-2 border-slate-200"
                     >
-                        <RefreshCw className={cn("h-4 w-4 text-slate-500", loading && "animate-spin")} />
+                        <RefreshCw className={cn("h-3.5 w-3.5 text-slate-500", loading && "animate-spin")} />
                         Refresh
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -168,22 +172,22 @@ export default function WarmupAnalyticsPage() {
 
             {selectedAccount && !loading && (
                 <div className="space-y-4">
-                    <Card className="overflow-hidden border-border">
-                        <div className="border-b border-border bg-slate-50/50 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <Card className="overflow-hidden border-border shadow-sm">
+                        <div className="border-b border-border bg-slate-50/30 px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg">
+                                <div className="h-9 w-9 rounded-full bg-indigo-100 text-indigo-600 border border-indigo-200 flex items-center justify-center font-bold text-base shadow-sm">
                                     {selectedAccount.email.charAt(0).toUpperCase()}
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-lg text-slate-900">{selectedAccount.email}</h3>
-                                    <p className="text-sm text-slate-500">Account Deliverability Status</p>
+                                    <h3 className="font-bold text-base text-slate-900">{selectedAccount.email}</h3>
+                                    <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Account Deliverability Status</p>
                                 </div>
                             </div>
                             <StatusBadge status={selectedAccount.status} score={selectedAccount.health_score} />
                         </div>
 
-                        <CardContent className="p-6">
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
+                        <CardContent className="p-5">
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
                                 <MiniMetric
                                     label="Health Score"
                                     value={`${selectedAccount.health_score}/100`}
@@ -230,10 +234,10 @@ export default function WarmupAnalyticsPage() {
                             </div>
 
                             {selectedAccount.history && selectedAccount.history.length > 0 ? (
-                                <div className="h-[400px] w-full mt-8">
-                                    <h4 className="text-base font-bold text-slate-900 mb-6">Historical Delivery Trend</h4>
+                                <div className="h-[320px] w-full mt-4">
+                                    <h4 className="text-sm font-bold text-slate-900 mb-4 px-1 uppercase tracking-wider">Historical Delivery Trend</h4>
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={selectedAccount.history} margin={{ top: 20, right: 60, left: 10, bottom: 30 }}>
+                                        <AreaChart data={selectedAccount.history} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
                                             <defs>
                                                 <linearGradient id={`colorInbox-${selectedAccount.email}`} x1="0" y1="0" x2="0" y2="1">
                                                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
@@ -311,7 +315,7 @@ function StatusBadge({ status, score }: { status: string, score: number }) {
     else if (status === "Poor") colorClass = "bg-rose-100 text-rose-800 hover:bg-rose-100 border-rose-200";
 
     return (
-        <Badge variant="outline" className={cn("px-4 py-1.5 text-sm font-bold border", colorClass)}>
+        <Badge variant="outline" className={cn("px-3 py-1 text-[11px] font-bold border rounded-full", colorClass)}>
             {status} ({score}%)
         </Badge>
     );
@@ -319,16 +323,16 @@ function StatusBadge({ status, score }: { status: string, score: number }) {
 
 function MiniMetric({ label, value, subtext, icon: Icon, color, bg }: any) {
     return (
-        <div className="flex flex-col gap-1.5 p-4 rounded-xl bg-white border border-border shadow-sm hover:shadow-md transition-shadow">
+        <div className="flex flex-col gap-1 p-3.5 rounded-xl bg-white border border-border shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">{label}</span>
-                <div className={cn("p-2 rounded-full", bg, color)}>
-                    <Icon className="h-4 w-4" />
+                <span className="text-[9px] uppercase tracking-widest text-slate-400 font-bold">{label}</span>
+                <div className={cn("p-1.5 rounded-full", bg, color)}>
+                    <Icon className="h-3.5 w-3.5" />
                 </div>
             </div>
-            <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-black text-slate-900">{value}</span>
-                {subtext && <span className="text-xs font-semibold text-slate-500">{subtext}</span>}
+            <div className="flex items-baseline gap-1">
+                <span className="text-xl font-black text-slate-900 tracking-tight">{value}</span>
+                {subtext && <span className="text-[10px] font-bold text-slate-500">{subtext}</span>}
             </div>
         </div>
     );
