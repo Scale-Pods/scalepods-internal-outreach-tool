@@ -6,11 +6,16 @@ import { Badge } from "@/components/ui/badge";
 import {
     Mail, Send, RefreshCw, BarChart2, Users,
     Reply, Sparkles,
-    ArrowUpRight, TrendingUp, Percent,
+    ArrowUpRight, TrendingUp, Percent, Info,
 } from "lucide-react";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useState, useEffect, useMemo } from "react";
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { useRouter } from "next/navigation";
 import { useData } from "@/context/DataContext";
 import { cn } from "@/lib/utils";
@@ -204,15 +209,6 @@ export default function EmailDashboardPage() {
     }, [campaigns]);
 
     // For the funnel bar chart
-    const funnelData = useMemo(() => [
-        { name: 'Leads', value: metrics.totalLeads, fill: '#6366f1' },
-        { name: 'Contacted', value: metrics.totalContacted, fill: '#3b82f6' },
-        { name: 'Opened', value: metrics.totalUniqueOpens, fill: '#10b981' },
-        { name: 'Clicked', value: metrics.totalUniqueClicks, fill: '#f59e0b' },
-        { name: 'Replied', value: metrics.totalUniqueReplies, fill: '#8b5cf6' },
-        { name: 'Opportunities', value: metrics.totalOpportunities, fill: '#ec4899' },
-    ], [metrics]);
-
     const handleDateUpdate = (range: any) => {
         setDateRange(range.range);
     };
@@ -232,12 +228,33 @@ export default function EmailDashboardPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Email Outreach Center</h1>
-                    <p className="text-sm text-slate-500 mt-1">
-                        Monitor your email campaign performance
+                    <div className="flex items-center gap-2 mt-1">
+                        <p className="text-sm text-slate-500">
+                            Monitor your email campaign performance
+                            {hasCampaignData && (
+                                <span className="ml-2 text-emerald-600 font-medium">• {campaigns.length} campaign{campaigns.length > 1 ? 's' : ''} active</span>
+                            )}
+                        </p>
                         {hasCampaignData && (
-                            <span className="ml-2 text-emerald-600 font-medium">• {campaigns.length} campaign{campaigns.length > 1 ? 's' : ''} active</span>
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button className="text-slate-400 hover:text-indigo-600 transition-colors">
+                                            <Info className="h-4 w-4" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="bg-slate-900 text-white border-slate-800">
+                                        <p className="text-xs font-bold mb-1 uppercase tracking-wider opacity-70">Active Campaign IDs</p>
+                                        <div className="flex flex-col gap-1">
+                                            {campaigns.map((c, i) => (
+                                                <span key={i} className="font-mono text-[10px]">{c.campaignId || 'N/A'} - {c.campaignName}</span>
+                                            ))}
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
                         )}
-                    </p>
+                    </div>
                 </div>
                 <div className="flex items-center gap-3">
                     <DateRangePicker onUpdate={handleDateUpdate} />
@@ -258,7 +275,6 @@ export default function EmailDashboardPage() {
                 <MetricCard
                     title="Total Leads"
                     value={metrics.totalLeads}
-                    subtitle={campaigns.length > 0 ? `Campaign ID: ${campaigns.map(c => c.campaignId).filter(Boolean).join(', ')}` : "No Campaigns"}
                     icon={<Users className="h-5 w-5" />}
                     iconBg="bg-indigo-50 text-indigo-600"
                     onClick={() => router.push('/dashboard/email/sent')}
@@ -266,7 +282,6 @@ export default function EmailDashboardPage() {
                 <MetricCard
                     title="Emails Sent"
                     value={localData.totalEmails}
-                    subtitle={`Across ${localData.leadsContacted} leads`}
                     icon={<Send className="h-5 w-5" />}
                     iconBg="bg-blue-50 text-blue-600"
                     onClick={() => router.push('/dashboard/email/sent')}
@@ -289,42 +304,48 @@ export default function EmailDashboardPage() {
 
             {/* Outreach Funnel + Sequence Breakdown side by side */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Outreach Funnel */}
-                <Card className="bg-white border-border shadow-sm">
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between mb-5">
+                {/* Delivery Status Card */}
+                <Card className="bg-white border-border shadow-sm flex flex-col overflow-hidden">
+                    <CardContent className="p-6 flex flex-col h-full">
+                        <div className="flex items-center justify-between mb-6 shrink-0">
                             <div>
-                                <h2 className="text-base font-bold text-slate-900">Outreach Funnel</h2>
-                                <p className="text-xs text-slate-500 mt-0.5">Lead progression from contact to opportunity</p>
+                                <h2 className="text-base font-bold text-slate-900">Delivery Status</h2>
+                                <p className="text-xs text-slate-500 mt-0.5">Outbound health & engagement metrics</p>
                             </div>
-                            <TrendingUp className="h-4 w-4 text-slate-400" />
+                            <div className="p-1.5 bg-slate-50 rounded-lg"><TrendingUp className="h-4 w-4 text-slate-400" /></div>
                         </div>
-                        {hasCampaignData ? (
-                            <div className="h-[220px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={funnelData} layout="vertical" margin={{ left: 10, right: 20 }}>
-                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                                        <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                                        <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: '#475569', fontWeight: 600 }} width={90} />
-                                        <Tooltip
-                                            contentStyle={{
-                                                background: '#fff',
-                                                border: '1px solid #e2e8f0',
-                                                borderRadius: '8px',
-                                                fontSize: '12px',
-                                            }}
-                                        />
-                                        <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
-                                            {funnelData.map((entry, idx) => (
-                                                <Cell key={idx} fill={entry.fill} />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        ) : (
-                            <div className="h-[220px] flex items-center justify-center text-sm text-slate-400">
-                                No campaign data yet — connect Instantly to see the funnel
+
+                        <div className="space-y-4 flex-1 flex flex-col justify-center">
+                            <StatusBar 
+                                label="Sent" 
+                                value={metrics.totalEmailsSent} 
+                                total={metrics.totalEmailsSent} 
+                                color="bg-blue-400" 
+                            />
+                            <StatusBar 
+                                label="Delivered" 
+                                value={metrics.totalEmailsSent - metrics.totalBounced} 
+                                total={metrics.totalEmailsSent} 
+                                color="bg-indigo-500" 
+                            />
+                            <StatusBar 
+                                label="Failed" 
+                                value={metrics.totalBounced} 
+                                total={metrics.totalEmailsSent} 
+                                color="bg-rose-500" 
+                            />
+                            <StatusBar 
+                                label="Replied" 
+                                value={dbReplyCount} 
+                                total={metrics.totalEmailsSent} 
+                                color="bg-emerald-500" 
+                            />
+                        </div>
+
+                        {metrics.totalBounced === 0 && metrics.totalEmailsSent > 0 && (
+                            <div className="mt-4 flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 w-fit px-2 py-0.5 rounded-full">
+                                <TrendingUp className="h-3 w-3" />
+                                <span>PERFECT DELIVERY RATE</span>
                             </div>
                         )}
                     </CardContent>
@@ -368,20 +389,7 @@ export default function EmailDashboardPage() {
                     </CardContent>
                 </Card>
             </div>
-
-            {/* Campaign-Level Breakdown (if multiple campaigns) */}
-            {campaigns.length > 0 && (
-                <div className="space-y-4">
-                    <h2 className="text-base font-bold text-slate-900 uppercase tracking-wider">Campaign Performance</h2>
-                    <div className="grid grid-cols-1 gap-4">
-                        {campaigns.map((c, idx) => (
-                            <CampaignRow key={idx} campaign={c} />
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Recent Replies */}
+{/* Recent Replies */}
             {recentReplies.length > 0 && (
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -437,6 +445,19 @@ export default function EmailDashboardPage() {
                     </div>
                 </div>
             )}
+            {/* Campaign-Level Breakdown (if multiple campaigns) */}
+            {campaigns.length > 0 && (
+                <div className="space-y-4">
+                    <h2 className="text-base font-bold text-slate-900 uppercase tracking-wider">Campaign Performance</h2>
+                    <div className="grid grid-cols-1 gap-4">
+                        {campaigns.map((c, idx) => (
+                            <CampaignRow key={idx} campaign={c} />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            
         </div>
     );
 }
@@ -517,6 +538,24 @@ function CampaignStat({ label, value, rate, alert }: { label: string; value: num
             {rate && (
                 <span className={cn("text-[10px] font-bold", alert ? "text-red-500" : "text-slate-400")}>{rate}</span>
             )}
+        </div>
+    );
+}
+
+function StatusBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+    const percentage = total > 0 ? (value / total) * 100 : 0;
+    return (
+        <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
+                <span className="text-slate-500">{label}</span>
+                <span className="text-slate-900">{value}</span>
+            </div>
+            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div 
+                    className={cn("h-full transition-all duration-1000", color)} 
+                    style={{ width: `${percentage}%` }}
+                />
+            </div>
         </div>
     );
 }
