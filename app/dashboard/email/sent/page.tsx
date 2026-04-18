@@ -40,6 +40,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
 } from "@/components/ui/dialog";
 import { format, formatDistanceToNow } from "date-fns";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -78,6 +79,8 @@ export default function SentEmailsPage() {
     const [dateRange, setDateRange] = useState<any>(undefined);
     const [sentEmails, setSentEmails] = useState<SentEmailEntry[]>([]);
     const [dbReplyCount, setDbReplyCount] = useState(0);
+    const [campaignsDB, setCampaignsDB] = useState<any[]>([]);
+    const [leadRepliesDB, setLeadRepliesDB] = useState<any[]>([]);
     const [loadingDB, setLoadingDB] = useState(true);
     const loading = loadingLeads || loadingDB;
     const [searchQuery, setSearchQuery] = useState("");
@@ -85,22 +88,39 @@ export default function SentEmailsPage() {
     const [filterStatus, setFilterStatus] = useState("all");
 
     useEffect(() => {
-        if (loadingLeads) return;
+        if (loadingLeads || loadingDB) return;
 
         const entries: SentEmailEntry[] = [];
 
         allLeads.forEach((lead: any, leadIndex: number) => {
             const fullName = String(lead.name || lead["Full Name"] || lead.full_name || "Unknown Lead");
             const email = String(lead.email || lead["Email"] || "No Email");
-            const senderEmail = String(lead.sender_email || lead["SENDERS  EMAIL"] || lead["Senders email"] || "");
-            const repliedRaw = lead.replied || lead["Replied"] || lead.email_replied || "No";
-            const hasReplied = String(repliedRaw).toLowerCase() !== "no" && 
-                               String(repliedRaw).toLowerCase() !== "none" && 
-                               String(repliedRaw).trim() !== "" &&
-                               String(repliedRaw).toLowerCase() !== "false";
+            
+            // 1. Fetch Actual Sender Email from Campaign Analytics if not in lead
+            const leadCampaignId = lead.campaign_id || lead["Campaign ID"];
+            const campaignInfo = campaignsDB.find((c: any) => 
+                String(c.campaign_id) === String(leadCampaignId)
+            );
+            const senderEmail = campaignInfo?.email_account || 
+                                String(lead.sender_email || lead["SENDERS  EMAIL"] || lead["Senders email"] || "N/A");
 
-            // Get the Email Last Contacted timestamp
-            const lastContactedRaw = lead.last_contacted || lead["Email Last Contacted"] || lead.created_at || null;
+            // 2. Fetch Actual Reply Status and Time from leadReplies
+            const dbReply = leadRepliesDB.find((r: any) => 
+                String(r.lead_email_id).toLowerCase() === email.toLowerCase()
+            );
+            const hasReplied = !!dbReply || (
+                String(lead.replied || lead["Replied"] || lead.email_replied || "No").toLowerCase() !== "no" &&
+                String(lead.replied || lead["Replied"] || lead.email_replied || "No").trim() !== ""
+            );
+
+            // 3. Get the Email Last Contacted timestamp — prioritize actual data
+            const lastContactedRaw = dbReply?.reply_timestamp || 
+                                     lead.last_contacted || 
+                                     lead.last_sent_at ||
+                                     lead.last_contacted_at ||
+                                     lead["Email Last Contacted"] || 
+                                     lead.created_at || null;
+
             let lastContactedFormatted = "N/A";
             let relativeTime = "";
             if (lastContactedRaw) {
@@ -138,8 +158,6 @@ export default function SentEmailsPage() {
                     stagesSent++;
                     let content = String(rawValue).trim();
 
-                    // Check if this is the stage where reply happened
-                    // If lead has replied and next stage has no data, this is the last stage
                     stages.push({
                         stage: stageKey,
                         content,
@@ -147,7 +165,6 @@ export default function SentEmailsPage() {
                         stoppedByReply: false,
                     });
 
-                    // If the lead has replied, check if the NEXT stage has data
                     if (hasReplied) {
                         const currentIdx = EMAIL_STAGES.indexOf(stageKey);
                         const nextStageKey = EMAIL_STAGES[currentIdx + 1];
@@ -155,13 +172,11 @@ export default function SentEmailsPage() {
                         const nextHasData = nextVal !== undefined && nextVal !== null && String(nextVal).trim() !== "";
 
                         if (!nextHasData) {
-                            // Reply happened after this stage, stop here
                             repliedAfterStage = stageKey;
                             foundReplyStop = true;
                         }
                     }
                 } else {
-                    // No data and no reply stop — just an empty stage
                     stages.push({
                         stage: stageKey,
                         content: "",
@@ -171,7 +186,6 @@ export default function SentEmailsPage() {
                 }
             }
 
-            // Only include leads that have at least one email stage sent
             if (stagesSent > 0) {
                 entries.push({
                     id: String(lead.id || `lead-${leadIndex}`),
@@ -189,7 +203,6 @@ export default function SentEmailsPage() {
             }
         });
 
-        // Sort by last contacted (newest first)
         entries.sort((a, b) => {
             const da = a.lastContactedRaw ? new Date(a.lastContactedRaw).getTime() : 0;
             const db = b.lastContactedRaw ? new Date(b.lastContactedRaw).getTime() : 0;
@@ -197,7 +210,7 @@ export default function SentEmailsPage() {
         });
 
         setSentEmails(entries);
-    }, [allLeads, loadingLeads]);
+    }, [allLeads, loadingLeads, loadingDB, campaignsDB, leadRepliesDB]);
 
     // Fetch DB data for real-time reply count
     useEffect(() => {
@@ -208,7 +221,10 @@ export default function SentEmailsPage() {
                 if (!res.ok) throw new Error('Failed to fetch');
                 const json = await res.json();
                 const allReplies = json.leadReplies || [];
+                const allCampaigns = json.campaignAnalytics || [];
                 setDbReplyCount(allReplies.length);
+                setLeadRepliesDB(allReplies);
+                setCampaignsDB(allCampaigns);
             } catch (err) {
                 console.error("Error fetching DB replies:", err);
             } finally {
@@ -217,15 +233,6 @@ export default function SentEmailsPage() {
         };
         fetchDB();
     }, []);
-
-    // Compute stats
-    const stats = useMemo(() => {
-        const total = sentEmails.length;
-        const replied = dbReplyCount; // Use the real DB count
-        const totalStagesSent = sentEmails.reduce((sum, e) => sum + e.stagesSent, 0);
-        const replyRate = total > 0 ? Math.round((replied / total) * 100) : 0;
-        return { total, replied, totalStagesSent, replyRate };
-    }, [sentEmails, dbReplyCount]);
 
     const filteredEmails = useMemo(() => {
         return sentEmails.filter((entry) => {
@@ -266,6 +273,15 @@ export default function SentEmailsPage() {
             return true;
         });
     }, [sentEmails, searchQuery, dateRange, filterStage, filterStatus]);
+
+    // Compute stats
+    const stats = useMemo(() => {
+        const total = filteredEmails.length;
+        const replied = filteredEmails.filter(e => e.replied).length;
+        const totalStagesSent = filteredEmails.reduce((sum, e) => sum + e.stagesSent, 0);
+        const replyRate = total > 0 ? Math.round((replied / total) * 100) : 0;
+        return { total, replied, totalStagesSent, replyRate };
+    }, [filteredEmails]);
 
     const totalPages = Math.ceil(filteredEmails.length / ITEMS_PER_PAGE);
     const paginatedEmails = filteredEmails.slice(
@@ -686,12 +702,20 @@ function StageRow({
                                     {stageLabel} Content
                                 </DialogTitle>
                             </div>
+                            <DialogDescription className="sr-only">
+                                Full content of the {stageLabel} email.
+                            </DialogDescription>
                         </DialogHeader>
                         
                         <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed bg-slate-50/50 p-6 rounded-xl border border-slate-200/60">
+                            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed bg-slate-50/50 p-6 rounded-xl border border-slate-200/60 font-sans">
                                 {stage.content.includes("<") ? (
-                                    <div dangerouslySetInnerHTML={{ __html: stage.content }} className="email-full-content" />
+                                    <div 
+                                        dangerouslySetInnerHTML={{ 
+                                            __html: stage.content.replace(/<a\b([^>]*?)>/gi, '<a $1 target="_blank" rel="noopener noreferrer">') 
+                                        }} 
+                                        className="email-full-content" 
+                                    />
                                 ) : (
                                     <p className="whitespace-pre-wrap">{stage.content}</p>
                                 )}
