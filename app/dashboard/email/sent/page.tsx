@@ -22,9 +22,11 @@ import {
     Reply,
     Clock,
     User,
+    Send,
     CheckCircle2,
     XCircle,
-    Send,
+    ExternalLink,
+    MailOpen,
 } from "lucide-react";
 import React, { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
@@ -33,6 +35,12 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { format, formatDistanceToNow } from "date-fns";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useData } from "@/context/DataContext";
@@ -69,7 +77,9 @@ export default function SentEmailsPage() {
     const [page, setPage] = useState(1);
     const [dateRange, setDateRange] = useState<any>(undefined);
     const [sentEmails, setSentEmails] = useState<SentEmailEntry[]>([]);
-    const loading = loadingLeads;
+    const [dbReplyCount, setDbReplyCount] = useState(0);
+    const [loadingDB, setLoadingDB] = useState(true);
+    const loading = loadingLeads || loadingDB;
     const [searchQuery, setSearchQuery] = useState("");
     const [filterStage, setFilterStage] = useState("all");
     const [filterStatus, setFilterStatus] = useState("all");
@@ -83,8 +93,11 @@ export default function SentEmailsPage() {
             const fullName = String(lead.name || lead["Full Name"] || lead.full_name || "Unknown Lead");
             const email = String(lead.email || lead["Email"] || "No Email");
             const senderEmail = String(lead.sender_email || lead["SENDERS  EMAIL"] || lead["Senders email"] || "");
-            const repliedRaw = String(lead.replied || lead["Replied"] || lead.email_replied || "No");
-            const hasReplied = repliedRaw.toLowerCase() === "yes";
+            const repliedRaw = lead.replied || lead["Replied"] || lead.email_replied || "No";
+            const hasReplied = String(repliedRaw).toLowerCase() !== "no" && 
+                               String(repliedRaw).toLowerCase() !== "none" && 
+                               String(repliedRaw).trim() !== "" &&
+                               String(repliedRaw).toLowerCase() !== "false";
 
             // Get the Email Last Contacted timestamp
             const lastContactedRaw = lead.last_contacted || lead["Email Last Contacted"] || lead.created_at || null;
@@ -186,14 +199,33 @@ export default function SentEmailsPage() {
         setSentEmails(entries);
     }, [allLeads, loadingLeads]);
 
+    // Fetch DB data for real-time reply count
+    useEffect(() => {
+        const fetchDB = async () => {
+            setLoadingDB(true);
+            try {
+                const res = await fetch('/api/email/db-data');
+                if (!res.ok) throw new Error('Failed to fetch');
+                const json = await res.json();
+                const allReplies = json.leadReplies || [];
+                setDbReplyCount(allReplies.length);
+            } catch (err) {
+                console.error("Error fetching DB replies:", err);
+            } finally {
+                setLoadingDB(false);
+            }
+        };
+        fetchDB();
+    }, []);
+
     // Compute stats
     const stats = useMemo(() => {
         const total = sentEmails.length;
-        const replied = sentEmails.filter(e => e.replied).length;
+        const replied = dbReplyCount; // Use the real DB count
         const totalStagesSent = sentEmails.reduce((sum, e) => sum + e.stagesSent, 0);
         const replyRate = total > 0 ? Math.round((replied / total) * 100) : 0;
         return { total, replied, totalStagesSent, replyRate };
-    }, [sentEmails]);
+    }, [sentEmails, dbReplyCount]);
 
     const filteredEmails = useMemo(() => {
         return sentEmails.filter((entry) => {
@@ -244,80 +276,80 @@ export default function SentEmailsPage() {
     return (
         <div className="space-y-6 pb-10 pt-6 relative min-h-[500px]">
             {loading && <SPLoader />}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4 mb-1">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Sent Emails</h1>
-                    <p className="text-sm text-slate-500 mt-1">Email outreach sequence from ICP Tracker — stages stop on reply</p>
+                    <h1 className="text-xl font-bold tracking-tight text-slate-900 leading-tight">Sent Emails</h1>
+                    <p className="text-[11px] text-slate-500">Email outreach sequence from ICP Tracker — stages stop on reply</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <DateRangePicker
+                        className="h-9 w-[240px]"
+                        onUpdate={(values) => { setDateRange(values.range); setPage(1); }}
+                    />
                 </div>
             </div>
 
             {/* Summary stat cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <Card className="bg-white border-border shadow-sm">
-                    <CardContent className="p-5 flex items-center justify-between">
+                    <CardContent className="p-3 flex items-center justify-between">
                         <div>
-                            <h3 className="text-2xl font-bold text-slate-900">{loading ? "..." : stats.total}</h3>
-                            <p className="text-sm font-medium text-slate-500 mt-0.5">Leads Contacted</p>
+                            <h3 className="text-lg font-bold text-slate-900">{loading ? "..." : stats.total}</h3>
+                            <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Contacted</p>
                         </div>
-                        <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-                            <User className="h-5 w-5" />
+                        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                            <User className="h-4 w-4" />
                         </div>
                     </CardContent>
                 </Card>
                 <Card className="bg-white border-border shadow-sm">
-                    <CardContent className="p-5 flex items-center justify-between">
+                    <CardContent className="p-3 flex items-center justify-between">
                         <div>
-                            <h3 className="text-2xl font-bold text-slate-900">{loading ? "..." : stats.totalStagesSent}</h3>
-                            <p className="text-sm font-medium text-slate-500 mt-0.5">Emails Sent</p>
+                            <h3 className="text-lg font-bold text-slate-900">{loading ? "..." : stats.totalStagesSent}</h3>
+                            <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Sent</p>
                         </div>
-                        <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-                            <Send className="h-5 w-5" />
+                        <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                            <Send className="h-4 w-4" />
                         </div>
                     </CardContent>
                 </Card>
                 <Card className="bg-white border-border shadow-sm">
-                    <CardContent className="p-5 flex items-center justify-between">
+                    <CardContent className="p-3 flex items-center justify-between">
                         <div>
-                            <h3 className="text-2xl font-bold text-slate-900">{loading ? "..." : stats.replied}</h3>
-                            <p className="text-sm font-medium text-slate-500 mt-0.5">Replied</p>
+                            <h3 className="text-lg font-bold text-slate-900">{loading ? "..." : stats.replied}</h3>
+                            <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Replied</p>
                         </div>
-                        <div className="p-3 bg-violet-50 text-violet-600 rounded-xl">
-                            <Reply className="h-5 w-5" />
+                        <div className="p-2 bg-violet-50 text-violet-600 rounded-lg">
+                            <Reply className="h-4 w-4" />
                         </div>
                     </CardContent>
                 </Card>
                 <Card className="bg-white border-border shadow-sm">
-                    <CardContent className="p-5 flex items-center justify-between">
+                    <CardContent className="p-3 flex items-center justify-between">
                         <div>
-                            <h3 className="text-2xl font-bold text-slate-900">{loading ? "..." : `${stats.replyRate}%`}</h3>
-                            <p className="text-sm font-medium text-slate-500 mt-0.5">Reply Rate</p>
+                            <h3 className="text-lg font-bold text-slate-900">{loading ? "..." : `${stats.replyRate}%`}</h3>
+                            <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Rate</p>
                         </div>
-                        <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-                            <CheckCircle2 className="h-5 w-5" />
+                        <div className="p-2 bg-amber-50 text-amber-600 rounded-lg">
+                            <CheckCircle2 className="h-4 w-4" />
                         </div>
                     </CardContent>
                 </Card>
             </div>
 
             {/* Filters */}
-            <div className="bg-white p-4 rounded-xl border border-border shadow-sm space-y-4">
-                <div className="flex flex-col md:flex-row gap-4">
-                    <div className="relative flex-1">
+            <div className="bg-white p-3 rounded-xl border border-border shadow-sm flex flex-wrap gap-2 items-center">
+                    <div className="relative flex-1 min-w-[200px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <Input
                             placeholder="Search by name, email..."
-                            className="pl-9 bg-slate-50 border-border"
+                            className="pl-9 h-9 bg-slate-50 border-border text-xs"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
-                    <DateRangePicker
-                        className="w-full md:w-[260px]"
-                        onUpdate={(values) => { setDateRange(values.range); setPage(1); }}
-                    />
-                </div>
 
-                <div className="flex flex-wrap gap-2 items-center">
+                    <div className="flex items-center gap-2">
                     <Filter className="h-4 w-4 text-slate-400 mr-2" />
 
                     <Select value={filterStage} onValueChange={(val) => { setFilterStage(val); setPage(1); }}>
@@ -325,7 +357,7 @@ export default function SentEmailsPage() {
                             <SelectValue placeholder="Email Stage" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">All Stages</SelectItem>
+                            <SelectItem value="all">All Emails</SelectItem>
                             <SelectItem value="1">Email 1</SelectItem>
                             <SelectItem value="2">Email 2</SelectItem>
                             <SelectItem value="3">Email 3</SelectItem>
@@ -335,17 +367,7 @@ export default function SentEmailsPage() {
                         </SelectContent>
                     </Select>
 
-                    <Select value={filterStatus} onValueChange={(val) => { setFilterStatus(val); setPage(1); }}>
-                        <SelectTrigger className="w-[150px] h-9 text-xs">
-                            <SelectValue placeholder="Reply Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Statuses</SelectItem>
-                            <SelectItem value="replied">Replied</SelectItem>
-                            <SelectItem value="no_reply">No Reply</SelectItem>
-                        </SelectContent>
-                    </Select>
-
+                
                     <Button
                         variant="ghost"
                         size="sm"
@@ -437,7 +459,7 @@ function SentEmailCard({ entry }: { entry: SentEmailEntry }) {
             className="bg-white border border-border rounded-xl shadow-sm transition-all hover:shadow-md"
         >
             <CollapsibleTrigger asChild>
-                <div className="p-5 cursor-pointer group">
+                <div className="p-3 cursor-pointer group">
                     <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
                         <div className="flex items-center gap-4">
                             <div className={cn(
@@ -454,33 +476,26 @@ function SentEmailCard({ entry }: { entry: SentEmailEntry }) {
                                     <h4 className="text-base font-bold text-slate-900 truncate max-w-[260px]">
                                         {entry.fullName}
                                     </h4>
-                                    {entry.replied ? (
-                                        <Badge
-                                            variant="outline"
-                                            className="text-emerald-600 border-emerald-200 bg-emerald-50 text-[10px] font-bold gap-1"
-                                        >
-                                            <Reply className="h-3 w-3" /> Replied
-                                        </Badge>
-                                    ) : (
-                                        <Badge
-                                            variant="outline"
-                                            className="text-slate-500 border-slate-200 bg-slate-50 text-[10px] font-bold"
-                                        >
-                                            No Reply
-                                        </Badge>
-                                    )}
+                                    
                                     <Badge
                                         variant="secondary"
                                         className="bg-blue-50 text-blue-600 hover:bg-blue-100 text-[10px] tracking-wider font-bold uppercase"
                                     >
-                                        {entry.stagesSent} / 6 Stages
+                                        {entry.stagesSent} / 6 Emails   
                                     </Badge>
                                 </div>
 
-                                {/* Email */}
-                                <div className="flex items-center gap-2">
-                                    <Mail className="h-3 w-3 text-slate-400" />
-                                    <p className="text-xs text-slate-500 font-medium truncate">{entry.email}</p>
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-0.5">
+                                    <div className="flex items-center gap-1.5 min-w-[120px]">
+                                        <Mail className="h-3 w-3 text-slate-400" />
+                                        <p className="text-[11px] text-slate-500 font-medium truncate">{entry.email}</p>
+                                    </div>
+                                    {entry.senderEmail && (
+                                        <div className="flex items-center gap-1.5">
+                                            <Send className="h-3 w-3 text-slate-400" />
+                                            <p className="text-[11px] text-indigo-500 font-medium truncate">From: {entry.senderEmail}</p>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Timestamp */}
@@ -512,14 +527,6 @@ function SentEmailCard({ entry }: { entry: SentEmailEntry }) {
             <CollapsibleContent>
                 <div className="px-5 pb-5 pt-0">
                     <div className="pl-[60px] space-y-4 border-t border-border pt-4">
-                        {/* Sender info */}
-                        {entry.senderEmail && (
-                            <div className="flex items-center gap-2 text-xs text-slate-500">
-                                <Send className="h-3.5 w-3.5 text-slate-400" />
-                                <span className="font-semibold text-slate-600">Sent from:</span>
-                                <span>{entry.senderEmail}</span>
-                            </div>
-                        )}
 
                         {/* Replied-after indicator */}
                         {entry.replied && entry.repliedAfterStage && (
@@ -611,8 +618,8 @@ function StageRow({
     }
 
     // Sent stage
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const stripHtmlContent = stripHtml(stage.content);
-    // Check if it's a date-only value (just a timestamp stored as stage value)
     const isDateOnly = !isNaN(new Date(stage.content).getTime()) && stage.content.length < 50;
     const displayContent = isDateOnly ? "Email sent" : stripHtmlContent;
 
@@ -648,16 +655,56 @@ function StageRow({
                         {isRepliedStage ? "✓ Sent → Replied" : "✓ Sent"}
                     </Badge>
                 </div>
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-sm text-slate-600 leading-relaxed">
-                    {stage.content.includes("<") ? (
-                        <div
-                            className="email-content overflow-auto max-h-48"
-                            dangerouslySetInnerHTML={{ __html: stage.content }}
-                        />
-                    ) : (
-                        <p className="whitespace-pre-wrap">{displayContent}</p>
-                    )}
+                
+                <div 
+                    onClick={() => setIsModalOpen(true)}
+                    className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-[13px] text-slate-600 leading-relaxed cursor-pointer hover:bg-slate-100 transition-colors group/content flex items-start justify-between gap-3"
+                >
+                    <div className="flex-1 overflow-hidden">
+                        {stage.content.includes("<") ? (
+                            <div
+                                className="email-content line-clamp-2"
+                                dangerouslySetInnerHTML={{ __html: stage.content }}
+                            />
+                        ) : (
+                            <p className="line-clamp-2">{displayContent}</p>
+                        )}
+                    </div>
+                    <div className="shrink-0 pt-1 opacity-0 group-hover/content:opacity-100 transition-opacity">
+                        <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
+                    </div>
                 </div>
+
+                <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                    <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-6 overflow-hidden bg-white shadow-2xl">
+                        <DialogHeader className="border-b border-slate-100 pb-4 mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                                    <MailOpen className="h-5 w-5" />
+                                </div>
+                                <DialogTitle className="text-lg font-bold text-slate-900">
+                                    {stageLabel} Content
+                                </DialogTitle>
+                            </div>
+                        </DialogHeader>
+                        
+                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed bg-slate-50/50 p-6 rounded-xl border border-slate-200/60">
+                                {stage.content.includes("<") ? (
+                                    <div dangerouslySetInnerHTML={{ __html: stage.content }} className="email-full-content" />
+                                ) : (
+                                    <p className="whitespace-pre-wrap">{stage.content}</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex justify-end pt-4 border-t border-slate-100">
+                            <Button variant="secondary" onClick={() => setIsModalOpen(false)} className="h-10 px-6 font-semibold">
+                                Close Email
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
             </div>
         </div>
     );
