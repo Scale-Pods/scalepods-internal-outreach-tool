@@ -635,6 +635,13 @@ function StageRow({
 
     // Sent stage
     const [isModalOpen, setIsModalOpen] = useState(false);
+    
+    // Helper to ensure links open in new tab
+    const processHtml = (html: string) => {
+        if (!html) return "";
+        return html.replace(/<a\b([^>]*?)>/gi, '<a $1 target="_blank" rel="noopener noreferrer">');
+    };
+
     const stripHtmlContent = stripHtml(stage.content);
     const isDateOnly = !isNaN(new Date(stage.content).getTime()) && stage.content.length < 50;
     const displayContent = isDateOnly ? "Email sent" : stripHtmlContent;
@@ -677,14 +684,7 @@ function StageRow({
                     className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-[13px] text-slate-600 leading-relaxed cursor-pointer hover:bg-slate-100 transition-colors group/content flex items-start justify-between gap-3"
                 >
                     <div className="flex-1 overflow-hidden">
-                        {stage.content.includes("<") ? (
-                            <div
-                                className="email-content line-clamp-2"
-                                dangerouslySetInnerHTML={{ __html: stage.content }}
-                            />
-                        ) : (
-                            <p className="line-clamp-2">{displayContent}</p>
-                        )}
+                        <p className="line-clamp-2">{displayContent}</p>
                     </div>
                     <div className="shrink-0 pt-1 opacity-0 group-hover/content:opacity-100 transition-opacity">
                         <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
@@ -711,9 +711,7 @@ function StageRow({
                             <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed bg-slate-50/50 p-6 rounded-xl border border-slate-200/60 font-sans">
                                 {stage.content.includes("<") ? (
                                     <div 
-                                        dangerouslySetInnerHTML={{ 
-                                            __html: stage.content.replace(/<a\b([^>]*?)>/gi, '<a $1 target="_blank" rel="noopener noreferrer">') 
-                                        }} 
+                                        dangerouslySetInnerHTML={{ __html: processHtml(stage.content) }} 
                                         className="email-full-content" 
                                     />
                                 ) : (
