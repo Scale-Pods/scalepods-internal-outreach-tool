@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Mail, MessageCircle, Mic, ExternalLink, Copy, Eye, EyeOff, ShieldCheck, Wallet, Phone, BarChart3, Settings, Smartphone } from "lucide-react";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { MaqsamBalanceDetail } from "@/components/dashboard/maqsam-balance-detail";
 import { useRouter } from "next/navigation";
 
@@ -30,22 +30,44 @@ export default function CredentialsPage() {
         }).reduce((acc: number, call: any) => acc + (call.costValue || 0), 0);
     }, [calls]);
 
-    // All 9 project email accounts
-    const ALL_EMAILS = [
-        "adnan@scalepods.co",
-        "adnan@scalepods.org",
-        "nancy@scalepods.co",
-        "palashy@scalepods.org",
-        "raunak@scalepods.co",
-        "raunak@scalepods.tech",
-        "tanushree@scalepods.co",
-        "viraj@scalepods.co",
-        "viraj@scalepods.tech",
-    ];
-
-    const [senderEmails, setSenderEmails] = useState<string[]>(ALL_EMAILS);
-    const [loading, setLoading] = useState(false);
+    const [senderEmails, setSenderEmails] = useState<string[]>([]);
+    const [loading, setLoading] = useState(true);
     const router = useRouter();
+
+    const fetchEmails = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/email/db-data');
+            const data = await res.json();
+            
+            // Extract unique sender emails from campaign analytics and lead replies
+            const emails = new Set<string>();
+            
+            if (data.campaignAnalytics && Array.isArray(data.campaignAnalytics)) {
+                data.campaignAnalytics.forEach((c: any) => {
+                    const email = c.email_account || c.senderEmail || c.sender_email;
+                    if (email) emails.add(email);
+                });
+            }
+            
+            if (data.leadReplies && Array.isArray(data.leadReplies)) {
+                data.leadReplies.forEach((r: any) => {
+                    const email = r.sender_email_id || r.sender_email || r.senderEmail;
+                    if (email) emails.add(email);
+                });
+            }
+
+            setSenderEmails(Array.from(emails).sort());
+        } catch (err) {
+            console.error("Error fetching credentials emails:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchEmails();
+    }, []);
 
     const vapiDetails = voiceBalance?.vapi;
 
@@ -61,8 +83,8 @@ export default function CredentialsPage() {
             <div className="grid gap-6">
                 {/* Email Section */}
                 <CredentialSection
-                    title="Email Integration"
-                    description="Active sender accounts detected from your campaigns."
+                    title="Sender's Email Integration"
+                    description="Active sender accounts from your campaigns."
                     icon={Mail}
                     iconColor="text-rose-600"
                     iconBg="bg-rose-50"
@@ -72,7 +94,7 @@ export default function CredentialsPage() {
                             <div className="md:col-span-2 text-slate-400 text-sm animate-pulse">Detecting active email accounts...</div>
                         ) : senderEmails.length > 0 ? (
                             senderEmails.map((email, idx) => (
-                                <ReadOnlyField key={idx} label={`Project Email ${idx + 1}`} value={email} />
+                                <ReadOnlyField key={idx} label={`Sender's Email ${idx + 1}`} value={email} />
                             ))
                         ) : (
                             <ReadOnlyField label="Connected Email" value="No active emails detected" />
