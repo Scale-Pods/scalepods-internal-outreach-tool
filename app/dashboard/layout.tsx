@@ -416,20 +416,7 @@ function DashboardContent({
                                     </Button>
 
 
-                                    {/* Maqsam Button */}
-                                    <Button
-                                        variant="outline"
-                                        className="h-10 px-3 border-slate-200 bg-slate-50/30 hover:bg-slate-50 text-slate-700 gap-2 flex items-center shadow-sm"
-                                        onClick={() => setWalletModal({ isOpen: true, type: 'maqsam' })}
-                                    >
-                                        <Wallet className="h-3.5 w-3.5" />
-                                        <div className="flex flex-col items-start leading-[1.1]">
-                                            <span className="text-[9px] font-bold uppercase opacity-70">Maqsam Used</span>
-                                            <span className="text-xs font-bold">
-                                                {loadingCalls ? "..." : `$${maqsamUsedCost.toFixed(2)}`}
-                                            </span>
-                                        </div>
-                                    </Button>
+
                                 </div>
                             </div>
                         </header>

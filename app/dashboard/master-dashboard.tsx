@@ -41,6 +41,7 @@ import {
     Pie,
     Legend
 } from 'recharts';
+import { format, startOfDay, subDays } from "date-fns";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -55,7 +56,10 @@ import { useData } from "@/context/DataContext";
 export default function MasterDashboard() {
     const [isRepliesModalOpen, setIsRepliesModalOpen] = useState(false);
     const [dateLabel, setDateLabel] = useState("Last 7 days");
-    const [dateRange, setDateRange] = useState<any>(undefined);
+    const [dateRange, setDateRange] = useState<any>({
+        from: subDays(new Date(), 7),
+        to: new Date(),
+    });
 
     const { leads: allLeads, calls: allCalls, loadingLeads, loadingCalls, refreshAll, maqsamBalance, loadingBalances } = useData();
     const [leads, setLeads] = useState<any[]>([]);
@@ -205,13 +209,15 @@ export default function MasterDashboard() {
 
                 if (!loadingCalls && Array.isArray(allCalls)) {
                     const filteredCalls = allCalls.filter((call: any) => {
+                        if (call.source !== 'vapi') return false;
                         if (!dateRange?.from) return true;
-                        if (!call.startedAt) return false;
+                        
+                        const dateStr = call.startedAt || (call.start_time_unix_secs ? new Date(call.start_time_unix_secs * 1000).toISOString() : null);
+                        if (!dateStr) return false;
 
-                        const callDate = new Date(call.startedAt);
-                        const from = new Date(dateRange.from);
-                        from.setHours(0, 0, 0, 0);
-                        const to = dateRange.to ? new Date(dateRange.to) : from;
+                        const callDate = new Date(dateStr);
+                        const from = startOfDay(new Date(dateRange.from));
+                        const to = startOfDay(new Date(dateRange.to || dateRange.from));
                         to.setHours(23, 59, 59, 999);
 
                         return callDate >= from && callDate <= to;

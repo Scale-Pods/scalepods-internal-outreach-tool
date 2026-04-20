@@ -96,7 +96,7 @@ export default function VoiceDashboardPage() {
     }, [globalCalls, dateRange, providerFilter, loading]);
 
     return (
-        <div className="h-full flex flex-col overflow-hidden bg-white p-6 space-y-6">
+        <div className="flex flex-col min-h-full bg-white p-6 space-y-6">
             {loading && <SPLoader />}
 
             {/* Header */}
