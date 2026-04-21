@@ -67,14 +67,38 @@ export default function MasterDashboard() {
     const [acquisitionChartData, setAcquisitionChartData] = useState<any[]>([]);
     const [stats, setStats] = useState({
         totalLeads: 0,
+        totalICP: 0,
+        totalMeta: 0,
         totalEmails: 0,
         totalWhatsApp: 0,
         totalVoice: 0,
-        totalReplies: 0,
-        voiceMinutes: 0,
-        totalVoiceCalls: 0
+        totalEmailReplies: 0,
+        totalWhatsappReplies: 0,
+        whatsappIcpReplied: 0,
+        whatsappMetaReplied: 0,
+        totalVoiceSeconds: 0,
+        voiceMinutesString: "0m 0s",
+        totalVoiceCalls: 0,
+        totalReplies: 0
     });
     const loading = loadingLeads || loadingCalls;
+    const [dbEmailReplies, setDbEmailReplies] = useState<any[]>([]);
+
+    // Fetch Email DB data for real counts
+    useEffect(() => {
+        const fetchEmailReplies = async () => {
+            try {
+                const res = await fetch('/api/email/db-data');
+                if (res.ok) {
+                    const data = await res.json();
+                    setDbEmailReplies(data.leadReplies || []);
+                }
+            } catch (err) {
+                console.error("MasterDashboard: Failed to fetch email replies:", err);
+            }
+        };
+        fetchEmailReplies();
+    }, []);
 
     // Fetch meta_lead_tracker leads
     useEffect(() => {
@@ -226,18 +250,42 @@ export default function MasterDashboard() {
                     totalVoiceCallsCount = filteredCalls.length;
                 }
 
-                let emailCount = 0;
-                let whatsappCount = 0;
+                // Helper: check if lead has replied on WhatsApp
+                const hasWPReplied = (l: any) => {
+                    for (let i = 1; i <= 25; i++) {
+                        const r = l[`User_Replied_${i}`];
+                        if (r && String(r).trim() && String(r).toLowerCase() !== 'no' && String(r).toLowerCase() !== 'none') return true;
+                    }
+                    if (l.whatsapp_replied && l.whatsapp_replied !== "No" && l.whatsapp_replied !== "none") return true;
+                    const wtsTrack = l["WTS_Reply_Track"];
+                    if (wtsTrack && String(wtsTrack).trim() !== "" && String(wtsTrack).toLowerCase() !== "no" && String(wtsTrack).toLowerCase() !== "none" && String(wtsTrack).toLowerCase() !== "false") return true;
+                    for (let i = 1; i <= 10; i++) {
+                        const r = l[`W.P_Replied_${i}`];
+                        if (r && String(r).toLowerCase() !== "no" && String(r).toLowerCase() !== "none") return true;
+                    }
+                    return false;
+                };
+
+                let emailSentCount = 0;
+                let whatsappSentCount = 0;
                 let voiceCount = 0;
-                let replyCount = 0;
+                let whatsappReplyCount = 0;
+                let icpRepliedCount = 0;
+                let metaRepliedCount = 0;
+                let icpCount = 0;
+                let metaCount = 0;
 
                 filteredLeads.forEach((lead: any) => {
+                    // Split counts for subtitle
+                    if (lead._table === 'meta_lead_tracker' || lead._table === 'Meta Lead') metaCount++;
+                    else icpCount++;
+
                     const stages = lead.stages_passed || [];
                     let hasEmail = false;
                     stages.forEach((stage: string) => {
                         if (stage.toLowerCase().includes("email")) hasEmail = true;
                     });
-                    if (hasEmail) emailCount++;
+                    if (hasEmail) emailSentCount++;
 
                     let hasWhatsApp = false;
                     stages.forEach((stage: string) => {
@@ -261,7 +309,7 @@ export default function MasterDashboard() {
                             if (lead["W.P_FollowUp"] || lead.stage_data?.["WhatsApp FollowUp"]) hasWhatsApp = true;
                         }
                     }
-                    if (hasWhatsApp) whatsappCount++;
+                    if (hasWhatsApp) whatsappSentCount++;
 
                     let hasVoice = false;
                     stages.forEach((stage: string) => {
@@ -269,34 +317,41 @@ export default function MasterDashboard() {
                     });
                     if (hasVoice) voiceCount++;
 
-                    const hasEmailReply = lead.email_replied && lead.email_replied !== "No" && lead.email_replied !== "none";
-                    const hasTrack = lead["WTS_Reply_Track"] && lead["WTS_Reply_Track"] !== "No" && lead["WTS_Reply_Track"] !== "none";
-                    let hasWPReply = hasTrack || (lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none");
-                    if (!hasWPReply) {
-                        for (let i = 1; i <= 10; i++) {
-                            const r = lead[`W.P_Replied_${i}`];
-                            if (r && String(r).toLowerCase() !== "no" && String(r).toLowerCase() !== "none") {
-                                hasWPReply = true;
-                                break;
-                            }
-                        }
+                    // Count WhatsApp Replied Leads (Unique Leads - Exact match for WhatsApp dashboard)
+                    if (hasWPReplied(lead)) {
+                        whatsappReplyCount++;
+                        if (lead._table === 'meta_lead_tracker' || lead._table === 'Meta Lead') metaRepliedCount++;
+                        else icpRepliedCount++;
                     }
-
-                    if (hasEmailReply) replyCount++;
-                    if (hasWPReply) replyCount++;
-                    if (!hasEmailReply && !hasWPReply && lead.replied === "Yes") replyCount++;
                 });
+
+                // Calculate Email Replies from DB - Total ROW count
+                const filteredEmailReplies = dbEmailReplies.filter(r => {
+                    if (!dateRange?.from) return true;
+                    const rd = new Date(r.reply_timestamp || r.created_at);
+                    const from = new Date(dateRange.from); from.setHours(0, 0, 0, 0);
+                    const to = dateRange.to ? new Date(dateRange.to) : from; to.setHours(23, 59, 59, 999);
+                    return rd >= from && rd <= to;
+                });
+                
+                const emailReplyRowCount = filteredEmailReplies.length;
 
                 setStats({
                     totalLeads: filteredLeads.length,
-                    totalEmails: emailCount,
-                    totalWhatsApp: whatsappCount,
+                    totalICP: icpCount,
+                    totalMeta: metaCount,
+                    totalEmails: emailSentCount,
+                    totalWhatsApp: whatsappSentCount,
                     totalVoice: voiceCount,
                     voiceMinutesString: formatDuration(totalVoiceSeconds),
                     totalVoiceSeconds: totalVoiceSeconds,
                     totalVoiceCalls: totalVoiceCallsCount,
-                    totalReplies: replyCount
-                } as any);
+                    totalEmailReplies: emailReplyRowCount,
+                    totalWhatsappReplies: whatsappReplyCount,
+                    whatsappIcpReplied: icpRepliedCount,
+                    whatsappMetaReplied: metaRepliedCount,
+                    totalReplies: emailReplyRowCount + whatsappReplyCount
+                });
 
             } catch (e) {
                 console.error("Dashboard calculation error", e);
@@ -304,7 +359,7 @@ export default function MasterDashboard() {
         };
 
         calculateStats();
-    }, [dateRange, allLeads, allCalls, loadingLeads, loadingCalls]);
+    }, [dateRange, allLeads, allCalls, dbEmailReplies, loadingLeads, loadingCalls]);
 
     const router = useRouter();
 
@@ -380,13 +435,15 @@ export default function MasterDashboard() {
                 
                 <MetricCard
                     title="Total Replies"
-                    value={loading ? "..." : stats.totalReplies.toLocaleString()}
+                    value={loading ? "..." : (stats.totalReplies).toLocaleString()}
                     change={`${stats.totalLeads > 0 ? ((stats.totalReplies / stats.totalLeads) * 100).toFixed(1) : 0}% Rate`}
                     isUp={true}
                     icon={<Expand className="h-6 w-6" />}
                     color="text-indigo-600"
                     bg="bg-indigo-50"
                     border="border-indigo-100"
+                    onClick={() => setIsRepliesModalOpen(true)}
+                    subtitle={`Email: ${stats.totalEmailReplies} + WA: ${stats.totalWhatsappReplies} (ICP: ${stats.whatsappIcpReplied || 0} Meta: ${stats.whatsappMetaReplied || 0})`}
                 />
             </div>
 
