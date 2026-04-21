@@ -104,14 +104,11 @@ export default function SentEmailsPage() {
             const senderEmail = campaignInfo?.email_account || 
                                 String(lead.sender_email || lead["SENDERS  EMAIL"] || lead["Senders email"] || "N/A");
 
-            // 2. Fetch Actual Reply Status and Time from leadReplies
+            // 2. Fetch Actual Reply Status from leadRepliesDB
             const dbReply = leadRepliesDB.find((r: any) => 
                 String(r.lead_email_id).toLowerCase() === email.toLowerCase()
             );
-            const hasReplied = !!dbReply || (
-                String(lead.replied || lead["Replied"] || lead.email_replied || "No").toLowerCase() !== "no" &&
-                String(lead.replied || lead["Replied"] || lead.email_replied || "No").trim() !== ""
-            );
+            const hasReplied = !!dbReply;
 
             // 3. Get the Email Last Contacted timestamp — prioritize actual data
             const lastContactedRaw = dbReply?.reply_timestamp || 
@@ -277,11 +274,21 @@ export default function SentEmailsPage() {
     // Compute stats
     const stats = useMemo(() => {
         const total = filteredEmails.length;
-        const replied = filteredEmails.filter(e => e.replied).length;
+        
+        // Count total replies from leadRepliesDB for the leads that are currently filtered
+        const filteredLeadEmails = new Set(filteredEmails.map(e => e.email.toLowerCase()));
+        const replied = leadRepliesDB.filter(r => 
+            r.lead_email_id && filteredLeadEmails.has(String(r.lead_email_id).toLowerCase())
+        ).length;
+
         const totalStagesSent = filteredEmails.reduce((sum, e) => sum + e.stagesSent, 0);
-        const replyRate = total > 0 ? Math.round((replied / total) * 100) : 0;
+        
+        // For rate, we still want unique leads who replied relative to total leads
+        const uniqueLeadsReplied = filteredEmails.filter(e => e.replied).length;
+        const replyRate = total > 0 ? Math.round((uniqueLeadsReplied / total) * 100) : 0;
+        
         return { total, replied, totalStagesSent, replyRate };
-    }, [filteredEmails]);
+    }, [filteredEmails, leadRepliesDB]);
 
     const totalPages = Math.ceil(filteredEmails.length / ITEMS_PER_PAGE);
     const paginatedEmails = filteredEmails.slice(
@@ -333,7 +340,7 @@ export default function SentEmailsPage() {
                     <CardContent className="p-3 flex items-center justify-between">
                         <div>
                             <h3 className="text-lg font-bold text-slate-900">{loading ? "..." : stats.replied}</h3>
-                            <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Replied</p>
+                            <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Total Replies</p>
                         </div>
                         <div className="p-2 bg-violet-50 text-violet-600 rounded-lg">
                             <Reply className="h-4 w-4" />
