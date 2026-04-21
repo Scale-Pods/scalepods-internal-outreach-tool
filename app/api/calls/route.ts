@@ -69,6 +69,43 @@ function getMaqsamSignature(method: string, endpoint: string, timestamp: string,
         .digest("base64");
 }
 
+// --- High-Fidelity Summary Extraction ---
+function extractCallSummary(vc: any) {
+    if (!vc) return "";
+
+    // 1. Primary Source
+    let summary = vc.analysis?.summary || vc.transcript_summary || "";
+
+    // 2. Structured Data Scan
+    if (!summary && (vc.analysis?.structuredData || vc.analysis?.structured_data)) {
+        const sd = vc.analysis.structuredData || vc.analysis.structured_data;
+        const entries = Array.isArray(sd) ? sd : Object.values(sd || {});
+        for (const item of entries) {
+            if (typeof item === 'object' && item !== null) {
+                const name = (item.name || item.label || item.propertyName || "").toLowerCase();
+                // Priority scan for keywords
+                if (name.includes('summary') || name.includes('evaluation') || name.includes('call summary')) {
+                    summary = item.result || item.value || item.response || "";
+                    if (summary) break;
+                }
+            }
+        }
+    }
+
+    // 3. Artifact Backup (as a last resort)
+    if (!summary && vc.artifact?.messages) {
+        const artMsgs = vc.artifact.messages;
+        for (const msg of artMsgs) {
+            if (msg.role === 'assistant' && (msg.content?.toLowerCase().includes('summary') || msg.name?.toLowerCase().includes('summary'))) {
+                summary = msg.content;
+                break;
+            }
+        }
+    }
+
+    return summary;
+}
+
 // --- 1. Leads Cache (Supabase) ---
 async function fetchLeadsCache() {
     const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
@@ -296,6 +333,7 @@ export async function GET(req: Request) {
                         status: vc.status === 'completed' ? 'answered' : (vc.status || 'answered'),
                         phoneNumber: vapiAssistantNum,
                         customer_number: phoneRaw !== "Unknown" ? `+${phoneRaw}` : "Unknown",
+                        callSummary: extractCallSummary(vc),
                         raw: vc
                     };
                 }).filter(Boolean);

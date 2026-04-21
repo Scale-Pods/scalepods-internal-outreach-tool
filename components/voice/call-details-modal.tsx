@@ -341,50 +341,26 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
                             )}
                         </div>
 
-                        {/* Summary Section (Structured Data) */}
+                        {/* Summary Section (High Fidelity AI Summary) */}
                         {(() => {
-                            const analysis = displayCall.analysis || {};
-                            let summaryText = analysis.summary || displayCall.summary || displayCall.transcript_summary || "";
-
-                            // 1. Deep scan for "Call Summary" in structuredData or analysis objects
-                            if (!summaryText && (analysis.structuredData || analysis.structured_data)) {
-                                const sd = analysis.structuredData || analysis.structured_data;
-                                const entries = Array.isArray(sd) ? sd : Object.values(sd || {});
-                                for (const item of entries) {
-                                    if (typeof item === 'object' && item !== null) {
-                                        const name = (item.name || item.label || item.propertyName || "").toLowerCase();
-                                        if (name.includes('summary')) {
-                                            summaryText = item.result || item.value || item.response || "";
-                                            if (summaryText) break;
-                                        }
-                                    }
-                                }
-                            }
-
-                            // 2. Scan Artifacts (As suggested by Vapi Docs)
-                            if (!summaryText && displayCall.artifact?.messages) {
-                                const artMsgs = displayCall.artifact.messages;
-                                for (const msg of artMsgs) {
-                                    if (msg.role === 'assistant' && (msg.content?.toLowerCase().includes('summary') || msg.name?.toLowerCase().includes('summary'))) {
-                                        summaryText = msg.content;
-                                        break;
-                                    }
-                                }
-                            }
+                            const summaryText = displayCall.callSummary ||
+                                displayCall.analysis?.summary ||
+                                displayCall.summary ||
+                                displayCall.transcript_summary || "";
 
                             if (!summaryText) return null;
 
                             return (
-                                <div className="mb-8 p-6 bg-blue-50/40 border border-blue-100 rounded-xl shadow-sm">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <div className="h-6 w-6 rounded-full bg-blue-600 flex items-center justify-center">
-                                            <FileText className="h-3.5 w-3.5 text-white" />
+                                <div className="mb-8 p-6 bg-blue-50/40 border border-blue-100 rounded-2xl shadow-sm">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0 shadow-sm">
+                                            <FileText className="h-4 w-4 text-white" />
                                         </div>
-                                        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Call Summary</h3>
+                                        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Call Summary</h3>
                                     </div>
-                                    <p className="text-[13px] leading-relaxed text-slate-700 font-medium whitespace-pre-wrap">
-                                        {summaryText}
-                                    </p>
+                                    <div className="pl-1">
+                                        <SummaryRenderer text={summaryText} />
+                                    </div>
                                 </div>
                             );
                         })()}
@@ -748,6 +724,65 @@ function TranscriptMessage({ role, text }: { role: string; text: string }) {
                 }`}>
                 {text}
             </div>
+        </div>
+    );
+}
+
+function SummaryRenderer({ text }: { text: string }) {
+    if (!text) return null;
+
+    // Use regex to identify bullet points and bold/underlined categories
+    const lines = text.split('\n').filter(l => l.trim().length > 0);
+
+    return (
+        <div className="space-y-4">
+            {lines.map((line, i) => {
+                const trimmed = line.trim();
+
+                // Bullet point regex: Matches *, -, or • at start
+                const bulletMatch = trimmed.match(/^[*•-]\s*(.*)/);
+
+                if (bulletMatch) {
+                    const content = bulletMatch[1].trim();
+                    // Header regex: Matches "**Category:**", "**Category**:", or "Category:"
+                    // Also handles potential "Title:**" quirk mentioned by user
+                    const headerMatch = content.match(/^(\*\*(.*?)\*\*[:]*|([A-Za-z\s/]+):)(.*)/);
+
+                    if (headerMatch) {
+                        const header = (headerMatch[2] || headerMatch[3] || "").trim().replace(/:$/, "");
+                        const rest = (headerMatch[4] || "").trim();
+
+                        return (
+                            <div key={i} className="flex gap-3 items-start">
+                                <div className="h-2 w-2 rounded-full bg-blue-400 mt-[7px] shrink-0" />
+                                <div className="text-[13px] leading-relaxed text-slate-600 flex-1">
+                                    <span className="font-bold text-slate-900 underline decoration-slate-300 underline-offset-[5px] mr-2">
+                                        {header}:
+                                    </span>
+                                    {rest}
+                                </div>
+                            </div>
+                        );
+                    }
+
+                    return (
+                        <div key={i} className="flex gap-3 items-start">
+                            <div className="h-2 w-2 rounded-full bg-blue-400 mt-[7px] shrink-0" />
+                            <div className="text-[13px] leading-relaxed text-slate-600 flex-1">
+                                {content}
+                            </div>
+                        </div>
+                    );
+                }
+
+                // Handle header/intro lines (like "Here's a concise call summary:")
+                const isIntro = i === 0 && (trimmed.toLowerCase().includes('summary') || trimmed.endsWith(':'));
+                return (
+                    <p key={i} className={`text-[13px] leading-relaxed ${isIntro ? 'font-bold text-slate-800' : 'text-slate-600'}`}>
+                        {trimmed}
+                    </p>
+                );
+            })}
         </div>
     );
 }

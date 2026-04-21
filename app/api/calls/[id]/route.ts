@@ -2,6 +2,44 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io/v1';
 
+// --- High-Fidelity Summary Extraction ---
+function extractCallSummary(vc: any) {
+    if (!vc) return "";
+
+    // 1. Primary Source
+    let summary = vc.analysis?.summary || vc.transcript_summary || "";
+
+    // 2. Structured Data Scan
+    if (!summary && (vc.analysis?.structuredData || vc.analysis?.structured_data)) {
+        const sd = vc.analysis.structuredData || vc.analysis.structured_data;
+        const entries = Array.isArray(sd) ? sd : Object.values(sd || {});
+        for (const item of entries) {
+            if (typeof item === 'object' && item !== null) {
+                const name = (item.name || item.label || item.propertyName || "").toLowerCase();
+                // Priority scan for keywords
+                if (name.includes('summary') || name.includes('evaluation') || name.includes('call summary')) {
+                    summary = item.result || item.value || item.response || "";
+                    if (summary) break;
+                }
+            }
+        }
+    }
+
+    // 3. Artifact Backup (as a last resort)
+    if (!summary && vc.artifact?.messages) {
+        const artMsgs = vc.artifact.messages;
+        for (const msg of artMsgs) {
+            if (msg.role === 'assistant' && (msg.content?.toLowerCase().includes('summary') || msg.name?.toLowerCase().includes('summary'))) {
+                summary = msg.content;
+                break;
+            }
+        }
+    }
+
+    return summary;
+}
+
+
 export async function GET(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
@@ -94,6 +132,7 @@ export async function GET(
                         type: data.type || "Unknown",
                         isInbound,
                         source: 'vapi',
+                        callSummary: extractCallSummary(data),
                         audio_url: data.recordingUrl
                     });
                 }
