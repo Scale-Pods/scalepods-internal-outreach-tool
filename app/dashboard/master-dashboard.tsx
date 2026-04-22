@@ -61,7 +61,7 @@ export default function MasterDashboard() {
         to: new Date(),
     });
 
-    const { leads: allLeads, calls: allCalls, loadingLeads, loadingCalls, refreshAll, maqsamBalance, loadingBalances } = useData();
+    const { leads: allLeads, calls: allCalls, loadingLeads, loadingCalls, refreshAll, refreshCalls, maqsamBalance, loadingBalances } = useData();
     const [leads, setLeads] = useState<any[]>([]);
     const [metaLeads, setMetaLeads] = useState<any[]>([]);
     const [acquisitionChartData, setAcquisitionChartData] = useState<any[]>([]);
@@ -120,6 +120,13 @@ export default function MasterDashboard() {
             setDateLabel(label);
         }
         setDateRange(range);
+        if (range?.from) {
+            const from = new Date(range.from);
+            from.setHours(0, 0, 0, 0);
+            const to = new Date(range.to || range.from);
+            to.setHours(23, 59, 59, 999);
+            refreshCalls(from, to);
+        }
     };
 
     useEffect(() => {

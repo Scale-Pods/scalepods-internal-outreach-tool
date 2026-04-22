@@ -174,8 +174,14 @@ export async function GET(req: Request) {
         const { searchParams } = new URL(req.url);
         const fromParam = searchParams.get('from');
         const toParam = searchParams.get('to');
-        const fromDate = fromParam ? new Date(fromParam) : null;
-        const toDate = toParam ? new Date(toParam) : null;
+        
+        // Default to last 7 days if no range provided
+        let fromDate = fromParam ? new Date(fromParam) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        fromDate.setHours(0, 0, 0, 0);
+        
+        let toDate = toParam ? new Date(toParam) : new Date();
+        if (!toParam) toDate.setHours(23, 59, 59, 999); // Only set end of day if it's the default "now" 
+        else toDate.setHours(23, 59, 59, 999); // Safe to normalize to end of day if we expect day-level granularity
 
         // --- 1.2. Twilio Telephony Aggregation ---
         // Fetch real-time billing data from Twilio (BYOC carrier)
@@ -186,7 +192,7 @@ export async function GET(req: Request) {
         try {
             if (twilioSid && twilioToken) {
                 console.log(`[TwilioSync] Syncing billing for account: ${twilioSid}`);
-                const twRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Calls.json?PageSize=100`, {
+                const twRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Calls.json?PageSize=500`, {
                     headers: {
                         'Authorization': 'Basic ' + Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64'),
                     }
@@ -217,18 +223,17 @@ export async function GET(req: Request) {
                 let allVapiCalls: any[] = [];
                 let hasMoreVapi = true;
                 const vapiAgentId = process.env.VAPI_AGENT_ID;
-                const batchSize = 1000;
+                const batchSize = 100;
                 let lastCreatedAt = null;
 
-                // Fetch up to 5000 calls for lifetime view (adjust if needed)
-                let batchedFetched = 0;
-                while (hasMoreVapi && batchedFetched < 5) {
+                while (hasMoreVapi) {
                     let vapiListUrl = `https://api.vapi.ai/call?limit=${batchSize}`;
-                    if (vapiAgentId) {
-                        vapiListUrl += `&assistantId=${vapiAgentId}`;
-                    }
+                    if (vapiAgentId) vapiListUrl += `&assistantId=${vapiAgentId}`;
+                    
+                    if (fromDate) vapiListUrl += `&createdAtGe=${fromDate.toISOString()}`;
+                    if (toDate) vapiListUrl += `&createdAtLe=${toDate.toISOString()}`;
+                    
                     if (lastCreatedAt) {
-                        // Vapi uses createdAtLe for pagination moving backwards
                         vapiListUrl += `&createdAtLe=${lastCreatedAt}`;
                     }
 
@@ -242,18 +247,16 @@ export async function GET(req: Request) {
 
                     if (list.length === 0) break;
 
-                    // Filter out duplicates if any
                     const newList = list.filter((c: any) => !allVapiCalls.find((existing: any) => existing.id === c.id));
                     if (newList.length === 0) break;
 
                     allVapiCalls = [...allVapiCalls, ...newList];
 
-                    // Update cursor: use the createdAt of the last item minus 1ms to get older items
                     const oldestCall = list[list.length - 1];
                     lastCreatedAt = oldestCall.createdAt;
 
                     if (list.length < batchSize) hasMoreVapi = false;
-                    batchedFetched++;
+                    if (allVapiCalls.length > 5000) break; 
                 }
 
                 vapiNormalized = allVapiCalls.map((vc: any) => {

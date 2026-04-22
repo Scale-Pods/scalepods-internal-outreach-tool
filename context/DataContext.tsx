@@ -15,9 +15,9 @@ interface DataContextType {
     twilioBalance: any;
     error: string | null;
     refreshLeads: () => Promise<void>;
-    refreshCalls: () => Promise<void>;
+    refreshCalls: (from?: Date, to?: Date) => Promise<void>;
     refreshBalances: () => Promise<void>;
-    refreshAll: () => Promise<void>;
+    refreshAll: (from?: Date, to?: Date) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -49,10 +49,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
-    const fetchCalls = useCallback(async () => {
-        setLoadingCalls(prev => prev || true); // Only show loading if not already loading
+    const fetchCalls = useCallback(async (from?: Date, to?: Date) => {
+        setLoadingCalls(prev => prev || true);
         try {
-            const response = await fetch('/api/calls');
+            let url = '/api/calls';
+            if (from || to) {
+                const params = new URLSearchParams();
+                if (from) params.append('from', from.toISOString());
+                if (to) params.append('to', to.toISOString());
+                url += `?${params.toString()}`;
+            }
+            const response = await fetch(url);
             if (response.ok) {
                 const data = await response.json();
                 if (Array.isArray(data)) setCalls(data);
@@ -78,8 +85,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         finally { setLoadingBalances(false); }
     }, []);
 
-    const refreshAll = useCallback(async () => {
-        await Promise.all([fetchLeads(), fetchCalls(), fetchBalances()]);
+    const refreshAll = useCallback(async (from?: Date, to?: Date) => {
+        await Promise.all([fetchLeads(), fetchCalls(from, to), fetchBalances()]);
     }, [fetchLeads, fetchCalls, fetchBalances]);
 
     useEffect(() => {

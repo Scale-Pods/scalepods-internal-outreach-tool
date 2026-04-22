@@ -14,7 +14,7 @@ import { format, startOfDay, subDays } from "date-fns";
 import { useData } from "@/context/DataContext";
 
 export default function VoiceAnalyticsPage() {
-    const { calls: globalCalls, loadingCalls, voiceBalance, leads } = useData();
+    const { calls: globalCalls, loadingCalls, voiceBalance, leads, refreshCalls } = useData();
     const [statusFilter, setStatusFilter] = useState("all");
     const [providerFilter, setProviderFilter] = useState("vapi");
     const [calls, setCalls] = useState<any[]>([]);
@@ -149,7 +149,16 @@ export default function VoiceAnalyticsPage() {
                         <Phone className="h-4 w-4 text-blue-600" />
                         <span>Vapi AI</span>
                     </div>
-                    <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
+                    <DateRangePicker onUpdate={(values) => {
+                        setDateRange(values.range);
+                        if (values.range?.from) {
+                            const from = new Date(values.range.from);
+                            from.setHours(0, 0, 0, 0);
+                            const to = new Date(values.range.to || values.range.from);
+                            to.setHours(23, 59, 59, 999);
+                            refreshCalls(from, to);
+                        }
+                    }} />
                 </div>
             </div>
 

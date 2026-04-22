@@ -27,7 +27,7 @@ export default function VoiceDashboardPage() {
         from: subDays(new Date(), 7), to: new Date(),
     });
 
-    const { calls: globalCalls, loadingCalls, voiceBalance, refreshAll } = useData();
+    const { calls: globalCalls, loadingCalls, voiceBalance, refreshAll, refreshCalls } = useData();
 
     useEffect(() => {
         if (voiceBalance) {
@@ -110,13 +110,28 @@ export default function VoiceDashboardPage() {
                     <Button
                         variant="outline"
                         className="flex items-center gap-2 border-border text-slate-600 hover:bg-slate-50 transition-colors h-10 px-4"
-                        onClick={refreshAll}
+                        onClick={() => {
+                            const from = new Date(dateRange.from);
+                            from.setHours(0, 0, 0, 0);
+                            const to = new Date(dateRange.to || dateRange.from);
+                            to.setHours(23, 59, 59, 999);
+                            refreshAll(from, to);
+                        }}
                         disabled={loading}
                     >
                         <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
                         Refresh
                     </Button>
-                    <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
+                    <DateRangePicker onUpdate={(values) => {
+                        setDateRange(values.range);
+                        if (values.range?.from) {
+                            const from = new Date(values.range.from);
+                            from.setHours(0, 0, 0, 0);
+                            const to = new Date(values.range.to || values.range.from);
+                            to.setHours(23, 59, 59, 999);
+                            refreshCalls(from, to);
+                        }
+                    }} />
                 </div>
             </div>
 

@@ -98,7 +98,7 @@ const DynamicRowCells = ({ call, leads }: { call: any, leads: any[] }) => {
 
 
 export default function VoiceLogsPage() {
-    const { calls: globalCalls, loadingCalls, refreshAll, leads, loadingLeads } = useData();
+    const { calls: globalCalls, loadingCalls, refreshAll, leads, loadingLeads, refreshCalls } = useData();
     const [allCallsMapped, setAllCallsMapped] = useState<any[]>([]);
     const [calls, setCalls] = useState<any[]>([]);
     const loading = loadingCalls;
@@ -198,7 +198,11 @@ export default function VoiceLogsPage() {
     }, [allCallsMapped, dateRange, statusFilter, typeFilter, providerFilter, phoneFilter, sortBy]);
 
     const handleRefresh = () => {
-        refreshAll();
+        const from = new Date(dateRange.from);
+        from.setHours(0, 0, 0, 0);
+        const to = new Date(dateRange.to || dateRange.from);
+        to.setHours(23, 59, 59, 999);
+        refreshAll(from, to);
     };
 
     const handleRowClick = (call: any) => {
@@ -218,7 +222,16 @@ export default function VoiceLogsPage() {
                         <p className="text-slate-500 text-sm mt-1">Comprehensive history of AI voice interactions</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
+                        <DateRangePicker onUpdate={(values) => {
+                            setDateRange(values.range);
+                            if (values.range?.from) {
+                                const from = new Date(values.range.from);
+                                from.setHours(0, 0, 0, 0);
+                                const to = new Date(values.range.to || values.range.from);
+                                to.setHours(23, 59, 59, 999);
+                                refreshCalls(from, to);
+                            }
+                        }} />
                         <Button variant="outline" className="h-10 px-4 shadow-sm" onClick={handleRefresh} disabled={loading}>
                             <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
                             Refresh
