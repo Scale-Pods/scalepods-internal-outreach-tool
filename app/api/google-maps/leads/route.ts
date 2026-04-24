@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-export async function GET() {
+export async function GET(req: Request) {
     const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
     const secretKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 
@@ -15,7 +15,11 @@ export async function GET() {
         "Content-Type": "application/json"
     };
 
-    const tableName = "leads_scraper_gmap";
+    const { searchParams } = new URL(req.url);
+    const from = searchParams.get('from');
+    const to = searchParams.get('to');
+
+    const tableName = "gmap_leadsv2";
     let allData: any[] = [];
     let offset = 0;
     const limit = 1000;
@@ -23,7 +27,18 @@ export async function GET() {
 
     try {
         while (hasMore) {
-            const url = `${baseUrl}/${tableName}?select=*&offset=${offset}&limit=${limit}`;
+            let queryParts = [`select=*`, `offset=${offset}`, `limit=${limit}`, `order=scraped_at.desc` ];
+            
+            if (from && to) {
+                queryParts.push(`scraped_at=gte.${from}`);
+                queryParts.push(`scraped_at=lte.${to}`);
+            } else if (from) {
+                queryParts.push(`scraped_at=gte.${from}`);
+            } else if (to) {
+                queryParts.push(`scraped_at=lte.${to}`);
+            }
+
+            const url = `${baseUrl}/${tableName}?${queryParts.join('&')}`;
             const response = await fetch(url, {
                 headers,
                 cache: 'no-store'
