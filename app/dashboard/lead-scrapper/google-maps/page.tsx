@@ -416,7 +416,7 @@ export default function GoogleMapsScrapper() {
             </div>
 
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent className="max-w-[98vw] h-[95vh] rounded-2xl p-0 overflow-hidden flex flex-col shadow-2xl border-0">
+                <DialogContent className="max-w-[98vw] h-[95vh] rounded-2xl p-0 overflow-hidden flex flex-col shadow-2xl border-0 [&>button]:hidden">
                     <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <div className="h-10 w-10 bg-red-600 rounded-xl flex items-center justify-center">
