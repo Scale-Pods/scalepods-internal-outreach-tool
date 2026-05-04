@@ -8,7 +8,7 @@ import {
     Linkedin, Loader2, Send, CheckCircle2, Search, Filter, X, 
     Table as TableIcon, Download, Eye, Calendar, Tag, RefreshCw,
     Hash, Layers, Target, Database, ChevronLeft, Layout, Briefcase, Building, MapPin,
-    ArrowLeft, Plus, Check, ChevronsUpDown, Trash2, Info
+    ArrowLeft, Plus, Check, ChevronsUpDown, Trash2, Info, Rocket
 } from "lucide-react";
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -402,11 +402,6 @@ export default function LinkedInScrapper() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    {submitted && (
-                        <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 animate-in fade-in zoom-in slide-in-from-right-4 duration-300 py-1 px-3 flex items-center gap-2 font-black uppercase text-[8px] tracking-widest shadow-sm">
-                            <CheckCircle2 className="h-3 w-3" /> Engine Launched
-                        </Badge>
-                    )}
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
@@ -758,6 +753,34 @@ export default function LinkedInScrapper() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Premium Toast Notification */}
+            {submitted && (
+                <div className="fixed top-6 right-6 z-[100] animate-in fade-in slide-in-from-right-8 duration-500">
+                    <Card className="bg-slate-900 border-slate-800 shadow-2xl rounded-2xl overflow-hidden min-w-[320px] border">
+                        <div className="p-4 flex items-center gap-4">
+                            <div className="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
+                                <Rocket className="h-6 w-6 text-white animate-bounce" />
+                            </div>
+                            <div className="flex-1">
+                                <h4 className="text-sm font-black text-white uppercase tracking-tight">Execution Started</h4>
+                                <p className="text-[10px] text-slate-400 font-bold leading-none mt-1">LinkedIn Engine V2 is now processing leads.</p>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => setSubmitted(false)} className="h-8 w-8 p-0 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+                        <div className="h-1 bg-blue-600 w-full animate-[progress_5s_linear_forwards]" />
+                    </Card>
+                </div>
+            )}
+
+            <style jsx global>{`
+                @keyframes progress {
+                    from { width: 100%; }
+                    to { width: 0%; }
+                }
+            `}</style>
         </div>
     );
 }
