@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { 
     MapPin, Loader2, Send, CheckCircle2, Search, Filter, X, 
     Table as TableIcon, Download, Eye, Calendar, Tag, RefreshCw,
-    Hash, Layers, Target, Database, ChevronLeft, Layout
+    Hash, Layers, Target, Database, ChevronLeft, Layout, Rocket, Info
 } from "lucide-react";
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -17,6 +17,12 @@ import * as XLSX from 'xlsx';
 import { cn } from "@/lib/utils";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { subDays } from "date-fns";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import {
   Dialog,
@@ -57,6 +63,7 @@ export default function GoogleMapsScrapper() {
     const [currentSearchQuery, setCurrentSearchQuery] = useState("");
     const [searchQueries, setSearchQueries] = useState<string[]>([]);
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+    const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
 
     // History and Modal
     const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -67,7 +74,32 @@ export default function GoogleMapsScrapper() {
     const countries = Country.getAllCountries();
     const [statesList, setStatesList] = useState<any[]>([]);
 
-    const CATEGORIES = ["Steel distributor", "Steel fabricator", "Metal workshop", "Industrial wholesaler", "Construction company"];
+    const CATEGORIES = [
+        "steel distributor",
+        "steel fabricator",
+        "metal workshop",
+        "industrial spares and products wholesaler",
+        "construction company",
+        "transportation service",
+        "metal supplier",
+        "interior construction contractor"
+    ];
+    const DEPARTMENTS = [
+        "product",
+        "engineering_technical",
+        "design",
+        "operations",
+        "sales",
+        "consulting",
+        "c_suite",
+        "education",
+        "finance",
+        "human_resources",
+        "legal",
+        "information_technology",
+        "marketing",
+        "medical_health"
+    ];
     const LANGUAGES = [{ code: "en", name: "English" }, { code: "es", name: "Spanish" }, { code: "fr", name: "French" }];
 
     useEffect(() => {
@@ -158,14 +190,28 @@ export default function GoogleMapsScrapper() {
         e.preventDefault();
         setLoading(true);
         
-        const inputParams = { queries: searchQueries, location: `${formData.state}, ${formData.countryCode}`, categories: selectedCategories, max_places: formData.maxCrawledPlacesPerSearch, max_leads: formData.maximumLeadsEnrichmentRecords };
-        const payload = { ...formData, searchStringsArray: searchQueries.join(", "), categoryFilterWords: selectedCategories.join(", "), Input_queries: JSON.stringify(inputParams), scrape_date: new Date().toISOString() };
+        const inputParams = { 
+            queries: searchQueries, 
+            location: `${formData.state}, ${formData.countryCode}`, 
+            categories: selectedCategories, 
+            max_places: formData.maxCrawledPlacesPerSearch, 
+            max_leads: formData.maximumLeadsEnrichmentRecords,
+            leadsEnrichmentDepartments: selectedDepartments
+        };
+        const payload = { 
+            ...formData, 
+            searchStringsArray: searchQueries.join(", "), 
+            categoryFilterWords: selectedCategories, 
+            leadsEnrichmentDepartments: selectedDepartments,
+            Input_queries: JSON.stringify(inputParams), 
+            scrape_date: new Date().toISOString() 
+        };
 
         try {
             const response = await fetch("/api/webhook/google-maps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
             if (!response.ok) throw new Error("Trigger failed");
             setSubmitted(true);
-            setTimeout(() => setSubmitted(false), 3000);
+            setTimeout(() => setSubmitted(false), 5000);
         } catch (error) {
             console.error(error);
         } finally {
@@ -219,12 +265,23 @@ export default function GoogleMapsScrapper() {
                         <p className="text-[10px] text-slate-400 font-medium tracking-tight">Active Table: <span className="text-slate-600">gmap_leadsv2</span></p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    {submitted && <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 animate-pulse py-1">Extraction Launched</Badge>}
-                    <Button onClick={fetchCampaigns} variant="outline" size="sm" className="h-8 w-8 p-0 border-slate-200">
-                        <RefreshCw className="h-3.5 w-3.5" />
-                    </Button>
-                </div>
+                    <div className="flex items-center gap-2">
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:text-red-600">
+                                        <Info className="h-5 w-5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-slate-900 text-white border-red-800 text-[11px] font-bold p-3 max-w-xs rounded-xl shadow-2xl">
+                                    <p>Execute your run and come back after some time or refresh this page to see the results.</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                        <Button onClick={fetchCampaigns} variant="outline" size="sm" className="h-8 w-8 p-0 border-slate-200">
+                            <RefreshCw className="h-3.5 w-3.5" />
+                        </Button>
+                    </div>
             </div>
 
             <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-4">
@@ -329,11 +386,76 @@ export default function GoogleMapsScrapper() {
                         <CardContent className="p-4 space-y-4">
                             <div className="space-y-2">
                                 <Label className="text-[9px] font-black uppercase text-slate-400">Industry Categories</Label>
-                                <div className="flex flex-wrap gap-1">
-                                    {CATEGORIES.map(cat => (
-                                        <button key={cat} type="button" onClick={() => setSelectedCategories(p => p.includes(cat) ? p.filter(c => c !== cat) : [...p, cat])} className={cn("px-2 py-1 text-[9px] font-bold rounded-md border", selectedCategories.includes(cat) ? "bg-slate-900 border-slate-900 text-white" : "bg-white border-slate-200 text-slate-600")}>
-                                            {cat}
-                                        </button>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className="w-full h-9 justify-between text-xs px-3 border-slate-200 font-medium bg-white">
+                                            <span className="truncate">{selectedCategories.length > 0 ? selectedCategories.join(", ") : "Select Categories"}</span>
+                                            <ChevronsUpDown className="h-3 w-3 opacity-30 shrink-0" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 shadow-xl border-0 overflow-hidden bg-white">
+                                        <div className="max-h-60 overflow-y-auto p-1">
+                                            {CATEGORIES.map(cat => (
+                                                <div 
+                                                    key={cat} 
+                                                    onClick={() => setSelectedCategories(p => p.includes(cat) ? p.filter(c => c !== cat) : [...p, cat])} 
+                                                    className={cn(
+                                                        "flex items-center gap-2 px-3 py-2 text-xs font-medium cursor-pointer hover:bg-slate-50 transition-colors rounded-sm",
+                                                        selectedCategories.includes(cat) && "bg-red-50 text-red-600"
+                                                    )}
+                                                >
+                                                    <div className={cn("h-3 w-3 border rounded flex items-center justify-center", selectedCategories.includes(cat) ? "bg-red-600 border-red-600" : "border-slate-300")}>
+                                                        {selectedCategories.includes(cat) && <Check className="h-2 w-2 text-white" />}
+                                                    </div>
+                                                    {cat}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                    {selectedCategories.map(cat => (
+                                        <Badge key={cat} variant="secondary" className="bg-slate-100 text-slate-600 text-[8px] font-bold px-1.5 py-0 rounded-sm gap-1">
+                                            {cat} <X className="h-2 w-2 cursor-pointer" onClick={() => setSelectedCategories(p => p.filter(c => c !== cat))} />
+                                        </Badge>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-2 pt-2 border-t border-slate-100">
+                                <Label className="text-[9px] font-black uppercase text-slate-400">Enrichment Departments</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className="w-full h-9 justify-between text-xs px-3 border-slate-200 font-medium bg-white">
+                                            <span className="truncate">{selectedDepartments.length > 0 ? selectedDepartments.join(", ") : "Select Departments"}</span>
+                                            <ChevronsUpDown className="h-3 w-3 opacity-30 shrink-0" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 shadow-xl border-0 overflow-hidden bg-white">
+                                        <div className="max-h-60 overflow-y-auto p-1">
+                                            {DEPARTMENTS.map(dept => (
+                                                <div 
+                                                    key={dept} 
+                                                    onClick={() => setSelectedDepartments(p => p.includes(dept) ? p.filter(d => d !== dept) : [...p, dept])} 
+                                                    className={cn(
+                                                        "flex items-center gap-2 px-3 py-2 text-xs font-medium cursor-pointer hover:bg-slate-50 transition-colors rounded-sm",
+                                                        selectedDepartments.includes(dept) && "bg-red-50 text-red-600"
+                                                    )}
+                                                >
+                                                    <div className={cn("h-3 w-3 border rounded flex items-center justify-center", selectedDepartments.includes(dept) ? "bg-red-600 border-red-600" : "border-slate-300")}>
+                                                        {selectedDepartments.includes(dept) && <Check className="h-2 w-2 text-white" />}
+                                                    </div>
+                                                    {dept}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                    {selectedDepartments.map(dept => (
+                                        <Badge key={dept} variant="secondary" className="bg-slate-100 text-slate-600 text-[8px] font-bold px-1.5 py-0 rounded-sm gap-1">
+                                            {dept} <X className="h-2 w-2 cursor-pointer" onClick={() => setSelectedDepartments(p => p.filter(d => d !== dept))} />
+                                        </Badge>
                                     ))}
                                 </div>
                             </div>
@@ -343,7 +465,7 @@ export default function GoogleMapsScrapper() {
                                     <Input id="maxCrawledPlacesPerSearch" type="number" value={formData.maxCrawledPlacesPerSearch} onChange={handleChange} className="h-8 text-[11px] font-bold" />
                                 </div>
                                 <div className="space-y-1">
-                                    <Label className="text-[8px] font-black text-slate-400 uppercase">Leads/Place</Label>
+                                    <Label className="text-[8px] font-black text-slate-400 uppercase">Leads per Place</Label>
                                     <Input id="maximumLeadsEnrichmentRecords" type="number" value={formData.maximumLeadsEnrichmentRecords} onChange={handleChange} className="h-8 text-[11px] font-bold" />
                                 </div>
                             </div>
@@ -513,6 +635,34 @@ export default function GoogleMapsScrapper() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Premium Toast Notification */}
+            {submitted && (
+                <div className="fixed top-6 right-6 z-[100] animate-in fade-in slide-in-from-right-8 duration-500">
+                    <Card className="bg-slate-900 border-slate-800 shadow-2xl rounded-2xl overflow-hidden min-w-[320px] border">
+                        <div className="p-4 flex items-center gap-4">
+                            <div className="h-12 w-12 bg-red-600 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-red-500/20">
+                                <Rocket className="h-6 w-6 text-white animate-bounce" />
+                            </div>
+                            <div className="flex-1">
+                                <h4 className="text-sm font-black text-white uppercase tracking-tight">Execution Started</h4>
+                                <p className="text-[10px] text-slate-400 font-bold leading-none mt-1">G-Maps Engine V2 is now processing leads.</p>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => setSubmitted(false)} className="h-8 w-8 p-0 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+                        <div className="h-1 bg-red-600 w-full animate-[progress_5s_linear_forwards]" />
+                    </Card>
+                </div>
+            )}
+
+            <style jsx global>{`
+                @keyframes progress {
+                    from { width: 100%; }
+                    to { width: 0%; }
+                }
+            `}</style>
         </div>
     );
 }

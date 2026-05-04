@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { 
     Globe, Loader2, Send, CheckCircle2, Search, Filter, X, 
     Table as TableIcon, Download, Eye, Calendar, Tag, RefreshCw,
-    Hash, Layers, Target, Database, ChevronLeft, Layout, Trash2
+    Hash, Layers, Target, Database, ChevronLeft, Layout, Trash2, Info
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -16,6 +16,12 @@ import * as XLSX from 'xlsx';
 import { cn } from "@/lib/utils";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { subDays } from "date-fns";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import {
   Dialog,
@@ -206,6 +212,18 @@ export default function TradeIndiaScrapper() {
                 </div>
                 <div className="flex items-center gap-2">
                     {submitted && <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 animate-pulse py-1 px-3 rounded-lg text-[10px] font-bold">Extraction Launched</Badge>}
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:text-slate-600">
+                                    <Info className="h-5 w-5" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-slate-900 text-white border-red-800 text-[11px] font-bold p-3 max-w-xs rounded-xl shadow-2xl">
+                                <p>Execute your run and come back after some time or refresh this page to see the results.</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                     <Button onClick={fetchCampaigns} variant="outline" size="sm" className="h-8 w-8 p-0 border-slate-200 rounded-lg hover:bg-slate-50 transition-all">
                         <RefreshCw className="h-3.5 w-3.5 text-slate-400" />
                     </Button>

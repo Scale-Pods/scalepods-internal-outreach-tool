@@ -8,7 +8,7 @@ import {
     Linkedin, Loader2, Send, CheckCircle2, Search, Filter, X, 
     Table as TableIcon, Download, Eye, Calendar, Tag, RefreshCw,
     Hash, Layers, Target, Database, ChevronLeft, Layout, Briefcase, Building, MapPin,
-    ArrowLeft, Plus, Check, ChevronsUpDown, Trash2
+    ArrowLeft, Plus, Check, ChevronsUpDown, Trash2, Info
 } from "lucide-react";
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -18,6 +18,12 @@ import { cn } from "@/lib/utils";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { subDays } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import {
   Dialog,
@@ -401,6 +407,18 @@ export default function LinkedInScrapper() {
                             <CheckCircle2 className="h-3 w-3" /> Engine Launched
                         </Badge>
                     )}
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-red-500 hover:text-slate-600">
+                                    <Info className="h-5 w-5" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-slate-900 text-white border-red-800 text-[11px] font-bold p-3 max-w-xs rounded-xl shadow-2xl">
+                                <p>Execute your run and come back after some time or refresh this page to see the results.</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                     <Button variant="outline" size="icon" className="h-8 w-8 rounded-full border-slate-100" onClick={fetchCampaigns}>
                         <RefreshCw className="h-3.5 w-3.5 text-slate-400" />
                     </Button>

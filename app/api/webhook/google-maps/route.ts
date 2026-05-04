@@ -4,7 +4,9 @@ export async function POST(request: Request) {
     try {
         const body = await request.json();
         
-        const response = await fetch("https://n8n.srv1010832.hstgr.cloud/webhook/alco_gmap", {
+        const webhookUrl = process.env.GOOGLE_MAPS_SCRAPPER_WEBHOOK_URL || "https://n8n.srv1010832.hstgr.cloud/webhook/scalepods_gmap";
+        
+        const response = await fetch(webhookUrl, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
