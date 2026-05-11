@@ -18,9 +18,16 @@ import {
     ChevronUp,
     ChevronDown,
     ArrowUp,
-    Search
+    Search,
+    ChevronLeft,
+    ChevronRight
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
+import { useData } from "@/context/DataContext";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { format, subDays } from "date-fns";
+
+
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -36,7 +43,9 @@ interface BounceEmail {
     type: string;
     from: string;
     date: string;
+    name?: string | null;
 }
+
 
 interface BounceSummary {
     total_bounces: number;
@@ -46,7 +55,8 @@ interface BounceSummary {
 }
 
 export default function BouncedEmailsPage() {
-    const [bounces, setBounces] = useState<BounceEmail[]>([]);
+    const { leads: allLeads, loadingLeads, refreshLeads } = useData();
+    const [bounces, setBounces] = useState<any[]>([]);
     const [summary, setSummary] = useState<BounceSummary>({
         total_bounces: 0,
         hard_bounces: 0,
@@ -56,30 +66,21 @@ export default function BouncedEmailsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
+    const [dateRange, setDateRange] = useState<any>({
+        from: subDays(new Date(), 7),
+        to: new Date(),
+    });
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     const fetchBounces = async () => {
         setLoading(true);
-        setError(null);
         try {
-            const res = await fetch('/api/email/bounces');
-            const data = await res.json();
-
-            if (data.error) {
-                throw new Error(data.message || "Bounces API failed");
-            }
-
-            if (!res.ok) {
-                throw new Error("Failed to fetch bounces");
-            }
-
-            setSummary(data.summary || {
-                total_bounces: 0,
-                hard_bounces: 0,
-                soft_bounces: 0,
-                technical_bounces: 0
-            });
-            setBounces(data.bounced_emails || []);
-
+            const from = new Date(dateRange.from);
+            from.setHours(0, 0, 0, 0);
+            const to = new Date(dateRange.to || dateRange.from);
+            to.setHours(23, 59, 59, 999);
+            await refreshLeads(from, to);
         } catch (e: any) {
             console.error("Bounces fetch error", e);
             setError(e.message);
@@ -88,15 +89,65 @@ export default function BouncedEmailsPage() {
         }
     };
 
+
     useEffect(() => {
-        fetchBounces();
-    }, []);
+        if (loadingLeads) return;
+
+        const bouncedLeads = allLeads.filter((lead: any) => 
+            lead._table === 'icp_tracker' && 
+            lead.email_bounced && 
+            String(lead.email_bounced).toLowerCase() === 'yes'
+        );
+
+        const mappedBounces = bouncedLeads.map((l: any) => ({
+            email: l.email || "No Email",
+            type: "Bounced",
+            from: l.sender_email || "Campaign",
+            date: l["Email Last Contacted"] || l.updated_at || l.created_at || "N/A",
+            name: (l.name && l.name !== "Unknown Lead") ? l.name : null
+        }));
+
+        setBounces(mappedBounces);
+        setSummary({
+            total_bounces: bouncedLeads.length,
+            hard_bounces: bouncedLeads.length,
+            soft_bounces: 0,
+            technical_bounces: 0
+        });
+        setLoading(false);
+    }, [allLeads, loadingLeads]);
+
 
     // Filter
-    const filteredBounces = bounces.filter(b =>
-        b.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        b.from.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredBounces = bounces.filter(b => {
+        const matchesSearch = b.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            b.from.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (b.name && b.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+        if (!matchesSearch) return false;
+
+        // Local date filtering as secondary check
+        if (dateRange?.from) {
+            if (!b.date || b.date === "N/A") return false;
+            const bounceDate = new Date(b.date);
+            const from = new Date(dateRange.from);
+            from.setHours(0, 0, 0, 0);
+            const to = new Date(dateRange.to || dateRange.from);
+            to.setHours(23, 59, 59, 999);
+            if (bounceDate < from || bounceDate > to) return false;
+        }
+
+        return true;
+    });
+
+    const paginatedBounces = filteredBounces.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const totalPages = Math.ceil(filteredBounces.length / itemsPerPage);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, dateRange]);
+
+
 
     return (
         <TooltipProvider>
@@ -106,17 +157,31 @@ export default function BouncedEmailsPage() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                     <div>
                         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Bounced Emails</h1>
-                        <p className="text-sm text-slate-500 mt-1">Real-time bounce tracking from Instantly.ai</p>
+                        <p className="text-sm text-slate-500 mt-1">Real-time bounce tracking from ICP Tracker</p>
+
                     </div>
-                    <Button
-                        onClick={fetchBounces}
-                        variant="outline"
-                        className="gap-2 h-10 px-4 hover:bg-slate-50 transition-colors"
-                        disabled={loading}
-                    >
-                        <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-                        {loading ? "Refreshing..." : "Refresh List"}
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <DateRangePicker onUpdate={(values) => {
+                            setDateRange(values.range);
+                            if (values.range?.from) {
+                                const from = new Date(values.range.from);
+                                from.setHours(0, 0, 0, 0);
+                                const to = new Date(values.range.to || values.range.from);
+                                to.setHours(23, 59, 59, 999);
+                                refreshLeads(from, to);
+                            }
+                        }} />
+                        <Button
+                            onClick={fetchBounces}
+                            variant="outline"
+                            className="gap-2 h-10 px-4 hover:bg-slate-50 transition-colors"
+                            disabled={loading}
+                        >
+                            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                            {loading ? "Refreshing..." : "Refresh List"}
+                        </Button>
+                    </div>
+
                 </div>
 
                 {error && (
@@ -165,16 +230,49 @@ export default function BouncedEmailsPage() {
 
                 {/* Bounced Email List */}
                 <div className="space-y-4">
-                    {!loading && filteredBounces.length === 0 ? (
+                    {!loading && paginatedBounces.length === 0 ? (
                         <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-border">
                             <p className="text-slate-500">No bounces found.</p>
                         </div>
                     ) : (
-                        filteredBounces.map((bounce, index) => (
+                        paginatedBounces.map((bounce, index) => (
                             <BounceCard key={index} bounce={bounce} />
                         ))
                     )}
                 </div>
+
+                {/* Pagination */}
+                {filteredBounces.length > itemsPerPage && (
+                    <div className="flex items-center justify-between bg-white px-4 py-4 rounded-xl border border-border shadow-sm">
+                        <p className="text-sm text-slate-500">
+                            Showing <span className="font-bold text-slate-900">{(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredBounces.length)}</span> of {filteredBounces.length} bounces
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <span className="text-sm font-medium px-3 py-1 bg-slate-50 rounded-md border border-border">
+                                Page {currentPage} of {totalPages}
+                            </span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
             </div>
         </TooltipProvider>
     );
@@ -223,15 +321,20 @@ function BounceCard({ bounce }: { bounce: BounceEmail }) {
 
                     <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                         <div className="md:col-span-4">
-                            <h4 className="font-bold text-slate-900 truncate">{bounce.email}</h4>
-                            <p className="text-xs text-slate-500 truncate">From: {bounce.from}</p>
+                            <h4 className="font-bold text-slate-900 truncate">{bounce.name || bounce.email}</h4>
+                            <p className="text-xs text-slate-500 truncate">{bounce.name ? bounce.email : 'Bounced Recipient'}</p>
+                            {bounce.from && bounce.from !== "Campaign" && (
+                                <p className="text-[10px] text-slate-400 truncate">Sender: {bounce.from}</p>
+                            )}
                         </div>
+
+
                         <div className="md:col-span-3">
                             <Badge variant="outline" className={`font-bold ${badgeColor} border`}>
                                 {bounce.type}
                             </Badge>
                         </div>
-                        <div className="md:col-span-5 text-right md:text-right">
+                        <div className="md:col-span-5 text-right">
                             <span className="text-xs text-slate-400 font-medium">{bounce.date}</span>
                         </div>
                     </div>

@@ -56,15 +56,17 @@ export default function VoiceDashboardPage() {
         const filteredCalls = globalCalls.filter((call: any) => {
             if (providerFilter !== "all" && call.source !== providerFilter) return false;
             if (!dateRange?.from) return true;
-            const dateStr = call.startedAt || (call.start_time_unix_secs ? new Date(call.start_time_unix_secs * 1000).toISOString() : null);
+            const dateStr = call.createdAt || call.startedAt;
             if (!dateStr) return false;
             const callDate = new Date(dateStr);
             return callDate >= startOfDay(new Date(dateRange.from)) && callDate <= endOfDay(new Date(dateRange.to || dateRange.from));
+
         });
 
         filteredCalls.forEach((call: any) => {
             const status = call.status;
-            const startedAtDate = call.startedAt ? new Date(call.startedAt) : (call.start_time_unix_secs ? new Date(call.start_time_unix_secs * 1000) : null);
+            const startedAtDate = call.createdAt ? new Date(call.createdAt) : (call.startedAt ? new Date(call.startedAt) : null);
+
             const duration = call.durationSeconds || calculateDuration(call) || 0;
 
             let cost = 0;

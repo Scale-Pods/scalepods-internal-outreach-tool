@@ -159,14 +159,14 @@ export default function VoiceLogsPage() {
             if (providerFilter !== "all" && call.source !== providerFilter) return false;
 
             if (dateRange?.from) {
-                if (!call.startedAt) return false;
-                const callDate = new Date(call.startedAt);
+                const callDate = new Date(call.createdAt || call.startedAt);
                 const from = new Date(dateRange.from);
                 from.setHours(0, 0, 0, 0);
                 const to = new Date(dateRange.to || dateRange.from);
                 to.setHours(23, 59, 59, 999);
                 if (callDate < from || callDate > to) return false;
             }
+
 
             if (statusFilter !== "all" && call.status !== statusFilter) return false;
             if (typeFilter !== "all" && call.type?.toLowerCase() !== typeFilter.toLowerCase()) return false;

@@ -14,7 +14,8 @@ interface DataContextType {
     maqsamBalance: any;
     twilioBalance: any;
     error: string | null;
-    refreshLeads: () => Promise<void>;
+    refreshLeads: (from?: Date, to?: Date) => Promise<void>;
+
     refreshCalls: (from?: Date, to?: Date) => Promise<void>;
     refreshBalances: () => Promise<void>;
     refreshAll: (from?: Date, to?: Date) => Promise<void>;
@@ -33,10 +34,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const [twilioBalance, setTwilioBalance] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchLeads = useCallback(async () => {
+    const fetchLeads = useCallback(async (from?: Date, to?: Date) => {
         setLoadingLeads(true);
         try {
-            const response = await fetch('/api/leads');
+            let url = '/api/leads';
+            if (from || to) {
+                const params = new URLSearchParams();
+                if (from) params.append('from', from.toISOString());
+                if (to) params.append('to', to.toISOString());
+                url += `?${params.toString()}`;
+            }
+            const response = await fetch(url);
             if (!response.ok) throw new Error('Failed to fetch leads');
             const data = await response.json();
             const consolidated = consolidateLeads(data);
@@ -48,6 +56,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             setLoadingLeads(false);
         }
     }, []);
+
 
     const fetchCalls = useCallback(async (from?: Date, to?: Date) => {
         setLoadingCalls(prev => prev || true);
@@ -86,8 +95,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const refreshAll = useCallback(async (from?: Date, to?: Date) => {
-        await Promise.all([fetchLeads(), fetchCalls(from, to), fetchBalances()]);
+        await Promise.all([fetchLeads(from, to), fetchCalls(from, to), fetchBalances()]);
     }, [fetchLeads, fetchCalls, fetchBalances]);
+
 
     useEffect(() => {
         refreshAll();

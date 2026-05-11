@@ -45,9 +45,10 @@ export default function VoiceAnalyticsPage() {
         const filteredCalls = globalCalls.filter((call: any) => {
             if (providerFilter !== "all" && call.source !== providerFilter) return false;
             if (!dateRange?.from) return true;
-            const dateStr = call.startedAt || (call.start_time_unix_secs ? new Date(call.start_time_unix_secs * 1000).toISOString() : null);
+            const dateStr = call.createdAt || call.startedAt;
             if (!dateStr) return false;
             const callDate = new Date(dateStr);
+
             const from = startOfDay(new Date(dateRange.from));
             const to = startOfDay(new Date(dateRange.to || dateRange.from));
             to.setHours(23, 59, 59, 999);
@@ -76,7 +77,8 @@ export default function VoiceAnalyticsPage() {
         });
 
         data.forEach(call => {
-            const dateStr = call.startedAt || null;
+            const dateStr = call.createdAt || call.startedAt || null;
+
             const time = dateStr ? format(new Date(dateStr), 'MMM dd') : 'N/A';
             const dur = calculateDuration(call);
 
