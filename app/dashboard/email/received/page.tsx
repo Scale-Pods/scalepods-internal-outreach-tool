@@ -30,6 +30,9 @@ import {
 import { format, formatDistanceToNow } from "date-fns";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useData } from "@/context/DataContext";
+import { subDays } from "date-fns";
+import { useCallback } from "react";
+
 
 interface InstantlyReply {
     message_id: string;
@@ -66,20 +69,33 @@ export default function ReceivedEmailsPage() {
     const [replies, setReplies] = useState<NormalizedReply[]>([]);
     const [sortBy, setSortBy] = useState("newest");
     const [searchQuery, setSearchQuery] = useState("");
-    const [dateRange, setDateRange] = useState<any>(undefined);
+    const [dateRange, setDateRange] = useState<any>({
+        from: subDays(new Date(), 7),
+        to: new Date(),
+    });
+
     const [loadingDB, setLoadingDB] = useState(false);
     
     const loading = loadingLeads || loadingDB;
 
-    const fetchReplies = async () => {
+    const fetchReplies = useCallback(async (range?: any) => {
         try {
             setLoadingDB(true);
+            const targetRange = range || dateRange;
             const realReplies: NormalizedReply[] = [];
 
+            let url = '/api/email/db-data';
+            const params = new URLSearchParams();
+            if (targetRange?.from) params.append('from', targetRange.from.toISOString());
+            if (targetRange?.to) params.append('to', targetRange.to.toISOString());
+            
+            if (params.toString()) url += `?${params.toString()}`;
+
             // Fetch from instantly_lead_replies table
-            const dbRes = await fetch('/api/email/db-data');
+            const dbRes = await fetch(url);
             if (dbRes.ok) {
                 const { leadReplies } = await dbRes.json();
+
 
                 if (Array.isArray(leadReplies)) {
                     leadReplies.forEach((reply: InstantlyReply) => {
@@ -119,11 +135,13 @@ export default function ReceivedEmailsPage() {
         } finally {
             setLoadingDB(false);
         }
-    };
+    }, [dateRange]);
+
 
     useEffect(() => {
         fetchReplies();
-    }, []);
+    }, [fetchReplies]);
+
 
     const handleRefresh = () => {
         fetchReplies();
@@ -190,8 +208,12 @@ export default function ReceivedEmailsPage() {
                 <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
                     <DateRangePicker
                         className="h-10 w-full sm:w-[260px] shadow-sm"
-                        onUpdate={(values) => setDateRange(values.range)}
+                        onUpdate={(values) => {
+                            setDateRange(values.range);
+                            fetchReplies(values.range);
+                        }}
                     />
+
                     <Button 
                         onClick={handleRefresh}
                         variant="outline"

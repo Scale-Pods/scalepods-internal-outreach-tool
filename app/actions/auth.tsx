@@ -6,8 +6,12 @@ import { hashPassword, comparePassword } from '@/lib/auth-utils';
 import { SignJWT, jwtVerify } from 'jose';
 import crypto from 'crypto';
 
+import { sendOTPEmail } from '@/lib/mail-utils';
+
 const JWT_SECRET = process.env.JWT_SECRET || 'your-fallback-secret-change-this';
 const secret = new TextEncoder().encode(JWT_SECRET);
+
+
 
 export async function login(prevState: any, formData: FormData) {
     const email = formData.get('email') as string;
@@ -32,6 +36,20 @@ export async function login(prevState: any, formData: FormData) {
         if (!isPasswordValid) {
             return { error: 'Invalid email or password' };
         }
+
+        // Check if password change is required (every 90 days)
+        const passwordsChangedAt = user.passwords_changed_at ? new Date(user.passwords_changed_at) : new Date(user.created_at);
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+        if (passwordsChangedAt < ninetyDaysAgo) {
+            return { 
+                error: 'Your password has expired (required every 90 days for security). Please reset it to continue.', 
+                requiresReset: true,
+                email: user.email 
+            };
+        }
+
 
         // Create JWT
         const token = await new SignJWT({ userId: user.id, email: user.email })
@@ -64,11 +82,6 @@ export async function logout() {
     return { success: true };
 }
 
-import { Resend } from 'resend';
-import { ResetPasswordEmail } from '@/components/emails/reset-password-template';
-
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function forgotPassword(prevState: any, formData: FormData) {
     const email = formData.get('email') as string;
 
@@ -79,51 +92,44 @@ export async function forgotPassword(prevState: any, formData: FormData) {
     try {
         const { data: user } = await supabaseAdmin
             .from('users')
-            .select('id, full_name')
+            .select('id, full_name, email')
             .eq('email', email)
             .single();
 
         if (user) {
-            console.log(`Found user: ${user.full_name}, generating token...`);
-            const token = crypto.randomUUID();
-            const expiresAt = new Date(Date.now() + 3600000); // 1 hour
+            // Generate 6-digit OTP
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+            const expiresAt = new Date(Date.now() + 15 * 60000); // 15 minutes
 
-            // Save token to Supabase (Ensure you have run the SQL to create this table)
-            const { error: resetError } = await supabaseAdmin
-                .from('password_resets')
-                .insert([{
-                    email,
-                    token,
-                    expires_at: expiresAt.toISOString()
-                }]);
+            // Save OTP to users table
+            const { error: updateError } = await supabaseAdmin
+                .from('users')
+                .update({
+                    otp_code: otp,
+                    otp_expires_at: expiresAt.toISOString()
+                })
+                .eq('id', user.id);
 
-            if (resetError) {
-                console.error('Database error saving reset token:', resetError);
-                throw resetError;
+            if (updateError) {
+                console.error('Error saving OTP:', updateError);
+                throw updateError;
             }
 
-            // Send Email
-            const resetLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
-            console.log(`Sending email to ${email} via Resend... Link: ${resetLink}`);
-
-            const { data, error } = await resend.emails.send({
-                from: 'ScalePods <onboarding@resend.dev>',
-                to: [email],
-                subject: 'Reset your ScalePods password',
-                react: <ResetPasswordEmail fullName={user.full_name} resetLink={resetLink} />,
-            });
-
-            if (error) {
-                console.error('Resend API error:', error);
-                return { error: 'Failed to send reset email. Please try again later.' };
+            // Send Email via SMTP
+            try {
+                await sendOTPEmail(email, otp, user.full_name || 'User');
+                console.log(`OTP sent to ${email}`);
+            } catch (mailErr) {
+                console.error('SMTP Error:', mailErr);
+                return { error: 'Failed to send OTP email. Please check your SMTP settings.' };
             }
-
-            console.log('Resend success:', data);
-        } else {
-            console.log(`No user found with email: ${email}`);
         }
 
-        return { success: true, message: 'If an account exists with that email, we have sent password reset instructions.' };
+        return { 
+            success: true, 
+            message: 'If an account exists with that email, we have sent a 6-digit OTP.',
+            email: email // Return email to pre-fill the reset form
+        };
     } catch (err) {
         console.error('Forgot password error:', err);
         return { error: 'An unexpected error occurred' };
@@ -131,11 +137,12 @@ export async function forgotPassword(prevState: any, formData: FormData) {
 }
 
 export async function resetPassword(prevState: any, formData: FormData) {
-    const token = formData.get('token') as string;
+    const email = formData.get('email') as string;
+    const otp = formData.get('otp') as string;
     const password = formData.get('password') as string;
     const confirmPassword = formData.get('confirmPassword') as string;
 
-    if (!token || !password || !confirmPassword) {
+    if (!email || !otp || !password || !confirmPassword) {
         return { error: 'All fields are required' };
     }
 
@@ -144,33 +151,40 @@ export async function resetPassword(prevState: any, formData: FormData) {
     }
 
     try {
-        // Validate token
-        const { data: resetEntry, error: tokenError } = await supabaseAdmin
-            .from('password_resets')
+        // Validate user and OTP
+        const { data: user, error: userError } = await supabaseAdmin
+            .from('users')
             .select('*')
-            .eq('token', token)
+            .eq('email', email)
             .single();
 
-        if (tokenError || !resetEntry || new Date(resetEntry.expires_at) < new Date()) {
-            return { error: 'Invalid or expired token' };
+        if (userError || !user) {
+            return { error: 'Invalid request' };
+        }
+
+        if (user.otp_code !== otp) {
+            return { error: 'Invalid OTP code' };
+        }
+
+        if (new Date(user.otp_expires_at) < new Date()) {
+            return { error: 'OTP has expired. Please request a new one.' };
         }
 
         // Hash new password
         const passwordHash = await hashPassword(password);
 
-        // Update user
+        // Update user: new password, reset OTP, and update passwords_changed_at
         const { error: updateError } = await supabaseAdmin
             .from('users')
-            .update({ password_hash: passwordHash })
-            .eq('email', resetEntry.email);
+            .update({ 
+                password_hash: passwordHash,
+                otp_code: null,
+                otp_expires_at: null,
+                passwords_changed_at: new Date().toISOString()
+            })
+            .eq('id', user.id);
 
         if (updateError) throw updateError;
-
-        // Delete used token
-        await supabaseAdmin
-            .from('password_resets')
-            .delete()
-            .eq('token', token);
 
         return { success: true, message: 'Password updated successfully. You can now log in.' };
     } catch (err) {
@@ -178,3 +192,4 @@ export async function resetPassword(prevState: any, formData: FormData) {
         return { error: 'An unexpected error occurred' };
     }
 }
+

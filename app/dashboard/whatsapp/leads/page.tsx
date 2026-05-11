@@ -18,7 +18,8 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { WhatsAppChatDetail } from "@/components/dashboard/whatsapp-chat-detail";
 import { SPLoader } from "@/components/sp-loader";
 import { useData } from "@/context/DataContext";
-import { startOfDay, endOfDay } from "date-fns";
+import { startOfDay, endOfDay, subDays } from "date-fns";
+
 
 // Helper: check if lead has replied — matches chat page logic
 const hasLeadReplied = (lead: any) => {
@@ -59,7 +60,7 @@ const hasWhatsappActivity = (lead: any, table: string) => {
 };
 
 export default function WhatsappLeadsPage() {
-    const { leads: allLeads, loadingLeads } = useData();
+    const { leads: allLeads, loadingLeads, refreshLeads } = useData();
     const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedLeadIdForChat, setSelectedLeadIdForChat] = useState<string | null>(null);
@@ -68,8 +69,10 @@ export default function WhatsappLeadsPage() {
     const leadsPerPage = 15;
 
     const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
-        from: undefined, to: undefined
+        from: subDays(new Date(), 7),
+        to: new Date()
     });
+
 
     const [activeFilters, setActiveFilters] = useState<{
         replyStatus: string[], campaign: string[]
@@ -116,7 +119,24 @@ export default function WhatsappLeadsPage() {
         });
     }, [combinedLeads, searchQuery, dateRange, activeFilters]);
 
+    const handleRefresh = React.useCallback(async (range?: any) => {
+        const targetRange = range || dateRange;
+        if (targetRange?.from) {
+            const from = new Date(targetRange.from);
+            from.setHours(0, 0, 0, 0);
+            const to = new Date(targetRange.to || targetRange.from);
+            to.setHours(23, 59, 59, 999);
+            refreshLeads(from, to, 'whatsapp');
+
+        }
+    }, [dateRange, refreshLeads]);
+
+    useEffect(() => {
+        handleRefresh();
+    }, []);
+
     useEffect(() => { setCurrentPage(1); }, [searchQuery, activeFilters, dateRange]);
+
 
     const toggleFilter = (type: 'replyStatus' | 'campaign', value: string) => {
         setActiveFilters(prev => {
@@ -155,7 +175,11 @@ export default function WhatsappLeadsPage() {
                     <p className="text-slate-500 text-xs">ICP & Meta leads with WhatsApp activity</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                    <DateRangePicker onUpdate={({ range }) => setDateRange({ from: range?.from, to: range?.to })} />
+                    <DateRangePicker onUpdate={({ range }) => {
+                        setDateRange({ from: range?.from, to: range?.to });
+                        handleRefresh(range);
+                    }} />
+
                 </div>
             </div>
 

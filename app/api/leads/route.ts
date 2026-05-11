@@ -10,6 +10,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const fromParam = searchParams.get('from');
     const toParam = searchParams.get('to');
+    const typeParam = searchParams.get('type') || 'email';
     const baseUrl = `${supabaseUrl.replace(/\/$/, "")}/rest/v1`;
     
     // EXPLICIT HEADERS for exact counting
@@ -25,12 +26,14 @@ export async function GET(req: Request) {
         const formattedCol = dateCol?.includes(" ") ? `"${dateCol}"` : dateCol;
 
         const activeFrom = fromParam;
+        const activeTo = toParam;
 
         try {
             // 1. Get total count
             let countUrl = `${baseUrl}/${tableName}?select=*&limit=1`;
-            if (activeFrom && formattedCol) {
-                countUrl += `&${encodeURIComponent(formattedCol)}=gte.${new Date(activeFrom).toISOString()}`;
+            if (formattedCol) {
+                if (activeFrom) countUrl += `&${encodeURIComponent(formattedCol)}=gte.${new Date(activeFrom).toISOString()}`;
+                if (activeTo) countUrl += `&${encodeURIComponent(formattedCol)}=lte.${new Date(activeTo).toISOString()}`;
             }
             
             const countRes = await fetch(countUrl, { headers, cache: 'no-store', method: 'HEAD' });
@@ -52,13 +55,15 @@ export async function GET(req: Request) {
             for (let i = 0; i < pageCount; i++) {
                 const offset = i * limit;
                 let url = `${baseUrl}/${tableName}?select=*&limit=${limit}&offset=${offset}`;
-                if (activeFrom && formattedCol) {
-                    url += `&${encodeURIComponent(formattedCol)}=gte.${new Date(activeFrom).toISOString()}`;
+                if (formattedCol) {
+                    if (activeFrom) url += `&${encodeURIComponent(formattedCol)}=gte.${new Date(activeFrom).toISOString()}`;
+                    if (activeTo) url += `&${encodeURIComponent(formattedCol)}=lte.${new Date(activeTo).toISOString()}`;
                 }
                 if (formattedCol) url += `&order=${encodeURIComponent(formattedCol)}.desc.nullslast`;
                 
                 fetchPromises.push(fetch(url, { headers, cache: 'no-store' }).then(r => r.ok ? r.json() : []));
             }
+
 
             const results = await Promise.all(fetchPromises);
             const flat = results.flat().filter(Boolean);
@@ -71,13 +76,16 @@ export async function GET(req: Request) {
     };
 
     try {
-        const cacheKey = `leads-final-v1-${fromParam || 'all'}-${toParam || 'now'}`;
+        const cacheKey = `leads-final-v1-${fromParam || 'all'}-${toParam || 'now'}-${typeParam}`;
         
         const leads = await getOrSetCache(cacheKey, 5 * 60 * 1000, async () => {
+            const icpDateCol = typeParam === 'whatsapp' ? 'Whatsapp Last Contacted' : 'Email Last Contacted';
+            
             const [icpLeads, metaLeads] = await Promise.all([
-                fetchTableTurbo("icp_tracker", "Email Last Contacted"),
+                fetchTableTurbo("icp_tracker", icpDateCol),
                 fetchTableTurbo("meta_lead_tracker", "created_at")
             ]);
+
 
             return [
                 ...(icpLeads || []).map((l: any) => ({ 

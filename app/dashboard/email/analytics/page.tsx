@@ -43,15 +43,16 @@ interface HistoryData {
 }
 
 export default function EmailAnalyticsPage() {
-    const { leads: allLeads, loadingLeads } = useData();
+    const { leads: allLeads, loadingLeads, refreshLeads } = useData();
     const [generalData, setGeneralData] = useState<any>(null);
     const [loadingLocal, setLoadingLocal] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [unsubscribedCount, setUnsubscribedCount] = useState(0);
     const [dateRange, setDateRange] = useState<DateRange | undefined>({
-        from: subDays(new Date(), 30),
+        from: subDays(new Date(), 7),
         to: new Date(),
     });
+
     const [dbCampaigns, setDbCampaigns] = useState<any[]>([]);
 
     const loading = loadingLocal || loadingLeads;
@@ -111,16 +112,25 @@ export default function EmailAnalyticsPage() {
         }
     };
 
-    useEffect(() => {
-        fetchData(dateRange?.from, dateRange?.to);
-    }, [allLeads, loadingLeads]);
-
-    const handleDateUpdate = ({ range }: { range: DateRange | undefined }) => {
+    const handleDateUpdate = React.useCallback(({ range }: { range: DateRange | undefined }) => {
         setDateRange(range);
-        if (range?.from && range?.to) {
-            fetchData(range.from, range.to);
+        if (range?.from) {
+            const start = new Date(range.from);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(range.to || range.from);
+            end.setHours(23, 59, 59, 999);
+            
+            refreshLeads(start, end);
+            fetchData(start, end);
         }
-    };
+    }, [refreshLeads]);
+
+    useEffect(() => {
+        handleDateUpdate({ range: dateRange });
+    }, []);
+
+
+
 
     const leadStats = useMemo(() => {
         if (loadingLeads) return { totalSent: 0, totalReplies: 0, totalUnsubscribed: 0, totalLeads: 0 };

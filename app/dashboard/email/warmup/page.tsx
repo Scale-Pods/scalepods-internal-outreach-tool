@@ -14,6 +14,9 @@ import {
     AlertCircle,
     Activity,
 } from "lucide-react";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { subDays, startOfDay, endOfDay } from "date-fns";
+
 import React, { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -86,6 +89,11 @@ export default function WarmupAnalyticsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedEmail, setSelectedEmail] = useState<string>(ALL_TARGET_EMAILS[0]);
+    const [dateRange, setDateRange] = useState<any>({
+        from: subDays(new Date(), 7),
+        to: new Date(),
+    });
+
 
     const fetchData = async () => {
         setLoading(true);
@@ -117,7 +125,23 @@ export default function WarmupAnalyticsPage() {
         fetchData();
     }, []);
 
-    const selectedAccount = warmupData.find(a => a.email === selectedEmail) || warmupData[0] || null;
+    const selectedAccount = useMemo(() => {
+        const acc = warmupData.find(a => a.email === selectedEmail) || warmupData[0] || null;
+        if (!acc) return null;
+
+        // Local filtering of history data
+        if (acc.history && dateRange?.from) {
+            const from = startOfDay(new Date(dateRange.from));
+            const to = endOfDay(new Date(dateRange.to || dateRange.from));
+            const filteredHistory = acc.history.filter(h => {
+                const d = new Date(h.date);
+                return d >= from && d <= to;
+            });
+            return { ...acc, history: filteredHistory };
+        }
+        return acc;
+    }, [warmupData, selectedEmail, dateRange]);
+
 
     return (
         <div className="space-y-3 pb-10 pt-2 relative min-h-[500px] px-2 md:px-0">
@@ -128,12 +152,12 @@ export default function WarmupAnalyticsPage() {
                     <p className="text-[11px] text-slate-500">Monitor email account health and deliverability</p>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <DateRangePicker onUpdate={(val) => setDateRange(val.range)} />
                     <Select value={selectedEmail} onValueChange={setSelectedEmail}>
                         <SelectTrigger className="w-full sm:w-[240px] h-9 text-xs">
                             <SelectValue placeholder="Select email account" />
                         </SelectTrigger>
                         <SelectContent>
-                            
                             {ALL_TARGET_EMAILS.map((email) => (
                                 <SelectItem key={email} value={email}>
                                     {email}
@@ -141,6 +165,7 @@ export default function WarmupAnalyticsPage() {
                             ))}
                         </SelectContent>
                     </Select>
+
                     <Button
                         onClick={() => fetchData()}
                         disabled={loading}

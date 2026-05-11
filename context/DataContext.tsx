@@ -14,7 +14,8 @@ interface DataContextType {
     maqsamBalance: any;
     twilioBalance: any;
     error: string | null;
-    refreshLeads: (from?: Date, to?: Date) => Promise<void>;
+    refreshLeads: (from?: Date, to?: Date, type?: 'email' | 'whatsapp') => Promise<void>;
+
 
     refreshCalls: (from?: Date, to?: Date) => Promise<void>;
     refreshBalances: () => Promise<void>;
@@ -34,17 +35,20 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const [twilioBalance, setTwilioBalance] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchLeads = useCallback(async (from?: Date, to?: Date) => {
+    const fetchLeads = useCallback(async (from?: Date, to?: Date, type?: 'email' | 'whatsapp') => {
         setLoadingLeads(true);
         try {
             let url = '/api/leads';
-            if (from || to) {
-                const params = new URLSearchParams();
-                if (from) params.append('from', from.toISOString());
-                if (to) params.append('to', to.toISOString());
+            const params = new URLSearchParams();
+            if (from) params.append('from', from.toISOString());
+            if (to) params.append('to', to.toISOString());
+            if (type) params.append('type', type);
+            
+            if (params.toString()) {
                 url += `?${params.toString()}`;
             }
             const response = await fetch(url);
+
             if (!response.ok) throw new Error('Failed to fetch leads');
             const data = await response.json();
             const consolidated = consolidateLeads(data);

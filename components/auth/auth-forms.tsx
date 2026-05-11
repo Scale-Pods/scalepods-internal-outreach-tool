@@ -6,18 +6,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Mail, Lock, User, ArrowRight, Loader2, KeyRound } from 'lucide-react';
-import { login, signup, forgotPassword } from '@/app/actions/auth';
+import { login, signup, forgotPassword, resetPassword } from '@/app/actions/auth';
 
-type AuthMode = 'login' | 'forgot';
+type AuthMode = 'login' | 'forgot' | 'reset';
 
 import Image from 'next/image';
 
 export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: AuthMode, onSuccess?: () => void }) {
     const [mode, setMode] = useState<AuthMode>(defaultMode);
+    const [email, setEmail] = useState('');
     const router = useRouter();
 
     const [loginState, loginAction, isLoginPending] = useActionState(login, null as any);
     const [forgotState, forgotAction, isForgotPending] = useActionState(forgotPassword, null as any);
+    const [resetState, resetAction, isResetPending] = useActionState(resetPassword, null as any);
 
     useEffect(() => {
         if (loginState?.success) {
@@ -27,14 +29,32 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
         }
     }, [loginState, router, onSuccess]);
 
-    const error = loginState?.error || forgotState?.error;
-    const isPending = isLoginPending || isForgotPending;
-    const successMessage = forgotState?.message;
+    useEffect(() => {
+        if (forgotState?.success) {
+            setMode('reset');
+        }
+    }, [forgotState]);
+
+    useEffect(() => {
+        if (resetState?.success) {
+            // Wait 2 seconds to show success message before switching to login
+            const timer = setTimeout(() => {
+                setMode('login');
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [resetState]);
+
+
+    const error = loginState?.error || forgotState?.error || resetState?.error;
+    const isPending = isLoginPending || isForgotPending || isResetPending;
+    const successMessage = forgotState?.message || resetState?.message;
+
 
     return (
-        <div className="w-full max-w-sm mx-auto space-y-8 animate-in fade-in zoom-in-95 duration-300">
-            <div className="flex flex-col items-center justify-center space-y-6 text-center">
-                <div className="relative w-48 h-48 flex-shrink-0">
+        <div className="w-full max-w-sm mx-auto space-y-6 animate-in fade-in zoom-in-95 duration-300">
+            <div className="flex flex-col items-center justify-center space-y-4 text-center">
+                <div className="relative w-28 h-28 flex-shrink-0">
                     <Image
                         src="/SP_logo.png"
                         alt="ScalePods Logo"
@@ -43,17 +63,20 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
                         priority
                     />
                 </div>
-                <div className="space-y-2">
-                    <h1 className="text-4xl font-black tracking-tight text-white">
+                <div className="space-y-1">
+                    <h1 className="text-3xl font-black tracking-tight text-white">
                         {mode === 'login' && 'Welcome Back'}
                         {mode === 'forgot' && 'Reset Password'}
+                        {mode === 'reset' && 'Create New Password'}
                     </h1>
-                    <p className="text-zinc-500 text-sm font-medium">
+                    <p className="text-zinc-500 text-xs font-medium">
                         {mode === 'login' && 'Enter your credentials to access your dashboard'}
-                        {mode === 'forgot' && 'Enter your email to receive reset instructions'}
+                        {mode === 'forgot' && 'Enter your email to receive a 6-digit OTP'}
+                        {mode === 'reset' && 'Enter the OTP and your new password'}
                     </p>
                 </div>
             </div>
+
 
             {error && (
                 <div className="p-3 text-xs font-bold bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-center">
@@ -67,25 +90,39 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
                 </div>
             )}
 
-            <form action={mode === 'login' ? loginAction : forgotAction} className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="email" className="text-zinc-300 text-xs font-bold uppercase tracking-wider">Email Address</Label>
-                    <div className="relative group">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
-                        <Input
-                            id="email"
-                            name="email"
-                            type="email"
-                            placeholder="name@example.com"
-                            required
-                            className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all"
-                        />
-                    </div>
-                </div>
-
-                {mode !== 'forgot' && (
+            <form action={mode === 'login' ? loginAction : (mode === 'forgot' ? forgotAction : resetAction)} className="space-y-4">
+                {(mode === 'login' || mode === 'forgot' || mode === 'reset') && (
                     <div className="space-y-2">
-                        
+                        <Label htmlFor="email" className="text-zinc-300 text-xs font-bold uppercase tracking-wider">Email Address</Label>
+                        <div className="relative group">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+                            <Input
+                                id="email"
+                                name="email"
+                                type="email"
+                                placeholder="name@example.com"
+                                required
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all"
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {mode === 'login' && (
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <Label htmlFor="password" className="text-zinc-300 text-xs font-bold uppercase tracking-wider">Password</Label>
+
+                            <button
+                                type="button"
+                                onClick={() => setMode('forgot')}
+                                className="text-emerald-400 text-xs font-bold hover:underline"
+                            >
+                                Forgot password?
+                            </button>
+                        </div>
                         <div className="relative group">
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
                             <Input
@@ -100,6 +137,58 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
                     </div>
                 )}
 
+                {mode === 'reset' && (
+                    <>
+                        <div className="space-y-2">
+                            <Label htmlFor="otp" className="text-zinc-300 text-xs font-bold uppercase tracking-wider">6-Digit OTP</Label>
+                            <div className="relative group">
+                                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+                                <Input
+                                    id="otp"
+                                    name="otp"
+                                    type="text"
+                                    placeholder="123456"
+                                    maxLength={6}
+                                    required
+                                    className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all font-mono tracking-[0.5em] text-center"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="password" className="text-zinc-300 text-xs font-bold uppercase tracking-wider">New Password</Label>
+
+                            <div className="relative group">
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+                                <Input
+                                    id="password"
+                                    name="password"
+                                    type="password"
+                                    placeholder="••••••••"
+                                    required
+                                    className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="confirmPassword" className="text-zinc-300 text-xs font-bold uppercase tracking-wider">Confirm Password</Label>
+
+                            <div className="relative group">
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+                                <Input
+                                    id="confirmPassword"
+                                    name="confirmPassword"
+                                    type="password"
+                                    placeholder="••••••••"
+                                    required
+                                    className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all"
+                                />
+                            </div>
+                        </div>
+                    </>
+                )}
+
                 <Button
                     type="submit"
                     disabled={isPending}
@@ -110,14 +199,17 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
                     ) : (
                         <>
                             {mode === 'login' && 'Sign In'}
-                            {mode === 'forgot' && 'Send Reset Links'}
+                            {mode === 'forgot' && 'Send OTP Code'}
+                            {mode === 'reset' && (resetState?.success ? 'Password Updated!' : 'Update Password')}
                             <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
                         </>
+
+
                     )}
                 </Button>
             </form>
 
-            {mode === 'forgot' && (
+            {(mode === 'forgot' || mode === 'reset') && (
                 <div className="text-center">
                     <button
                         onClick={() => setMode('login')}

@@ -20,7 +20,9 @@ import { useRouter } from "next/navigation";
 import { useData } from "@/context/DataContext";
 import { cn } from "@/lib/utils";
 import { SPLoader } from "@/components/sp-loader";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
+import { useCallback } from "react";
+
 
 interface CampaignMetrics {
     campaignId: string;
@@ -70,8 +72,12 @@ const EMPTY_METRICS: AggregatedMetrics = {
 
 export default function EmailDashboardPage() {
     const router = useRouter();
-    const { leads: allLeads, loadingLeads } = useData();
-    const [dateRange, setDateRange] = useState<any>(undefined);
+    const { leads: allLeads, loadingLeads, refreshLeads } = useData();
+    const [dateRange, setDateRange] = useState<any>({
+        from: subDays(new Date(), 7),
+        to: new Date(),
+    });
+
     const [loadingDB, setLoadingDB] = useState(true);
     const [campaigns, setCampaigns] = useState<CampaignMetrics[]>([]);
     const [recentReplies, setRecentReplies] = useState<any[]>([]);
@@ -209,13 +215,26 @@ export default function EmailDashboardPage() {
     }, [campaigns]);
 
     // For the funnel bar chart
-    const handleDateUpdate = (range: any) => {
+    const handleDateUpdate = useCallback((range: any) => {
         setDateRange(range.range);
-    };
+        if (range.range?.from) {
+            const from = new Date(range.range.from);
+            from.setHours(0, 0, 0, 0);
+            const to = new Date(range.range.to || range.range.from);
+            to.setHours(23, 59, 59, 999);
+            refreshLeads(from, to);
+        }
+    }, [refreshLeads]);
+
+    useEffect(() => {
+        handleDateUpdate({ range: dateRange });
+    }, []);
+
 
     const handleRefresh = () => {
-        window.location.reload();
+        handleDateUpdate({ range: dateRange });
     };
+
 
     // Use DB data if available, otherwise fallback to local icp_tracker data
     const hasCampaignData = campaigns.length > 0;

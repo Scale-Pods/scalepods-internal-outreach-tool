@@ -9,10 +9,16 @@ import React, { useState, useEffect } from "react";
 import { consolidateLeads } from "@/lib/leads-utils";
 import { SPLoader } from "@/components/sp-loader";
 import { useData } from "@/context/DataContext";
+import { subDays } from "date-fns";
+
 
 export default function WhatsappSentPage() {
-    const { leads: allLeads, loadingLeads } = useData();
-    const [dateRange, setDateRange] = useState<any>(undefined);
+    const { leads: allLeads, loadingLeads, refreshLeads } = useData();
+    const [dateRange, setDateRange] = useState<any>({
+        from: subDays(new Date(), 7),
+        to: new Date()
+    });
+
     const [messages, setMessages] = useState<any[]>([]);
     const loading = loadingLeads;
     const [searchQuery, setSearchQuery] = useState("");
@@ -22,6 +28,22 @@ export default function WhatsappSentPage() {
         read: 0,
         failed: 0
     });
+
+    const handleRefresh = React.useCallback(async (range?: any) => {
+        const targetRange = range || dateRange;
+        if (targetRange?.from) {
+            const from = new Date(targetRange.from);
+            from.setHours(0, 0, 0, 0);
+            const to = new Date(targetRange.to || targetRange.from);
+            to.setHours(23, 59, 59, 999);
+            refreshLeads(from, to, 'whatsapp');
+
+        }
+    }, [dateRange, refreshLeads]);
+
+    useEffect(() => {
+        handleRefresh();
+    }, []);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -38,9 +60,11 @@ export default function WhatsappSentPage() {
                 // Apply Date Filtering
                 const leads = allLeads.filter((lead: any) => {
                     if (!dateRange?.from) return true;
-                    if (!lead.created_at) return false;
+                    
+                    const wlc = lead["Whatsapp Last Contacted"] || lead["whatsapp_last_contacted"] || lead.created_at;
+                    if (!wlc) return false;
 
-                    const leadDate = new Date(lead.created_at);
+                    const leadDate = new Date(wlc);
                     const from = new Date(dateRange.from);
                     from.setHours(0, 0, 0, 0);
                     const to = dateRange.to ? new Date(dateRange.to) : from;
@@ -106,7 +130,11 @@ export default function WhatsappSentPage() {
                     <h1 className="text-2xl font-bold">Total Sent Messages</h1>
                     <p className="text-slate-500">History of all outbound WhatsApp communications</p>
                 </div>
-                <DateRangePicker onUpdate={(val) => setDateRange(val.range)} />
+                <DateRangePicker onUpdate={(val) => {
+                    setDateRange(val.range);
+                    handleRefresh(val.range);
+                }} />
+
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

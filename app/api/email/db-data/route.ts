@@ -3,7 +3,11 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: Request) {
+    const { searchParams } = new URL(req.url);
+    const fromParam = searchParams.get('from');
+    const toParam = searchParams.get('to');
+
     try {
         // Fetch Campaign Analytics
         const { data: campaignAnalytics, error: campaignError } = await supabaseAdmin
@@ -14,11 +18,21 @@ export async function GET() {
             console.error('Campaign Analytics Error:', campaignError);
         }
 
-        // Fetch Lead Replies ordered by reply_timestamp (actual column name)
-        const { data: leadReplies, error: repliesError } = await supabaseAdmin
+        // Fetch Lead Replies ordered by reply_timestamp
+        let repliesQuery = supabaseAdmin
             .from('instantly_lead_replies')
-            .select('*')
+            .select('*');
+
+        if (fromParam) {
+            repliesQuery = repliesQuery.gte('reply_timestamp', new Date(fromParam).toISOString());
+        }
+        if (toParam) {
+            repliesQuery = repliesQuery.lte('reply_timestamp', new Date(toParam).toISOString());
+        }
+
+        const { data: leadReplies, error: repliesError } = await repliesQuery
             .order('reply_timestamp', { ascending: false });
+
 
         if (repliesError) {
             console.error('Lead Replies Error (reply_timestamp):', repliesError);

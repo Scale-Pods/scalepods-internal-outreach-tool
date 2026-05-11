@@ -13,10 +13,12 @@ import {
     LineChart, Line, Area, ComposedChart
 } from "recharts";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useData } from "@/context/DataContext";
 import { cn } from "@/lib/utils";
+import { format, subDays } from "date-fns";
+
 import {
     Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
@@ -24,12 +26,16 @@ import { SPLoader } from "@/components/sp-loader";
 
 export default function WhatsappDashboardPage() {
     const router = useRouter();
-    const { leads: allLeads, loadingLeads } = useData();
+    const { leads: allLeads, loadingLeads, refreshLeads } = useData();
     const [leads, setLeads] = useState<any[]>([]);
     const [isRepliesOpen, setIsRepliesOpen] = useState(false);
     const [metaLeads, setMetaLeads] = useState<any[]>([]);
     const [loadingMeta, setLoadingMeta] = useState(true);
-    const [dateRange, setDateRange] = useState<any>(undefined);
+    const [dateRange, setDateRange] = useState<any>({
+        from: subDays(new Date(), 7),
+        to: new Date(),
+    });
+
     const loading = loadingLeads || loadingMeta;
 
     const [stats, setStats] = useState({
@@ -58,6 +64,18 @@ export default function WhatsappDashboardPage() {
     const [stageData, setStageData] = useState<any[]>([]);
     const [statusDistribution, setStatusDistribution] = useState<any[]>([]);
 
+    const handleRefresh = useCallback(async (range?: any) => {
+        const targetRange = range || dateRange;
+        if (targetRange?.from) {
+            const from = new Date(targetRange.from);
+            from.setHours(0, 0, 0, 0);
+            const to = new Date(targetRange.to || targetRange.from);
+            to.setHours(23, 59, 59, 999);
+            refreshLeads(from, to, 'whatsapp');
+
+        }
+    }, [dateRange, refreshLeads]);
+
     // Fetch meta leads
     useEffect(() => {
         (async () => {
@@ -74,7 +92,9 @@ export default function WhatsappDashboardPage() {
                 setLoadingMeta(false);
             }
         })();
+        handleRefresh();
     }, []);
+
 
     // Helper: check if lead has replied — matches chat page logic
     const hasLeadReplied = (lead: any) => {
@@ -334,7 +354,11 @@ export default function WhatsappDashboardPage() {
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">WhatsApp Dashboard</h1>
                     <p className="text-sm font-medium text-slate-500">Real-time engagement & health analytics</p>
                 </div>
-                <DateRangePicker onUpdate={(range) => setDateRange(range.range)} />
+                <DateRangePicker onUpdate={(range) => {
+                    setDateRange(range.range);
+                    handleRefresh(range.range);
+                }} />
+
             </header>
 
             {/* Top Metric Cards */}

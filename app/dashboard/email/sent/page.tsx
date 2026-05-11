@@ -46,6 +46,9 @@ import { format, formatDistanceToNow } from "date-fns";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useData } from "@/context/DataContext";
 import { SPLoader } from "@/components/sp-loader";
+import { subDays } from "date-fns";
+import { useCallback } from "react";
+
 
 const ITEMS_PER_PAGE = 7;
 const EMAIL_STAGES = ["Email_1", "Email_2", "Email_3", "Email_4", "Email_5", "Email_6"] as const;
@@ -74,9 +77,13 @@ interface SentEmailEntry {
 }
 
 export default function SentEmailsPage() {
-    const { leads: allLeads, loadingLeads } = useData();
+    const { leads: allLeads, loadingLeads, refreshLeads } = useData();
     const [page, setPage] = useState(1);
-    const [dateRange, setDateRange] = useState<any>(undefined);
+    const [dateRange, setDateRange] = useState<any>({
+        from: subDays(new Date(), 7),
+        to: new Date(),
+    });
+
     const [sentEmails, setSentEmails] = useState<SentEmailEntry[]>([]);
     const [dbReplyCount, setDbReplyCount] = useState(0);
     const [campaignsDB, setCampaignsDB] = useState<any[]>([]);
@@ -209,6 +216,22 @@ export default function SentEmailsPage() {
         setSentEmails(entries);
     }, [allLeads, loadingLeads, loadingDB, campaignsDB, leadRepliesDB]);
 
+    const handleDateUpdate = useCallback((range: any) => {
+        setDateRange(range.range);
+        setPage(1);
+        if (range.range?.from) {
+            const from = new Date(range.range.from);
+            from.setHours(0, 0, 0, 0);
+            const to = new Date(range.range.to || range.range.from);
+            to.setHours(23, 59, 59, 999);
+            refreshLeads(from, to);
+        }
+    }, [refreshLeads]);
+
+    useEffect(() => {
+        handleDateUpdate({ range: dateRange });
+    }, []);
+
     // Fetch DB data for real-time reply count
     useEffect(() => {
         const fetchDB = async () => {
@@ -230,6 +253,7 @@ export default function SentEmailsPage() {
         };
         fetchDB();
     }, []);
+
 
     const filteredEmails = useMemo(() => {
         return sentEmails.filter((entry) => {
@@ -307,8 +331,9 @@ export default function SentEmailsPage() {
                 <div className="flex items-center gap-3">
                     <DateRangePicker
                         className="h-9 w-[240px]"
-                        onUpdate={(values) => { setDateRange(values.range); setPage(1); }}
+                        onUpdate={handleDateUpdate}
                     />
+
                 </div>
             </div>
 

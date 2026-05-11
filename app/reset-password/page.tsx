@@ -5,14 +5,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Lock, ArrowRight, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Lock, ArrowRight, Loader2, CheckCircle2, KeyRound, Mail } from 'lucide-react';
 import { resetPassword } from '@/app/actions/auth';
 import Image from 'next/image';
 
 function ResetPasswordForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const token = searchParams.get('token');
+    const initialEmail = searchParams.get('email') || '';
 
     const [state, action, isPending] = useActionState(resetPassword, null as any);
     const [countdown, setCountdown] = useState(5);
@@ -33,23 +33,6 @@ function ResetPasswordForm() {
             };
         }
     }, [state?.success, router]);
-
-    if (!token) {
-        return (
-            <div className="min-h-screen bg-black flex items-center justify-center p-6">
-                <div className="max-w-md w-full text-center space-y-6">
-                    <div className="inline-flex p-4 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 mb-4">
-                        <AlertCircle className="h-10 w-10" />
-                    </div>
-                    <h1 className="text-3xl font-bold text-white">Invalid Request</h1>
-                    <p className="text-zinc-400">The password reset link is missing its security token.</p>
-                    <Button onClick={() => router.push('/')} className="bg-white text-black hover:bg-zinc-200">
-                        Return Home
-                    </Button>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="min-h-screen bg-black selection:bg-emerald-500/30 font-sans flex items-center justify-center p-6">
@@ -74,7 +57,7 @@ function ResetPasswordForm() {
 
                 {state?.success ? (
                     <div className="text-center space-y-6 animate-in fade-in zoom-in-95 duration-500">
-                        <div className="inline-flex p-4 rounded-full bg-emerald-500/10 border border-bordermerald-500/20 text-emerald-500">
+                        <div className="inline-flex p-4 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500">
                             <CheckCircle2 className="h-10 w-10" />
                         </div>
                         <div className="space-y-2">
@@ -92,7 +75,7 @@ function ResetPasswordForm() {
                     <div className="space-y-6">
                         <div className="space-y-2 text-center">
                             <h1 className="text-2xl font-bold tracking-tight text-white">Create New Password</h1>
-                            <p className="text-zinc-400 text-sm">Your new password must be at least 8 characters long.</p>
+                            <p className="text-zinc-400 text-sm">Enter the 6-digit OTP sent to your email and your new password.</p>
                         </div>
 
                         {state?.error && (
@@ -101,8 +84,44 @@ function ResetPasswordForm() {
                             </div>
                         )}
 
+                        <div className="p-3 text-[10px] font-medium bg-white/5 border border-white/10 text-zinc-500 rounded-lg text-center flex items-center justify-center gap-2">
+                            <KeyRound className="h-3 w-3 text-emerald-500/50" />
+                            Passwords must be changed every 90 days for account security.
+                        </div>
+
+
                         <form action={action} className="space-y-4">
-                            <input type="hidden" name="token" value={token} />
+                            <div className="space-y-2">
+                                <Label htmlFor="email" className="text-zinc-300 text-xs font-bold uppercase tracking-wider">Email Address</Label>
+                                <div className="relative group">
+                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+                                    <Input
+                                        id="email"
+                                        name="email"
+                                        type="email"
+                                        defaultValue={initialEmail}
+                                        placeholder="name@example.com"
+                                        required
+                                        className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="otp" className="text-zinc-300 text-xs font-bold uppercase tracking-wider">6-Digit OTP</Label>
+                                <div className="relative group">
+                                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+                                    <Input
+                                        id="otp"
+                                        name="otp"
+                                        type="text"
+                                        placeholder="123456"
+                                        maxLength={6}
+                                        required
+                                        className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all font-mono tracking-[0.5em] text-center"
+                                    />
+                                </div>
+                            </div>
 
                             <div className="space-y-2">
                                 <Label htmlFor="password" className="text-zinc-300 text-xs font-bold uppercase tracking-wider">New Password</Label>
@@ -114,7 +133,7 @@ function ResetPasswordForm() {
                                         type="password"
                                         placeholder="••••••••"
                                         required
-                                        className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-bordermerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all"
+                                        className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all"
                                     />
                                 </div>
                             </div>
@@ -129,7 +148,7 @@ function ResetPasswordForm() {
                                         type="password"
                                         placeholder="••••••••"
                                         required
-                                        className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-bordermerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all"
+                                        className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all"
                                     />
                                 </div>
                             </div>
