@@ -67,7 +67,10 @@ export default function WhatsappAnalyticsPage() {
     const combinedLeads = useMemo(() => {
         return allLeads
             .filter((l: any) => hasWhatsappActivity(l))
-            .map((l: any) => ({ ...l, _source: l._table === 'meta_lead_tracker' ? 'meta' : 'icp' }));
+            .map((l: any) => ({
+                ...l,
+                _source: l._table === 'meta_lead_tracker' ? 'meta' : l._table === 'ENRICHED_LEADS' ? 'enriched' : 'icp'
+            }));
     }, [allLeads]);
 
     const filteredLeads = useMemo(() => {
@@ -82,7 +85,7 @@ export default function WhatsappAnalyticsPage() {
 
     const stats = useMemo(() => {
         let totalSent = 0, repliedCount = 0, leadsContacted = 0;
-        const campaigns: Record<string, { value: number }> = { "ICP Tracker": { value: 0 }, "Meta Lead": { value: 0 } };
+        const campaigns: Record<string, { value: number }> = { "ICP Tracker": { value: 0 }, "Meta Lead": { value: 0 }, "Enriched Leads": { value: 0 } };
 
         filteredLeads.forEach(lead => {
             const sentCount = countSentMessages(lead);
@@ -90,7 +93,9 @@ export default function WhatsappAnalyticsPage() {
             if (sentCount > 0) leadsContacted++;
             if (hasLeadReplied(lead)) {
                 repliedCount++;
-                campaigns[lead._source === 'icp' ? "ICP Tracker" : "Meta Lead"].value++;
+                if (lead._source === 'icp') campaigns["ICP Tracker"].value++;
+                else if (lead._source === 'meta') campaigns["Meta Lead"].value++;
+                else if (lead._source === 'enriched') campaigns["Enriched Leads"].value++;
             }
         });
 
@@ -209,7 +214,7 @@ export default function WhatsappAnalyticsPage() {
                                     />
                                     <Bar dataKey="value" fill="#6366f1" radius={[6, 6, 0, 0]} barSize={40}>
                                         {stats.campaignData.map((_, index) => (
-                                            <Cell key={`cell-${index}`} fill={['#6366f1', '#8b5cf6'][index % 2]} />
+                                            <Cell key={`cell-${index}`} fill={['#6366f1', '#8b5cf6', '#10b981'][index % 3]} />
                                         ))}
                                     </Bar>
                                 </BarChart>

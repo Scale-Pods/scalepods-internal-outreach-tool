@@ -39,7 +39,7 @@ const hasLeadReplied = (lead: any) => {
 
 // Helper: check if lead has WhatsApp activity — matches chat page logic
 const hasWhatsappActivity = (lead: any, table: string) => {
-    if (table === 'icp_tracker') {
+    if (table === 'icp_tracker' || table === 'ENRICHED_LEADS') {
         for (let i = 1; i <= 5; i++) { if (lead[`Whatsapp_${i}`]) return true; }
         for (let i = 1; i <= 25; i++) {
             if (lead[`User_Replied_${i}`] && String(lead[`User_Replied_${i}`]).toLowerCase() !== 'no') return true;
@@ -64,7 +64,7 @@ export default function WhatsappLeadsPage() {
     const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedLeadIdForChat, setSelectedLeadIdForChat] = useState<string | null>(null);
-    const [selectedLeadSource, setSelectedLeadSource] = useState<'icp_tracker' | 'meta_lead_tracker'>('icp_tracker');
+    const [selectedLeadSource, setSelectedLeadSource] = useState<'icp_tracker' | 'meta_lead_tracker' | 'ENRICHED_LEADS'>('icp_tracker');
     const [currentPage, setCurrentPage] = useState(1);
     const leadsPerPage = 15;
 
@@ -85,7 +85,7 @@ export default function WhatsappLeadsPage() {
         if (loadingLeads) return [];
         return allLeads
             .filter((l: any) => hasWhatsappActivity(l, l._table || 'icp_tracker'))
-            .map((l: any) => ({ ...l, _source: l._table === 'meta_lead_tracker' ? 'meta_lead_tracker' : 'icp_tracker' }));
+            .map((l: any) => ({ ...l, _source: l._table === 'meta_lead_tracker' ? 'meta_lead_tracker' : l._table === 'ENRICHED_LEADS' ? 'ENRICHED_LEADS' : 'icp_tracker' }));
     }, [allLeads, loadingLeads]);
 
     const filteredLeads = useMemo(() => {
@@ -172,7 +172,7 @@ export default function WhatsappLeadsPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0">
                 <div>
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight">WhatsApp Leads</h1>
-                    <p className="text-slate-500 text-xs">ICP & Meta leads with WhatsApp activity</p>
+                    <p className="text-slate-500 text-xs">ICP, Meta & Enriched leads with WhatsApp activity</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <DateRangePicker onUpdate={({ range }) => {
@@ -213,6 +213,7 @@ export default function WhatsappLeadsPage() {
                     <DropdownMenuContent align="end" className="w-44">
                         <DropdownMenuItem onClick={() => toggleFilter('campaign', 'icp_tracker')}>ICP Tracker {activeFilters.campaign.includes('icp_tracker') && "✓"}</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => toggleFilter('campaign', 'meta_lead_tracker')}>Meta Lead {activeFilters.campaign.includes('meta_lead_tracker') && "✓"}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toggleFilter('campaign', 'ENRICHED_LEADS')}>Enriched Leads {activeFilters.campaign.includes('ENRICHED_LEADS') && "✓"}</DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
 
@@ -256,6 +257,7 @@ export default function WhatsappLeadsPage() {
                                         const replied = hasLeadReplied(lead);
                                         const wlc = lead["Whatsapp Last Contacted"] || lead["whatsapp_last_contacted"];
                                         const isIcp = lead._source === 'icp_tracker';
+                                        const isEnriched = lead._source === 'ENRICHED_LEADS';
 
                                         return (
                                             <tr key={`${leadId}-${index}`} className="hover:bg-slate-50/80 transition-colors group cursor-pointer"
@@ -266,8 +268,8 @@ export default function WhatsappLeadsPage() {
                                                 <td className="px-3 py-2 font-semibold text-slate-900 text-xs">{leadName}</td>
                                                 <td className="px-3 py-2 text-slate-500 font-mono text-[11px]">{leadPhone}</td>
                                                 <td className="px-3 py-2">
-                                                    <Badge variant="outline" className={`text-[9px] uppercase font-bold px-1.5 py-0.5 ${isIcp ? 'bg-purple-50 text-purple-700 border-purple-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
-                                                        {isIcp ? 'ICP' : 'Meta'}
+                                                    <Badge variant="outline" className={`text-[9px] uppercase font-bold px-1.5 py-0.5 ${isIcp ? 'bg-purple-50 text-purple-700 border-purple-100' : isEnriched ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
+                                                        {isIcp ? 'ICP' : isEnriched ? 'ENRICHED' : 'Meta'}
                                                     </Badge>
                                                 </td>
                                                 <td className="px-3 py-2 text-center">
@@ -299,7 +301,7 @@ export default function WhatsappLeadsPage() {
                     <div className="px-3 py-2 border-t border-border bg-slate-50/50 flex items-center justify-between shrink-0">
                         <p className="text-[11px] text-slate-500">
                             <span className="font-bold text-slate-900">{filteredLeads.length}</span> leads
-                            {activeFilters.campaign.length > 0 && ` · ${activeFilters.campaign.map(c => c === 'icp_tracker' ? 'ICP' : 'Meta').join(', ')}`}
+                            {activeFilters.campaign.length > 0 && ` · ${activeFilters.campaign.map(c => c === 'icp_tracker' ? 'ICP' : c === 'ENRICHED_LEADS' ? 'Enriched' : 'Meta').join(', ')}`}
                         </p>
                         {totalPages > 1 && (
                             <div className="flex items-center gap-1">

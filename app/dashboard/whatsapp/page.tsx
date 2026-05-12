@@ -42,16 +42,20 @@ export default function WhatsappDashboardPage() {
         totalLeads: 0,
         icpLeadCount: 0,
         metaLeadCount: 0,
+        enrichedLeadCount: 0,
         leadsContacted: 0,
         icpLeadsContacted: 0,
         metaLeadsContacted: 0,
+        enrichedLeadsContacted: 0,
         messagesSent: 0,
         icpMessagesSent: 0,
         metaMessagesSent: 0,
+        enrichedMessagesSent: 0,
         botMessages: 0,
         totalReplies: 0,
         icpRepliedCount: 0,
         metaRepliedCount: 0,
+        enrichedRepliedCount: 0,
         replyRate: 0,
         readRate: 0,
         deliveredCount: 0,
@@ -175,10 +179,29 @@ export default function WhatsappDashboardPage() {
                     return false;
                 })
                 .map((l: any) => ({ ...l, _source: 'meta' }));
-            
-            const allWhatsappLeads = [...icpWhatsapp, ...metaWhatsapp];
+            // Filter Enriched leads
+            const enrichedWhatsapp = allLeads
+                .filter((l: any) => {
+                    if (l._table && l._table !== 'ENRICHED_LEADS') return false;
+                    for (let i = 1; i <= 5; i++) {
+                        if (l[`Whatsapp_${i}`]) return true;
+                    }
+                    for (let i = 1; i <= 25; i++) {
+                        if (l[`User_Replied_${i}`] && String(l[`User_Replied_${i}`]).toLowerCase() !== 'no') return true;
+                        if (l[`Bot_Replied_${i}`]) return true;
+                    }
+                    if (l.stages_passed?.some?.((s: string) => s.toLowerCase().includes("whatsapp"))) return true;
+                    for (let i = 1; i <= 12; i++) {
+                        if (l[`W.P_${i}`] || l.stage_data?.[`WhatsApp ${i}`]) return true;
+                    }
+                    return false;
+                })
+                .map((l: any) => ({ ...l, _source: 'enriched' }));
+
+            const allWhatsappLeads = [...icpWhatsapp, ...metaWhatsapp, ...enrichedWhatsapp];
             const icpCount = icpWhatsapp.length;
             const metaCount = metaWhatsapp.length;
+            const enrichedCount = enrichedWhatsapp.length;
             setLeads(allWhatsappLeads);
 
             // Date filtering
@@ -203,16 +226,19 @@ export default function WhatsappDashboardPage() {
             let messagesSent = 0;
             let icpMessagesSent = 0;
             let metaMessagesSent = 0;
+            let enrichedMessagesSent = 0;
             let botMessages = 0;
             let leadsContacted = 0;
             let icpLeadsContacted = 0;
             let metaLeadsContacted = 0;
+            let enrichedLeadsContacted = 0;
             let totalReplies = 0;
             let readCount = 0;
             let deliveredCount = 0;
             let waitingCount = 0;
             let icpRepliedCount = 0;
             let metaRepliedCount = 0;
+            let enrichedRepliedCount = 0;
             let failedCount = 0;
 
             filteredLeads.forEach((lead: any) => {
@@ -265,10 +291,12 @@ export default function WhatsappDashboardPage() {
                     leadsContacted++;
                     if (lead._source === 'icp') icpLeadsContacted++;
                     else if (lead._source === 'meta') metaLeadsContacted++;
+                    else if (lead._source === 'enriched') enrichedLeadsContacted++;
                 }
                 messagesSent += leadSentCount;
                 if (lead._source === 'icp') icpMessagesSent += leadSentCount;
                 else if (lead._source === 'meta') metaMessagesSent += leadSentCount;
+                else if (lead._source === 'enriched') enrichedMessagesSent += leadSentCount;
                 botMessages += leadBotCount;
 
                 const isReplied = hasLeadReplied(lead);
@@ -276,6 +304,7 @@ export default function WhatsappDashboardPage() {
                     totalReplies++;
                     if (lead._source === 'icp') icpRepliedCount++;
                     else if (lead._source === 'meta') metaRepliedCount++;
+                    else if (lead._source === 'enriched') enrichedRepliedCount++;
                 } else if (leadSentCount > 0) {
                     waitingCount++;
                 }
@@ -300,16 +329,20 @@ export default function WhatsappDashboardPage() {
                 totalLeads: filteredLeads.length,
                 icpLeadCount: icpCount,
                 metaLeadCount: metaCount,
+                enrichedLeadCount: enrichedCount,
                 leadsContacted,
                 icpLeadsContacted,
                 metaLeadsContacted,
+                enrichedLeadsContacted,
                 messagesSent,
                 icpMessagesSent,
                 metaMessagesSent,
+                enrichedMessagesSent,
                 botMessages,
                 totalReplies,
                 icpRepliedCount,
                 metaRepliedCount,
+                enrichedRepliedCount,
                 replyRate: leadsContacted > 0 ? (totalReplies / leadsContacted) * 100 : 0,
                 readRate: totalStatusMessages > 0 ? (statuses.read / totalStatusMessages) * 100 : 0,
                 deliveredCount,
@@ -366,7 +399,7 @@ export default function WhatsappDashboardPage() {
                 <TopCard
                     title="Total Reachouts"
                     value={loading ? "..." : stats.leadsContacted}
-                    subtitle={`ICP: ${stats.icpLeadsContacted} + Meta: ${stats.metaLeadsContacted}`}
+                    subtitle={`ICP: ${stats.icpLeadsContacted} | Meta: ${stats.metaLeadsContacted} | Enriched: ${stats.enrichedLeadsContacted}`}
                     icon={<Users className="h-5 w-5" />}
                     iconBg="bg-indigo-50 text-indigo-600"
                     onClick={() => router.push('/dashboard/whatsapp/leads')}
@@ -374,7 +407,7 @@ export default function WhatsappDashboardPage() {
                 <TopCard
                     title="Messages Sent"
                     value={loading ? "..." : stats.messagesSent}
-                    subtitle={`ICP: ${stats.icpMessagesSent} + Meta: ${stats.metaMessagesSent}`}
+                    subtitle={`ICP: ${stats.icpMessagesSent} | Meta: ${stats.metaMessagesSent} | Enriched: ${stats.enrichedMessagesSent}`}
                     icon={<Send className="h-5 w-5" />}
                     iconBg="bg-blue-50 text-blue-600"
                     onClick={() => router.push('/dashboard/whatsapp/sent')}
@@ -382,7 +415,7 @@ export default function WhatsappDashboardPage() {
                 <TopCard
                     title="Total Replies"
                     value={loading ? "..." : stats.totalReplies}
-                    subtitle={`ICP: ${stats.icpRepliedCount} + Meta: ${stats.metaRepliedCount}`}
+                    subtitle={`ICP: ${stats.icpRepliedCount} | Meta: ${stats.metaRepliedCount} | Enriched: ${stats.enrichedRepliedCount}`}
                     icon={<Reply className="h-5 w-5" />}
                     iconBg="bg-emerald-50 text-emerald-600"
                 />
@@ -446,34 +479,38 @@ export default function WhatsappDashboardPage() {
                         <div className="flex items-center justify-between mb-3 shrink-0">
                             <div>
                                 <h2 className="text-sm font-bold text-slate-900">Source Performance</h2>
-                                <p className="text-[10px] text-slate-500 mt-0.5">ICP vs Meta channel comparison</p>
+                                <p className="text-[10px] text-slate-500 mt-0.5">ICP vs Meta vs Enriched channel comparison</p>
                             </div>
                             <div className="p-1.5 bg-slate-50 rounded-lg"><BarChart3 className="h-4 w-4 text-slate-400" /></div>
                         </div>
 
                         <div className="space-y-3 flex-1 flex flex-col justify-center">
                             {[
-                                { label: 'Contacted', icp: stats.icpLeadsContacted, meta: stats.metaLeadsContacted, icpColor: '#6366f1', metaColor: '#3b82f6' },
-                                { label: 'Messages', icp: stats.icpMessagesSent, meta: stats.metaMessagesSent, icpColor: '#6366f1', metaColor: '#3b82f6' },
-                                { label: 'Replies', icp: stats.icpRepliedCount, meta: stats.metaRepliedCount, icpColor: '#6366f1', metaColor: '#3b82f6' },
-                                { label: 'Reply Rate', icp: stats.icpLeadsContacted > 0 ? Math.round((stats.icpRepliedCount / stats.icpLeadsContacted) * 100) : 0, meta: stats.metaLeadsContacted > 0 ? Math.round((stats.metaRepliedCount / stats.metaLeadsContacted) * 100) : 0, icpColor: '#6366f1', metaColor: '#3b82f6', isPercent: true },
+                                { label: 'Contacted', icp: stats.icpLeadsContacted, meta: stats.metaLeadsContacted, enriched: stats.enrichedLeadsContacted, icpColor: '#6366f1', metaColor: '#3b82f6', enrichedColor: '#10b981' },
+                                { label: 'Messages', icp: stats.icpMessagesSent, meta: stats.metaMessagesSent, enriched: stats.enrichedMessagesSent, icpColor: '#6366f1', metaColor: '#3b82f6', enrichedColor: '#10b981' },
+                                { label: 'Replies', icp: stats.icpRepliedCount, meta: stats.metaRepliedCount, enriched: stats.enrichedRepliedCount, icpColor: '#6366f1', metaColor: '#3b82f6', enrichedColor: '#10b981' },
+                                { label: 'Reply Rate', icp: stats.icpLeadsContacted > 0 ? Math.round((stats.icpRepliedCount / stats.icpLeadsContacted) * 100) : 0, meta: stats.metaLeadsContacted > 0 ? Math.round((stats.metaRepliedCount / stats.metaLeadsContacted) * 100) : 0, enriched: stats.enrichedLeadsContacted > 0 ? Math.round((stats.enrichedRepliedCount / stats.enrichedLeadsContacted) * 100) : 0, icpColor: '#6366f1', metaColor: '#3b82f6', enrichedColor: '#10b981', isPercent: true },
                             ].map((row, idx) => {
-                                const max = Math.max(row.icp, row.meta, 1);
+                                const max = Math.max(row.icp, row.meta, row.enriched, 1);
                                 return (
                                     <div key={idx} className="space-y-1">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[10px] font-black uppercase tracking-wider text-slate-700">{row.label}</span>
-                                            <div className="flex items-center gap-2.5 text-[9px] font-bold">
+                                            <div className="flex items-center gap-2 text-[9px] font-bold">
                                                 <span className="text-indigo-600">ICP: {row.icp}{(row as any).isPercent ? '%' : ''}</span>
                                                 <span className="text-blue-500">Meta: {row.meta}{(row as any).isPercent ? '%' : ''}</span>
+                                                <span className="text-emerald-600">Enr: {row.enriched}{(row as any).isPercent ? '%' : ''}</span>
                                             </div>
                                         </div>
                                         <div className="space-y-0.5">
-                                            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
                                                 <div className="h-full rounded-full transition-all duration-1000 ease-out" style={{ width: `${(row.icp / max) * 100}%`, backgroundColor: row.icpColor }} />
                                             </div>
-                                            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
                                                 <div className="h-full rounded-full transition-all duration-1000 ease-out" style={{ width: `${(row.meta / max) * 100}%`, backgroundColor: row.metaColor }} />
+                                            </div>
+                                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                                <div className="h-full rounded-full transition-all duration-1000 ease-out" style={{ width: `${(row.enriched / max) * 100}%`, backgroundColor: row.enrichedColor }} />
                                             </div>
                                         </div>
                                     </div>
@@ -481,9 +518,10 @@ export default function WhatsappDashboardPage() {
                             })}
                         </div>
 
-                        <div className="flex items-center justify-center gap-4 mt-2 pt-2 border-t border-slate-100 shrink-0">
-                            <div className="flex items-center gap-1.5"><div className="h-1.5 w-1.5 rounded-full bg-indigo-500" /><span className="text-[9px] font-bold text-slate-500 uppercase">ICP</span></div>
-                            <div className="flex items-center gap-1.5"><div className="h-1.5 w-1.5 rounded-full bg-blue-500" /><span className="text-[9px] font-bold text-slate-500 uppercase">Meta</span></div>
+                        <div className="flex items-center justify-center gap-3 mt-2 pt-2 border-t border-slate-100 shrink-0">
+                            <div className="flex items-center gap-1"><div className="h-1.5 w-1.5 rounded-full bg-indigo-500" /><span className="text-[9px] font-bold text-slate-500 uppercase">ICP</span></div>
+                            <div className="flex items-center gap-1"><div className="h-1.5 w-1.5 rounded-full bg-blue-500" /><span className="text-[9px] font-bold text-slate-500 uppercase">Meta</span></div>
+                            <div className="flex items-center gap-1"><div className="h-1.5 w-1.5 rounded-full bg-emerald-500" /><span className="text-[9px] font-bold text-slate-500 uppercase">Enriched</span></div>
                         </div>
                     </CardContent>
                 </Card>
@@ -593,7 +631,7 @@ function StatusBar({ label, value, total, color }: { label: string; value: numbe
 }
 
 function DeliveryStatusDetailedCard({ allLeads }: { allLeads: any[] }) {
-    const [localSource, setLocalSource] = useState<"icp" | "meta">("icp");
+    const [localSource, setLocalSource] = useState<"icp" | "meta" | "enriched">("icp");
     
     const cardStats = useMemo(() => {
         const filtered = allLeads.filter(l => l._source === localSource);
@@ -670,6 +708,12 @@ function DeliveryStatusDetailedCard({ allLeads }: { allLeads: any[] }) {
                                 className={cn("px-1.5 py-0.5 rounded-sm text-[8px] font-black transition-all uppercase", localSource === 'meta' ? "bg-white text-blue-600 shadow-sm" : "text-slate-400 hover:text-blue-600")}
                             >
                                 Meta
+                            </button>
+                            <button 
+                                onClick={() => setLocalSource("enriched")}
+                                className={cn("px-1.5 py-0.5 rounded-sm text-[8px] font-black transition-all uppercase", localSource === 'enriched' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-emerald-600")}
+                            >
+                                ENRICHED
                             </button>
                         </div>
                     </div>

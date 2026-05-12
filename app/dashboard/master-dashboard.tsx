@@ -284,12 +284,15 @@ export default function MasterDashboard() {
                 let whatsappReplyCount = 0;
                 let icpRepliedCount = 0;
                 let metaRepliedCount = 0;
+                let enrichedRepliedCount = 0;
                 let icpCount = 0;
                 let metaCount = 0;
+                let enrichedCount = 0;
 
                 filteredLeads.forEach((lead: any) => {
                     // Split counts for subtitle
                     if (lead._table === 'meta_lead_tracker' || lead._table === 'Meta Lead') metaCount++;
+                    else if (lead._table === 'ENRICHED_LEADS') enrichedCount++;
                     else icpCount++;
 
                     const stages = lead.stages_passed || [];
@@ -311,6 +314,12 @@ export default function MasterDashboard() {
                                 break;
                             }
                         }
+                        // Check new schema Whatsapp_1-5 (used by icp_tracker & ENRICHED_LEADS)
+                        if (!hasWhatsApp) {
+                            for (let i = 1; i <= 5; i++) {
+                                if (lead[`Whatsapp_${i}`]) { hasWhatsApp = true; break; }
+                            }
+                        }
                         if (!hasWhatsApp) {
                             for (let i = 1; i <= 6; i++) {
                                 if (lead[`W.P_${i}`] || lead.stage_data?.[`WhatsApp ${i}`]) {
@@ -329,10 +338,11 @@ export default function MasterDashboard() {
                     });
                     if (hasVoice) voiceCount++;
 
-                    // Count WhatsApp Replied Leads (Unique Leads - Exact match for WhatsApp dashboard)
+                    // Count WhatsApp Replied Leads (Unique Leads)
                     if (hasWPReplied(lead)) {
                         whatsappReplyCount++;
                         if (lead._table === 'meta_lead_tracker' || lead._table === 'Meta Lead') metaRepliedCount++;
+                        else if (lead._table === 'ENRICHED_LEADS') enrichedRepliedCount++;
                         else icpRepliedCount++;
                     }
                 });
@@ -362,8 +372,10 @@ export default function MasterDashboard() {
                     totalWhatsappReplies: whatsappReplyCount,
                     whatsappIcpReplied: icpRepliedCount,
                     whatsappMetaReplied: metaRepliedCount,
-                    totalReplies: emailReplyRowCount + whatsappReplyCount
-                });
+                    totalReplies: emailReplyRowCount + whatsappReplyCount,
+                    totalEnriched: enrichedCount,
+                    enrichedRepliedCount,
+                } as any);
 
             } catch (e) {
                 console.error("Dashboard calculation error", e);
@@ -409,7 +421,7 @@ export default function MasterDashboard() {
                     bg="bg-blue-50"
                     border="border-borderlue-100"
                     onClick={() => router.push('/dashboard/leads')}
-                    subtitle={`ICP: ${stats.totalICP} + Meta: ${stats.totalMeta}`}
+                    subtitle={`ICP: ${stats.totalICP} | Meta: ${stats.totalMeta} | Enriched: ${(stats as any).totalEnriched || 0}`}
                 />
                 <MetricCard
                     title="Total Emails Sent"
@@ -455,7 +467,7 @@ export default function MasterDashboard() {
                     bg="bg-indigo-50"
                     border="border-indigo-100"
                     onClick={() => setIsRepliesModalOpen(true)}
-                    subtitle={`Email: ${stats.totalEmailReplies} + WA: ${stats.totalWhatsappReplies} (ICP: ${stats.whatsappIcpReplied || 0} Meta: ${stats.whatsappMetaReplied || 0})`}
+                    subtitle={`Email: ${stats.totalEmailReplies} + WA: ${stats.totalWhatsappReplies} (ICP: ${stats.whatsappIcpReplied || 0} Meta: ${stats.whatsappMetaReplied || 0} Enriched: ${(stats as any).enrichedRepliedCount || 0})`}
                 />
             </div>
 

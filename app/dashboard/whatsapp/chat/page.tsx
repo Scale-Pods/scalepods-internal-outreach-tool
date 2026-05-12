@@ -36,7 +36,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { subDays, startOfDay, endOfDay } from "date-fns";
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 
-type SourceTable = 'icp_tracker' | 'meta_lead_tracker';
+type SourceTable = 'icp_tracker' | 'meta_lead_tracker' | 'ENRICHED_LEADS';
 
 // --- Sorting & Activity Helpers ---
 const getMsgDate = (raw: any) => {
@@ -219,6 +219,26 @@ export default function WhatsappChatPage() {
                     if (lead[`Bot_Replied_${i}`]) return true;
                 }
                 // Legacy W.P_ fields
+                if (lead.stages_passed?.some?.((s: string) => s.toLowerCase().includes("whatsapp"))) return true;
+                for (let i = 1; i <= 12; i++) {
+                    if (lead[`W.P_${i}`] || lead.stage_data?.[`WhatsApp ${i}`]) return true;
+                }
+                return false;
+            });
+            setLeads(wpLeads);
+        } else if (sourceTable === 'ENRICHED_LEADS') {
+            if (loadingLeads) return;
+            const wpLeads = allLeads.filter(l => {
+                const lead = l as any;
+                if (lead._table && lead._table !== 'ENRICHED_LEADS') return false;
+
+                for (let i = 1; i <= 5; i++) {
+                    if (lead[`Whatsapp_${i}`]) return true;
+                }
+                for (let i = 1; i <= 25; i++) {
+                    if (lead[`User_Replied_${i}`] && String(lead[`User_Replied_${i}`]).toLowerCase() !== 'no') return true;
+                    if (lead[`Bot_Replied_${i}`]) return true;
+                }
                 if (lead.stages_passed?.some?.((s: string) => s.toLowerCase().includes("whatsapp"))) return true;
                 for (let i = 1; i <= 12; i++) {
                     if (lead[`W.P_${i}`] || lead.stage_data?.[`WhatsApp ${i}`]) return true;
@@ -512,6 +532,17 @@ export default function WhatsappChatPage() {
                             <Database className="h-3.5 w-3.5" />
                             Meta Lead
                         </button>
+                        <button
+                            onClick={() => { setSourceTable('ENRICHED_LEADS'); setCurrentPage(1); }}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                                sourceTable === 'ENRICHED_LEADS'
+                                    ? 'bg-white text-slate-900 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                            <Database className="h-3.5 w-3.5" />
+                            Enriched Leads
+                        </button>
                     </div>
                     <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
                     <Button variant="outline" size="sm" onClick={() => window.location.reload()} className="gap-2 h-10 px-4">
@@ -785,7 +816,7 @@ function CustomerRow({ lead: leadRaw, onClick, loopMap = {} }: { lead: Consolida
     const displayPhone = lead.phone || lead.Phone || lead.company_phone_number || '';
     const displayName = lead.name || lead.Name || lead.full_name || displayPhone || 'Unknown';
     // Use _table source for Loop column as requested
-    const displayLoop = lead._table === 'icp_tracker' ? 'ICP Tracker' : 'Meta Lead';
+    const displayLoop = lead._table === 'icp_tracker' ? 'ICP Tracker' : lead._table === 'ENRICHED_LEADS' ? 'Enriched Leads' : 'Meta Lead';
 
     return (
         <tr className="hover:bg-slate-50 transition-colors cursor-pointer group" onClick={onClick}>

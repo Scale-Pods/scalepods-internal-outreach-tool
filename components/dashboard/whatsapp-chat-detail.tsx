@@ -19,7 +19,7 @@ import { useData } from "@/context/DataContext";
 interface WhatsAppChatDetailProps {
     customerId: string;
     onClose?: () => void;
-    sourceTable?: 'icp_tracker' | 'meta_lead_tracker';
+    sourceTable?: 'icp_tracker' | 'meta_lead_tracker' | 'ENRICHED_LEADS';
     metaLeads?: any[];
 }
 
@@ -110,7 +110,7 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
             const f = found as any;
             let seq = 1;
 
-            if (sourceTable === 'icp_tracker') {
+            if (sourceTable === 'icp_tracker' || sourceTable === 'ENRICHED_LEADS') {
                 // --- ICP Tracker Flow ---
                 // Step 1: Whatsapp_1 through Whatsapp_5 (bot drip messages)
                 let dripBroken = false;
@@ -220,7 +220,7 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                 </div>
                 <div className="flex items-center gap-2">
                     <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-none text-[10px] font-bold uppercase">
-                        {sourceTable === 'icp_tracker' ? 'ICP Tracker' : 'Meta Lead'}
+                        {sourceTable === 'icp_tracker' ? 'ICP Tracker' : sourceTable === 'ENRICHED_LEADS' ? 'Enriched Leads' : 'Meta Lead'}
                     </Badge>
                     <Button
                         variant="ghost"
@@ -319,7 +319,7 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                                 <div>
                                     <span className="text-[10px] font-bold text-slate-400 uppercase">Source Table</span>
                                     <p className="font-bold text-blue-600 mt-1 text-xs">
-                                        {sourceTable === 'icp_tracker' ? 'icp_tracker' : 'meta_lead_tracker'}
+                                        {sourceTable === 'icp_tracker' ? 'icp_tracker' : sourceTable === 'ENRICHED_LEADS' ? 'ENRICHED_LEADS' : 'meta_lead_tracker'}
                                     </p>
                                 </div>
                             </div>
