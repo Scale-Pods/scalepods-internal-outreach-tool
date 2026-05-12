@@ -24,6 +24,11 @@ function getRateInfo(phoneNumber: string) {
     return matches[0];
 }
 
+function getCountryName(phoneNumber: string) {
+    const rate = getRateInfo(phoneNumber);
+    return rate?.Country || "Unknown";
+}
+
 function calculateTelephonyCost(durationSecs: number, phoneNumber: string, isInbound: boolean, providerNumber?: string) {
     if (isInbound) return durationSecs > 0 ? 0.02 : 0;
     if (!durationSecs || durationSecs <= 0) return 0;
@@ -169,8 +174,8 @@ async function fetchArchive(from: Date, to: Date) {
     const secretKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
     if (!supabaseUrl || !secretKey) return [];
 
-    // Use created_at for filtering as requested
-    const url = `${supabaseUrl.replace(/\/$/, "")}/rest/v1/vapi_call_logs?created_at=gte.${from.toISOString()}&created_at=lte.${to.toISOString()}&order=started_at.desc`;
+    // Use started_at for filtering as requested
+    const url = `${supabaseUrl.replace(/\/$/, "")}/rest/v1/vapi_call_logs?started_at=gte.${from.toISOString()}&started_at=lte.${to.toISOString()}&order=started_at.desc`;
     const headers = { 
         "apikey": secretKey, 
         "Authorization": `Bearer ${secretKey}`,
@@ -182,25 +187,42 @@ async function fetchArchive(from: Date, to: Date) {
         if (res.ok) {
             const data = await res.json();
             const list = Array.isArray(data) ? data : [];
-            return list.map((db: any) => ({
-                id: db.id,
-                name: db.customer_name,
-                startedAt: db.started_at,
-                durationSeconds: db.duration_seconds,
-                cost: db.cost_usd > 0 ? `$${db.cost_usd.toFixed(3)}` : "$0.00",
-                costValue: db.cost_usd,
-                source: db.source,
-                status: db.status,
-                phone: db.customer_phone,
-                customer_number: db.customer_phone,
-                callSummary: db.summary,
-                audio_url: db.recording_url,
-                transcript: db.transcript,
-                type: db.type,
-                assistantId: db.assistantId,
-                vapi_account: db.vapi_account,
-                createdAt: db.created_at
-            }));
+            return list.map((db: any) => {
+                const duration = db.duration_seconds || 0;
+                // Agent Cost from vapi_call_logs
+                const agentCost = db.cost_usd || 0;
+                
+                // Estimate Telephony Cost (Twilio)
+                const telCost = calculateTelephonyCost(duration, db.customer_phone, db.type === 'inbound');
+                
+                // Total Cost is Agent + Telephony
+                const totalCost = agentCost + telCost;
+
+                return {
+                    id: db.id,
+                    name: db.customer_name,
+                    startedAt: db.started_at,
+                    durationSeconds: duration,
+                    cost: totalCost > 0 ? `$${totalCost.toFixed(3)}` : "$0.00",
+                    costValue: totalCost,
+                    breakdown: {
+                        agent: agentCost,
+                        telephony: telCost
+                    },
+                    source: db.source,
+                    status: db.status,
+                    phone: db.customer_phone,
+                    customer_number: db.customer_phone,
+                    callSummary: db.summary,
+                    audio_url: db.recording_url,
+                    transcript: db.transcript,
+                    type: db.type,
+                    assistantId: db.assistantId,
+                    vapi_account: db.vapi_account,
+                    createdAt: db.created_at,
+                    country: getCountryName(db.customer_phone)
+                };
+            });
 
         }
     } catch (e) {

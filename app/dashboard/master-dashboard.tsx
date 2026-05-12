@@ -61,7 +61,7 @@ export default function MasterDashboard() {
         to: new Date(),
     });
 
-    const { leads: allLeads, calls: allCalls, loadingLeads, loadingCalls, refreshAll, refreshCalls, maqsamBalance, loadingBalances } = useData();
+    const { leads: allLeads, calls: allCalls, loadingLeads, loadingCalls, refreshAll, refreshCalls, voiceBalance, maqsamBalance, loadingBalances } = useData();
     const [leads, setLeads] = useState<any[]>([]);
     const [metaLeads, setMetaLeads] = useState<any[]>([]);
     const [acquisitionChartData, setAcquisitionChartData] = useState<any[]>([]);
@@ -83,6 +83,12 @@ export default function MasterDashboard() {
     });
     const loading = loadingLeads || loadingCalls;
     const [dbEmailReplies, setDbEmailReplies] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (voiceBalance) {
+            setStats(prev => ({ ...prev, vapiBalance: voiceBalance.vapi?.balance || 0 }));
+        }
+    }, [voiceBalance]);
 
     // Fetch Email DB data for real counts
     useEffect(() => {
@@ -240,10 +246,9 @@ export default function MasterDashboard() {
 
                 if (!loadingCalls && Array.isArray(allCalls)) {
                     const filteredCalls = allCalls.filter((call: any) => {
-                        if (call.source !== 'vapi') return false;
                         if (!dateRange?.from) return true;
                         
-                        const dateStr = call.startedAt || (call.start_time_unix_secs ? new Date(call.start_time_unix_secs * 1000).toISOString() : null);
+                        const dateStr = call.startedAt || call.createdAt;
                         if (!dateStr) return false;
 
                         const callDate = new Date(dateStr);
@@ -396,7 +401,7 @@ export default function MasterDashboard() {
 
                 <MetricCard
                     title="Total Leads"
-                    value={loading ? "..." : (stats.totalLeads + metaLeads.length).toLocaleString()}
+                    value={loading ? "..." : stats.totalLeads.toLocaleString()}
                     change="Real-time"
                     isUp={true}
                     icon={<Users className="h-6 w-6" />}
@@ -404,7 +409,7 @@ export default function MasterDashboard() {
                     bg="bg-blue-50"
                     border="border-borderlue-100"
                     onClick={() => router.push('/dashboard/leads')}
-                    subtitle={`ICP: ${stats.totalLeads} + Meta: ${metaLeads.length}`}
+                    subtitle={`ICP: ${stats.totalICP} + Meta: ${stats.totalMeta}`}
                 />
                 <MetricCard
                     title="Total Emails Sent"

@@ -57,6 +57,15 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
         } else if (data.analysis && Array.isArray(data.analysis.transcript)) {
             rawMessages = data.analysis.transcript;
         } else if (typeof data.transcript === 'string') {
+            // Split string transcript by "AI:" and "User:" markers
+            const parts = data.transcript.split(/(?=AI:|User:)/g);
+            if (parts.length > 1) {
+                return parts.map((p: string) => {
+                    const role = p.trim().startsWith('AI:') ? 'assistant' : 'user';
+                    const message = p.trim().replace(/^(AI:|User:)\s*/, '');
+                    return { role, message };
+                });
+            }
             return [{ role: 'assistant', message: data.transcript }];
         }
 
@@ -152,12 +161,12 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
 
         toName = assistantName;
         toSubInfo = assistantNumber;
-        toLabel = "To (Assistant)";
+        toLabel = `To (Assistant: ${assistantNumber})`;
     } else {
         // We call the customer (or a Web Call simulating us calling)
         fromName = assistantName;
         fromSubInfo = assistantNumber;
-        fromLabel = "From (Assistant)";
+        fromLabel = `From (Assistant: ${assistantNumber})`;
 
         toName = extractedGuestName;
         toSubInfo = guestNumber;

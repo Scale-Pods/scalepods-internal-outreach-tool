@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Phone, Clock, DollarSign, CheckCircle, PhoneIncoming } from "lucide-react";
+import { Phone, Clock, DollarSign, CheckCircle, PhoneIncoming, TrendingUp } from "lucide-react";
 import { calculateDuration, formatDuration, cn } from "@/lib/utils";
 import { SPLoader } from "@/components/sp-loader";
 import {
@@ -16,7 +16,7 @@ import { useData } from "@/context/DataContext";
 export default function VoiceAnalyticsPage() {
     const { calls: globalCalls, loadingCalls, voiceBalance, leads, refreshCalls } = useData();
     const [statusFilter, setStatusFilter] = useState("all");
-    const [providerFilter, setProviderFilter] = useState("vapi");
+    const [providerFilter, setProviderFilter] = useState("all");
     const [calls, setCalls] = useState<any[]>([]);
     const [loadingLocal, setLoadingLocal] = useState(false);
     const loading = loadingLocal || loadingCalls;
@@ -27,15 +27,17 @@ export default function VoiceAnalyticsPage() {
 
     const [volumeData, setVolumeData] = useState<any[]>([]);
     const [durationData, setDurationData] = useState<any[]>([]);
-    const [stats, setStats] = useState({
-        totalCalls: 0, avgDuration: 0, totalCost: 0, successRate: 0,
-        typesData: [], vapiBalance: 0, inboundDuration: 0, outboundDuration: 0,
-        pickUpRate: 0, completionRate: 0, positiveRate: 0, lifetimeVapiUsed: 0,
+    const [icpStats, setIcpStats] = useState<any>({ pickUpRate: 0, completionRate: 0, positiveRate: 0, totalCalls: 0 });
+    const [enrichedStats, setEnrichedStats] = useState<any>({ pickUpRate: 0, completionRate: 0, positiveRate: 0, totalCalls: 0 });
+    const [stats, setStats] = useState<any>({
+        totalCalls: 0, avgDuration: 0, totalCost: 0,
+        inboundDuration: 0, outboundDuration: 0,
+        lifetimeVapiUsed: 0, vapiBalance: 0
     });
 
     useEffect(() => {
         if (voiceBalance) {
-            setStats(prev => ({ ...prev, vapiBalance: voiceBalance.vapi?.balance || 0 }));
+            setStats((prev: any) => ({ ...prev, vapiBalance: voiceBalance.vapi?.balance || 0 }));
         }
     }, [voiceBalance]);
 
@@ -57,14 +59,93 @@ export default function VoiceAnalyticsPage() {
 
         setCalls(filteredCalls);
         processAnalytics(filteredCalls);
-    }, [globalCalls, loadingCalls, dateRange, providerFilter]);
+    }, [globalCalls, loadingCalls, dateRange, providerFilter, leads]); // Added leads dependency
+
+    const calculateTableStats = (tableLeads: any[], archiveCalls: any[]) => {
+        if (archiveCalls.length === 0 && tableLeads.length === 0) return { pickUpRate: 0, completionRate: 0, positiveRate: 0, totalCalls: 0 };
+        
+        const archiveCount = archiveCalls.length;
+        const pickUpCount = archiveCalls.filter((c: any) => (c.durationSeconds || 0) > 18).length;
+        const completionCount = archiveCalls.filter((c: any) => {
+            const status = String(c.status || "").toLowerCase();
+            return status.includes('assistant-ended-call') || status.includes('customer-ended-call') || 
+                   status.includes('assistant ended call') || status.includes('customer ended call');
+        }).length;
+
+        const positiveCount = tableLeads.filter((l: any) => {
+            const s1 = String(l.voice_sentiment || "").trim();
+            const s2 = String(l.voice2_sentiment || "").trim();
+            const isPos = (s: string) => s.toLowerCase().includes('expression of interest') || s.toLowerCase().includes('callback- plan postponed');
+            return isPos(s1) || isPos(s2);
+        }).length;
+
+        const effectiveTotal = Math.max(archiveCount, tableLeads.length);
+
+        return {
+            totalCalls: effectiveTotal,
+            pickUpRate: archiveCount > 0 ? (pickUpCount / archiveCount) * 100 : 0,
+            completionRate: archiveCount > 0 ? (completionCount / archiveCount) * 100 : 0,
+            positiveRate: effectiveTotal > 0 ? (positiveCount / effectiveTotal) * 100 : 0
+        };
+    };
 
     const processAnalytics = (data: any[]) => {
-        const totalCalls = data.length;
-        let totalDuration = 0, totalCredits = 0, successCount = 0;
+        const totalCallsArchive = data.length;
+        let totalDuration = 0, totalCredits = 0;
         const dayMap = new Map();
         const durationBuckets = { '0-30s': 0, '30s-1m': 0, '1-2m': 0, '2-5m': 0, '5m+': 0 };
         let inboundSum = 0, outboundSum = 0;
+
+        // Split leads by table
+        const from = dateRange?.from ? startOfDay(new Date(dateRange.from)) : null;
+        const to = dateRange?.to ? startOfDay(new Date(dateRange.to)) : from;
+        if (to) to.setHours(23, 59, 59, 999);
+
+        const filterLeadsByDate = (l: any) => {
+            if (!from || !to) return true;
+            const d1 = l.Voice_1_Date ? new Date(l.Voice_1_Date) : null;
+            const d2 = l.Voice_2_Date ? new Date(l.Voice_2_Date) : null;
+            const d3 = l.Voice_3_Date ? new Date(l.Voice_3_Date) : null;
+            return (d1 && d1 >= from && d1 <= to) || (d2 && d2 >= from && d2 <= to) || (d3 && d3 >= from && d3 <= to);
+        };
+
+        const icpLeads = leads?.filter(l => l._table === 'icp_tracker' && filterLeadsByDate(l)) || [];
+        const enrichedLeads = leads?.filter(l => l._table === 'ENRICHED_LEADS' && filterLeadsByDate(l)) || [];
+
+        // Distribute archive calls to tables based on phone number matching (Robust check)
+        const getCleanPhones = (ls: any[]) => {
+            const set = new Set<string>();
+            ls.forEach(l => {
+                const p1 = String(l.phone || "").replace(/\D/g, '');
+                const p2 = String(l.personal_phone || "").replace(/\D/g, '');
+                const p3 = String(l.company_phone_number || "").replace(/\D/g, '');
+                if (p1) set.add(p1);
+                if (p2) set.add(p2);
+                if (p3) set.add(p3);
+            });
+            return set;
+        };
+
+        const icpPhones = getCleanPhones(icpLeads);
+        const enrichedPhones = getCleanPhones(enrichedLeads);
+
+        const icpArchive = data.filter(c => {
+            const cp = String(c.phone || "").replace(/\D/g, '');
+            if (!cp) return false;
+            // Robust check: full match or last 9 digits match
+            return Array.from(icpPhones).some(p => p === cp || (cp.length > 8 && p.endsWith(cp.slice(-9))) || (p.length > 8 && cp.endsWith(p.slice(-9))));
+        });
+        const enrichedArchive = data.filter(c => {
+            const cp = String(c.phone || "").replace(/\D/g, '');
+            if (!cp) return false;
+            return Array.from(enrichedPhones).some(p => p === cp || (cp.length > 8 && p.endsWith(cp.slice(-9))) || (p.length > 8 && cp.endsWith(p.slice(-9))));
+        });
+
+        console.log(`Analytics Debug: ICP Leads: ${icpLeads.length}, ICP Matched Calls: ${icpArchive.length}`);
+        console.log(`Analytics Debug: Enriched Leads: ${enrichedLeads.length}, Enriched Matched Calls: ${enrichedArchive.length}`);
+
+        setIcpStats(calculateTableStats(icpLeads, icpArchive));
+        setEnrichedStats(calculateTableStats(enrichedLeads, enrichedArchive));
 
         let lifetimeVapiUsedSum = 0;
         globalCalls.forEach((call: any) => {
@@ -78,21 +159,16 @@ export default function VoiceAnalyticsPage() {
 
         data.forEach(call => {
             const dateStr = call.createdAt || call.startedAt || null;
-
             const time = dateStr ? format(new Date(dateStr), 'MMM dd') : 'N/A';
             const dur = calculateDuration(call);
-
             let cost = 0;
             if (typeof call.cost === 'string') cost = parseFloat(call.cost.replace(/[^\d.]/g, '')) || 0;
             else if (typeof call.cost === 'number') cost = call.cost;
 
-            if (['done', 'ended', 'completed', 'success', 'answered'].includes(call.status)) successCount++;
             totalDuration += dur;
             totalCredits += cost;
 
-            const raw = call.raw || call;
-            const directionProp = (raw.telephony?.direction || raw.direction || "").toLowerCase();
-            const isInbound = call.isInbound === true || directionProp.includes('inbound') || directionProp.includes('incoming');
+            const isInbound = call.isInbound === true || (call.type || "").toLowerCase().includes('inbound');
             if (isInbound) inboundSum += dur; else outboundSum += dur;
 
             const dayObj = dayMap.get(time) || { calls: 0, credits: 0 };
@@ -105,52 +181,42 @@ export default function VoiceAnalyticsPage() {
             else durationBuckets['5m+']++;
         });
 
-        setStats(prev => ({
-            ...prev,
-            totalCalls, avgDuration: totalCalls > 0 ? totalDuration / totalCalls : 0,
+        const newStats = {
+            totalCalls: totalCallsArchive,
+            avgDuration: totalCallsArchive > 0 ? totalDuration / totalCallsArchive : 0,
             totalCost: totalCredits,
-            successRate: totalCalls > 0 ? Math.round((successCount / totalCalls) * 100) : 0,
-            inboundDuration: inboundSum, outboundDuration: outboundSum,
+            inboundDuration: inboundSum,
+            outboundDuration: outboundSum,
             lifetimeVapiUsed: lifetimeVapiUsedSum,
-            pickUpRate: totalCalls > 0 ? (data.filter((c: any) => calculateDuration(c) > 18).length / totalCalls) * 100 : 0,
-            completionRate: totalCalls > 0 ? (data.filter((c: any) => {
-                const reason = c.endedReason || c.raw?.endedReason;
-                return reason === 'customer-ended-call' || reason === 'assistant-ended-call';
-            }).length / totalCalls) * 100 : 0,
-            positiveRate: (() => {
-                if (totalCalls === 0 || !leads || leads.length === 0) return 0;
-                const positiveCount = leads.filter((l: any) =>
-                    l.voice_sentiment === 'Expression of Interest' ||
-                    l.voice_sentiment === 'Callback- Plan Postponed' ||
-                    l.voice2_sentiment === 'Expression of Interest' ||
-                    l.voice2_sentiment === 'Callback- Plan Postponed'
-                ).length;
-                return (positiveCount / totalCalls) * 100;
-            })()
+        };
+
+        setStats((prev: any) => ({
+            ...prev,
+            ...newStats
         }));
 
         const sortedDays = Array.from(dayMap.entries()).sort((a, b) => {
             return new Date(`${a[0]} ${new Date().getFullYear()}`).getTime() - new Date(`${b[0]} ${new Date().getFullYear()}`).getTime();
         });
 
-        setVolumeData(sortedDays.map(([name, obj]) => ({ name, value: obj.calls })));
+        setVolumeData(sortedDays.length ? sortedDays.map(([name, obj]) => ({ name, value: obj.calls })) : [{ name: 'No data', value: 0 }]);
         setDurationData(Object.entries(durationBuckets).map(([name, value]) => ({ name, value })));
     };
+
+    const earliestCallDate = calls.length > 0 
+        ? new Date(Math.min(...calls.map(c => new Date(c.createdAt || c.startedAt).getTime())))
+        : null;
 
     return (
         <div className="h-full flex flex-col overflow-hidden bg-white p-6 space-y-6">
             {loading && <SPLoader />}
-            {/* Header section with refined spacing */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
+            {/* Header section */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Voice Analytics</h1>
-                    <p className="text-slate-500 text-sm mt-1">Comprehensive insights into voice agent performance</p>
+                    <p className="text-slate-500 text-sm mt-1">Comparative performance across lead sources</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 px-3 h-10 border border-border rounded-md bg-white text-sm font-medium text-slate-700 shadow-sm">
-                        <Phone className="h-4 w-4 text-blue-600" />
-                        <span>Vapi AI</span>
-                    </div>
+                <div className="flex items-center gap-3">
                     <DateRangePicker onUpdate={(values) => {
                         setDateRange(values.range);
                         if (values.range?.from) {
@@ -164,91 +230,51 @@ export default function VoiceAnalyticsPage() {
                 </div>
             </div>
 
-            {/* Key Metric Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Total Calls" value={stats.totalCalls} change="Historical" icon={<Phone className="h-5 w-5" />} color="text-blue-600" bg="bg-blue-50" />
-                <StatCard title="Total Call Duration" value={formatDuration(stats.inboundDuration + stats.outboundDuration)} change="All Inbound + Outbound" icon={<Clock className="h-5 w-5" />} color="text-slate-600" bg="bg-slate-50" />
-                <StatCard title="Avg Duration" value={`${Math.round(stats.avgDuration)}s`} change="All Time" icon={<Clock className="h-5 w-5" />} color="text-purple-600" bg="bg-purple-50" />
-                <StatCard
-                    title="Vapi Credits Used"
-                    value={`$${(stats as any).lifetimeVapiUsed?.toFixed(2) || '0.00'}`}
-                    change="All Time Count"
-                    icon={<DollarSign className="h-5 w-5" />}
-                    color="text-blue-600"
-                    bg="bg-blue-50"
+            {/* Global Metrics Row */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <StatCard 
+                    title="Total Calls" 
+                    value={stats.totalCalls} 
+                    change={earliestCallDate ? `Since ${format(earliestCallDate, 'MMM dd')}` : "Total logged interactions"} 
+                    icon={<Phone className="h-5 w-5" />} 
+                    color="text-blue-600" 
+                    bg="bg-blue-50" 
                 />
+                <StatCard title="Total Duration" value={formatDuration(stats.inboundDuration + stats.outboundDuration)} change="Talk Time" icon={<Clock className="h-5 w-5" />} color="text-slate-600" bg="bg-slate-50" />
+                <StatCard title="Avg Duration" value={`${Math.round(stats.avgDuration)}s`} change="Per Call" icon={<Clock className="h-5 w-5" />} color="text-purple-600" bg="bg-purple-50" />
+                <StatCard title="Credits Used" value={`$${stats.lifetimeVapiUsed?.toFixed(2)}`} change="Estimated spend" icon={<DollarSign className="h-5 w-5" />} color="text-emerald-600" bg="bg-emerald-50" />
             </div>
 
-            {/* Performance Conversion Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <StatCard 
-                    title="Call Pick-up Rate" 
-                    value={`${stats.pickUpRate.toFixed(1)}%`} 
-                    change="Duration > 18s" 
-                    icon={<PhoneIncoming className="h-5 w-5" />} 
-                    color="text-emerald-600" 
-                    bg="bg-emerald-50" 
-                />
-                <StatCard 
-                    title="Call Completion Rate" 
-                    value={`${stats.completionRate.toFixed(1)}%`} 
-                    change="Ended by User/AI" 
-                    icon={<CheckCircle className="h-5 w-5" />} 
-                    color="text-cyan-600" 
-                    bg="bg-cyan-50" 
-                />
-                <StatCard 
-                    title="Positive Response Rate" 
-                    value={`${stats.positiveRate.toFixed(1)}%`} 
-                    change="Interested Leads( EOI & Callback )" 
-                    icon={<DollarSign className="h-5 w-5" />} 
-                    color="text-amber-600" 
-                    bg="bg-amber-50" 
-                />
+            {/* Split Panels for ICP_TRACKER and ENRICHED_LEADS - Stacked into 2 rows */}
+            <div className="grid grid-cols-1 gap-8">
+                {/* ICP Tracker Panel */}
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2 px-1">
+                        <div className="h-2 w-2 rounded-full bg-blue-500" />
+                        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Source: icp_tracker</h2>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <StatCard title="Call Pick-up Rate" value={`${icpStats.pickUpRate.toFixed(1)}%`} change="Duration > 18s" icon={<PhoneIncoming className="h-5 w-5" />} color="text-blue-600" bg="bg-blue-50" />
+                        <StatCard title="Call Completion Rate" value={`${icpStats.completionRate.toFixed(1)}%`} change="Ended by User/AI" icon={<CheckCircle className="h-5 w-5" />} color="text-blue-600" bg="bg-blue-50" />
+                        <StatCard title="Positive Response Rate" value={`${icpStats.positiveRate.toFixed(1)}%`} change="Interested Leads" icon={<TrendingUp className="h-5 w-5" />} color="text-blue-600" bg="bg-blue-50" />
+                    </div>
+                </div>
+
+                {/* ENRICHED_LEADS Panel */}
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2 px-1">
+                        <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Source: ENRICHED_LEADS</h2>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <StatCard title="Call Pick-up Rate" value={`${enrichedStats.pickUpRate.toFixed(1)}%`} change="Duration > 18s" icon={<PhoneIncoming className="h-5 w-5" />} color="text-emerald-600" bg="bg-emerald-50" />
+                        <StatCard title="Call Completion Rate" value={`${enrichedStats.completionRate.toFixed(1)}%`} change="Ended by User/AI" icon={<CheckCircle className="h-5 w-5" />} color="text-emerald-600" bg="bg-emerald-50" />
+                        <StatCard title="Positive Response Rate" value={`${enrichedStats.positiveRate.toFixed(1)}%`} change="Interested Leads" icon={<TrendingUp className="h-5 w-5" />} color="text-emerald-600" bg="bg-emerald-50" />
+                    </div>
+                </div>
             </div>
 
-            {/* Charts Section - Fixed to fit screen */}
-            <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-6 pb-2">
-                {/* Call Volume Trends */}
-                <Card className="border-border flex flex-col overflow-hidden">
-                    <CardHeader className="py-2 shrink-0">
-                        <CardTitle className="text-base">Call Volume Trends</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex-1 min-h-0 p-4 pt-0">
-                        <div className="w-full h-full min-h-[150px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={volumeData.length ? volumeData : [{ name: 'No data', value: 0 }]}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                                    <YAxis axisLine={false} tickLine={false} />
-                                    <Tooltip />
-                                    <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={3} dot={false} />
-                                </LineChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Call Duration Distribution */}
-                <Card className="border-border flex flex-col overflow-hidden">
-                    <CardHeader className="py-2 shrink-0">
-                        <CardTitle className="text-base">Duration Distribution</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex-1 min-h-0 p-4 pt-0">
-                        <div className="w-full h-full min-h-[150px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={durationData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                                    <YAxis axisLine={false} tickLine={false} />
-                                    <Tooltip cursor={{ fill: '#f8fafc' }} />
-                                    <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} barSize={40} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
+            
         </div>
     );
 }

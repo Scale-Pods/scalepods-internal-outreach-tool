@@ -15,7 +15,7 @@ import { calculateDuration, formatDuration, cn } from "@/lib/utils";
 import { useData } from "@/context/DataContext";
 
 export default function VoiceDashboardPage() {
-    const [providerFilter, setProviderFilter] = useState("vapi");
+    const [providerFilter, setProviderFilter] = useState("all");
     const [stats, setStats] = useState({
         totalCalls: 0, totalDuration: 0, avgDuration: 0, totalCost: 0, avgCost: 0,
         successRate: 0, completedCalls: 0, vapiBalance: 0, lifetimeCostVapi: 0
@@ -56,11 +56,17 @@ export default function VoiceDashboardPage() {
         const filteredCalls = globalCalls.filter((call: any) => {
             if (providerFilter !== "all" && call.source !== providerFilter) return false;
             if (!dateRange?.from) return true;
+            
             const dateStr = call.createdAt || call.startedAt;
             if (!dateStr) return false;
+            
             const callDate = new Date(dateStr);
-            return callDate >= startOfDay(new Date(dateRange.from)) && callDate <= endOfDay(new Date(dateRange.to || dateRange.from));
-
+            const start = new Date(dateRange.from);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(dateRange.to || dateRange.from);
+            end.setHours(23, 59, 59, 999);
+            
+            return callDate >= start && callDate <= end;
         });
 
         filteredCalls.forEach((call: any) => {

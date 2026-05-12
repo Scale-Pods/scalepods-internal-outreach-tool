@@ -23,7 +23,9 @@ const DynamicRowCells = ({ call, leads }: { call: any, leads: any[] }) => {
     // RESOLVE: Prioritize backend names, then Leads database, then Vapi/Maqsam metadata
     let guestName = call.name || "Guest";
     const guestNum = call.phone || "Unknown";
-    const realType = call.type || (call.isInbound ? "Inbound" : "Outbound");
+    let realType = call.type || (call.isInbound ? "Inbound" : "Outbound");
+    if (realType.toLowerCase().includes('outbound')) realType = 'Outbound';
+    if (realType.toLowerCase().includes('inbound')) realType = 'Inbound';
     const isInboundState = call.isInbound;
 
     // Eagerly resolve name from our Leads database based on phone if Guest
@@ -159,7 +161,7 @@ export default function VoiceLogsPage() {
             if (providerFilter !== "all" && call.source !== providerFilter) return false;
 
             if (dateRange?.from) {
-                const callDate = new Date(call.createdAt || call.startedAt);
+                const callDate = new Date(call.startedAt || call.createdAt);
                 const from = new Date(dateRange.from);
                 from.setHours(0, 0, 0, 0);
                 const to = new Date(dateRange.to || dateRange.from);
