@@ -23,7 +23,9 @@ interface WhatsAppChatDetailProps {
     metaLeads?: any[];
 }
 
-export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tracker', metaLeads = [] }: WhatsAppChatDetailProps) {
+const DEFAULT_META_LEADS: any[] = [];
+
+export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tracker', metaLeads = DEFAULT_META_LEADS }: WhatsAppChatDetailProps) {
     const { leads: allLeads, loadingLeads } = useData();
     const [lead, setLead] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
@@ -33,20 +35,24 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
     const handleCopyLink = () => {
         if (!lead) return;
         const baseUrl = window.location.origin;
-        const shareUrl = `${baseUrl}/dashboard/whatsapp/chat/${encodeURIComponent(lead.phone || lead.Phone || '')}`;
+        const phone = encodeURIComponent(lead.phone || lead.Phone || lead.company_phone_number || '');
+        const source = encodeURIComponent(sourceTable || 'icp_tracker');
+        const shareUrl = `${baseUrl}/share/whatsapp/${phone}?source=${source}`;
         navigator.clipboard.writeText(shareUrl);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
 
     useEffect(() => {
-        if (sourceTable === 'icp_tracker' && loadingLeads) {
+        // If we're using allLeads (either explicitly or as fallback), wait for it to load
+        const usingAllLeads = sourceTable !== 'meta_lead_tracker' || metaLeads.length === 0;
+        if (usingAllLeads && loadingLeads) {
             setLoading(true);
             return;
         }
 
         const searchVal = String(customerId).toLowerCase().trim();
-        const dataSource = sourceTable === 'meta_lead_tracker' ? metaLeads : allLeads;
+        const dataSource = (sourceTable === 'meta_lead_tracker' && metaLeads.length > 0) ? metaLeads : allLeads;
 
         const found = dataSource.find((l: any) => {
             if (l.id && String(l.id).toLowerCase() === searchVal) return true;
@@ -225,11 +231,15 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                     <Button
                         variant="ghost"
                         size="sm"
-                        className={`gap-2 text-[10px] font-bold uppercase transition-all ${copied ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-900'}`}
+                        className={`gap-1.5 text-[10px] font-black uppercase transition-all border ${
+                            copied 
+                                ? 'text-emerald-600 border-emerald-200 bg-emerald-50' 
+                                : 'text-red-600 border-red-200 bg-red-50 hover:bg-red-100 hover:text-red-700'
+                        }`}
                         onClick={handleCopyLink}
                     >
                         {copied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
-                        {copied ? 'Copied' : 'Share Link'}
+                        {copied ? 'Link Copied!' : 'Share Link'}
                     </Button>
                 </div>
             </div>
