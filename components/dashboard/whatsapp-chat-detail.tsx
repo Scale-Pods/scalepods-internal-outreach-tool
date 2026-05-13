@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,7 @@ import {
     Check
 } from "lucide-react";
 import { ConsolidatedLead } from "@/lib/leads-utils";
-import { useData } from "@/context/DataContext";
+import { useData, DataContext } from "@/context/DataContext";
 
 interface WhatsAppChatDetailProps {
     customerId: string;
@@ -27,7 +27,9 @@ interface WhatsAppChatDetailProps {
 const DEFAULT_META_LEADS: any[] = [];
 
 export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tracker', metaLeads = DEFAULT_META_LEADS, isPublic = false }: WhatsAppChatDetailProps) {
-    const { leads: allLeads, loadingLeads } = useData() || { leads: [], loadingLeads: false };
+    const dataContext = useContext(DataContext);
+    const allLeads = dataContext?.leads || [];
+    const loadingLeads = dataContext?.loadingLeads || false;
     const [lead, setLead] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
     const [messages, setMessages] = useState<any[]>([]);
@@ -233,7 +235,7 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
     return (
         <div className="space-y-6 flex flex-col h-full overflow-hidden max-h-[85vh]">
             {/* Header */}
-            <div className="flex items-center justify-between shrink-0">
+            <div className="flex items-center justify-between shrink-0 pr-12">
                 <div>
                     <h2 className="text-xl font-bold text-slate-900">{leadName}</h2>
                     <div className="flex items-center gap-2 text-xs text-slate-500">

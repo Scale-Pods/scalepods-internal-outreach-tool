@@ -22,7 +22,7 @@ interface DataContextType {
     refreshAll: (from?: Date, to?: Date) => Promise<void>;
 }
 
-const DataContext = createContext<DataContextType | undefined>(undefined);
+export const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
     const [leads, setLeads] = useState<ConsolidatedLead[]>([]);
