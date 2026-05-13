@@ -185,6 +185,42 @@ function DashboardContent({
     const pathname = usePathname();
     const router = useRouter();
 
+    // Session Timeout Logic (1 hour inactivity)
+    useEffect(() => {
+        let timeoutId: NodeJS.Timeout;
+
+        const handleLogout = async () => {
+            console.log("Inactivity timeout reached, logging out...");
+            await logout();
+            router.push('/');
+            router.refresh();
+        };
+
+        const resetTimer = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            timeoutId = setTimeout(handleLogout, 3600000); // 1 hour in milliseconds
+        };
+
+        // Events to track activity
+        const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'mousemove'];
+        
+        // Add event listeners
+        events.forEach(event => {
+            window.addEventListener(event, resetTimer);
+        });
+
+        // Initialize timer
+        resetTimer();
+
+        // Cleanup
+        return () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            events.forEach(event => {
+                window.removeEventListener(event, resetTimer);
+            });
+        };
+    }, [router]);
+
     const dashboardConfig = {
         master: {
             label: "Master Overview",

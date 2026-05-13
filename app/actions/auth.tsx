@@ -55,14 +55,14 @@ export async function login(prevState: any, formData: FormData) {
         const token = await new SignJWT({ userId: user.id, email: user.email })
             .setProtectedHeader({ alg: 'HS256' })
             .setIssuedAt()
-            .setExpirationTime('24h')
+            .setExpirationTime('1h')
             .sign(secret);
 
         (await cookies()).set('auth_token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 60 * 60 * 24, // 1 day
+            maxAge: 60 * 60, // 1 hour
             path: '/',
         });
 
