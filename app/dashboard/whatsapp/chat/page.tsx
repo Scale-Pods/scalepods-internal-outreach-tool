@@ -123,8 +123,9 @@ export default function WhatsappChatPage() {
                     const data = await res.json();
                     const map: Record<string, string> = {};
                     (data.data || []).forEach((row: any) => {
-                        if (row.Phone && row.Loop) {
-                            const normalized = String(row.Phone).replace(/\D/g, '');
+                        const phoneVal = row.phone || row.Phone;
+                        if (phoneVal && row.Loop) {
+                            const normalized = String(phoneVal).replace(/\D/g, '');
                             if (normalized) map[normalized] = row.Loop;
                         }
                     });

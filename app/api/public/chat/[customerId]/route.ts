@@ -48,10 +48,16 @@ export async function GET(
                     : ['company_phone_number', 'phone', 'Phone'];
 
                 for (const col of phoneCols) {
-                    const phoneRes = await fetch(`${query}&${col}=ilike.*${phoneVal}*`, { headers });
-                    data = await phoneRes.json();
-                    if (data && data.length > 0) {
-                        return NextResponse.json({ lead: { ...data[0], _table: table } });
+                    try {
+                        const phoneRes = await fetch(`${query}&${col}=ilike.*${phoneVal}*`, { headers });
+                        if (phoneRes.ok) {
+                            const data = await phoneRes.json();
+                            if (data && data.length > 0) {
+                                return NextResponse.json({ lead: { ...data[0], _table: table } });
+                            }
+                        }
+                    } catch (e) {
+                        console.error(`Column ${col} not found in ${table}`);
                     }
                 }
             }

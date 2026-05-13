@@ -25,10 +25,11 @@ interface WhatsAppChatDetailProps {
 }
 
 const DEFAULT_META_LEADS: any[] = [];
+const EMPTY_ARRAY: any[] = [];
 
 export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tracker', metaLeads = DEFAULT_META_LEADS, isPublic = false }: WhatsAppChatDetailProps) {
     const dataContext = useContext(DataContext);
-    const allLeads = dataContext?.leads || [];
+    const allLeads = dataContext?.leads || EMPTY_ARRAY;
     const loadingLeads = dataContext?.loadingLeads || false;
     const [lead, setLead] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
@@ -42,7 +43,7 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
         const identifier = lead.id || lead.phone || lead.Phone || lead.company_phone_number || '';
         const phone = encodeURIComponent(identifier);
         const source = encodeURIComponent(sourceTable || 'icp_tracker');
-        const shareUrl = `${baseUrl}/share/whatsapp/${phone}?source=${source}`;
+        const shareUrl = `${baseUrl}/share/chat/${phone}?source=${source}`;
         navigator.clipboard.writeText(shareUrl);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -227,10 +228,12 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
         );
     }
 
-    const leadPhone = String(lead.phone || lead.Phone || lead.company_phone_number || '');
-    const leadName = lead.name || lead.Name || lead.full_name || leadPhone || 'Unknown';
-    const leadEmail = lead.email || lead.Email || '';
-    const leadLoop = lead.source_loop || lead.Source_Loop || lead.Loop || '';
+    const leadPhone = String(lead.phone || lead.Phone || lead.phone_number || lead["Phone Number"] || lead.whatsapp_number || lead.company_phone_number || '');
+    const rawName = lead.name || lead.Name || lead["Full Name"] || lead.full_name || lead["Person Name"] || lead.Person_Name;
+    const combinedName = `${lead["First Name"] || lead.first_name || lead.First_Name || ""} ${lead["Last Name"] || lead.last_name || lead.Last_Name || ""}`.trim();
+    const leadName = rawName || combinedName || (leadPhone && leadPhone !== "" ? leadPhone : 'Unknown Lead');
+    const leadEmail = lead.email || lead.Email || lead["Email Address"] || '';
+    const leadLoop = lead.source_loop || lead.Source_Loop || lead.Loop || lead.loop || '';
 
     return (
         <div className="space-y-6 flex flex-col h-full overflow-hidden max-h-[85vh]">
