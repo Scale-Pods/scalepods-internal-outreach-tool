@@ -21,12 +21,13 @@ interface WhatsAppChatDetailProps {
     onClose?: () => void;
     sourceTable?: 'icp_tracker' | 'meta_lead_tracker' | 'ENRICHED_LEADS';
     metaLeads?: any[];
+    isPublic?: boolean;
 }
 
 const DEFAULT_META_LEADS: any[] = [];
 
-export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tracker', metaLeads = DEFAULT_META_LEADS }: WhatsAppChatDetailProps) {
-    const { leads: allLeads, loadingLeads } = useData();
+export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tracker', metaLeads = DEFAULT_META_LEADS, isPublic = false }: WhatsAppChatDetailProps) {
+    const { leads: allLeads, loadingLeads } = useData() || { leads: [], loadingLeads: false };
     const [lead, setLead] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
     const [messages, setMessages] = useState<any[]>([]);
@@ -35,7 +36,9 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
     const handleCopyLink = () => {
         if (!lead) return;
         const baseUrl = window.location.origin;
-        const phone = encodeURIComponent(lead.phone || lead.Phone || lead.company_phone_number || '');
+        // Use ID for more uniqueness/security if available, otherwise fallback to phone
+        const identifier = lead.id || lead.phone || lead.Phone || lead.company_phone_number || '';
+        const phone = encodeURIComponent(identifier);
         const source = encodeURIComponent(sourceTable || 'icp_tracker');
         const shareUrl = `${baseUrl}/share/whatsapp/${phone}?source=${source}`;
         navigator.clipboard.writeText(shareUrl);
@@ -44,28 +47,48 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
     };
 
     useEffect(() => {
-        // If we're using allLeads (either explicitly or as fallback), wait for it to load
-        const usingAllLeads = sourceTable !== 'meta_lead_tracker' || metaLeads.length === 0;
-        if (usingAllLeads && loadingLeads) {
+        const fetchLead = async () => {
             setLoading(true);
-            return;
-        }
+            try {
+                // If not public and we have leads in context, find it there
+                if (!isPublic && allLeads && allLeads.length > 0) {
+                    const searchVal = String(customerId).toLowerCase().trim();
+                    const dataSource = (sourceTable === 'meta_lead_tracker' && metaLeads.length > 0) ? metaLeads : allLeads;
 
-        const searchVal = String(customerId).toLowerCase().trim();
-        const dataSource = (sourceTable === 'meta_lead_tracker' && metaLeads.length > 0) ? metaLeads : allLeads;
+                    const found = dataSource.find((l: any) => {
+                        if (l.id && String(l.id).toLowerCase() === searchVal) return true;
+                        const phone = String(l.phone || l.Phone || l.company_phone_number || '');
+                        if (phone) {
+                            const lPhoneReplaced = phone.replace(/\D/g, '');
+                            const searchReplaced = searchVal.replace(/\D/g, '');
+                            if (searchReplaced && lPhoneReplaced === searchReplaced) return true;
+                        }
+                        return false;
+                    });
 
-        const found = dataSource.find((l: any) => {
-            if (l.id && String(l.id).toLowerCase() === searchVal) return true;
-            const phone = String(l.phone || l.Phone || l.company_phone_number || '');
-            if (phone) {
-                const lPhoneReplaced = phone.replace(/\D/g, '');
-                const searchReplaced = searchVal.replace(/\D/g, '');
-                if (searchReplaced && lPhoneReplaced === searchReplaced) return true;
+                    if (found) {
+                        processLead(found);
+                        setLoading(false);
+                        return;
+                    }
+                }
+
+                // Fallback to public API or if isPublic is true
+                const res = await fetch(`/api/public/chat/${encodeURIComponent(customerId)}?source=${sourceTable}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.lead) {
+                        processLead(data.lead);
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching lead:", err);
+            } finally {
+                setLoading(false);
             }
-            return false;
-        });
+        };
 
-        if (found) {
+        const processLead = (found: any) => {
             setLead(found);
             const timeline: any[] = [];
 
@@ -116,10 +139,10 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
             const f = found as any;
             let seq = 1;
 
-            if (sourceTable === 'icp_tracker' || sourceTable === 'ENRICHED_LEADS') {
+            const table = found._table || sourceTable;
+
+            if (table === 'icp_tracker' || table === 'ENRICHED_LEADS') {
                 // --- ICP Tracker Flow ---
-                // Step 1: Whatsapp_1 through Whatsapp_5 (bot drip messages)
-                let dripBroken = false;
                 for (let i = 1; i <= 5; i++) {
                     const raw = f[`Whatsapp_${i}`] || f.stage_data?.[`Whatsapp_${i}`];
                     if (!raw) continue;
@@ -132,7 +155,6 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                     }
                 }
 
-                // Step 2: Reply chain — User_Replied_1 → Bot_Replied_1 → User_Replied_2 → Bot_Replied_2 → ... → 25
                 for (let j = 1; j <= 25; j++) {
                     const userReply = f[`User_Replied_${j}`];
                     if (userReply && String(userReply).trim() && String(userReply).toLowerCase() !== 'no' && String(userReply).toLowerCase() !== 'none') {
@@ -147,7 +169,6 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                     }
                 }
 
-                // Fallback: legacy replied field
                 if (!timeline.some(m => m.type === 'user')) {
                     const repliedVal = f.whatsapp_replied || f.whatsapp_replied_1 || f.Replied;
                     if (repliedVal && String(repliedVal).toLowerCase() !== "no" && String(repliedVal).toLowerCase() !== "none") {
@@ -157,7 +178,6 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                 }
             } else {
                 // --- Meta Lead Tracker Flow ---
-                // Step 1: Whatsapp_1 through Whatsapp_5 (bot drip messages)
                 for (let i = 1; i <= 5; i++) {
                     const raw = f[`Whatsapp_${i}`];
                     if (!raw) continue;
@@ -165,7 +185,6 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                     if (msg) timeline.push(msg);
                 }
 
-                // Step 2: User_Replied_1 → Bot_Replied_1 → User_Replied_2 → Bot_Replied_2 → ... → 25
                 for (let j = 1; j <= 25; j++) {
                     const userReply = f[`User_Replied_${j}`];
                     if (userReply && String(userReply).trim() && String(userReply).toLowerCase() !== 'no' && String(userReply).toLowerCase() !== 'none') {
@@ -182,12 +201,10 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
             }
 
             setMessages(timeline);
-        } else {
-            setLead(null);
-            setMessages([]);
-        }
-        setLoading(false);
-    }, [customerId, allLeads, loadingLeads, sourceTable, metaLeads]);
+        };
+
+        fetchLead();
+    }, [customerId, allLeads, loadingLeads, sourceTable, metaLeads, isPublic]);
 
     if (loading) {
         return (
@@ -228,19 +245,21 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                     <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-none text-[10px] font-bold uppercase">
                         {sourceTable === 'icp_tracker' ? 'ICP Tracker' : sourceTable === 'ENRICHED_LEADS' ? 'Enriched Leads' : 'Meta Lead'}
                     </Badge>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className={`gap-1.5 text-[10px] font-black uppercase transition-all border ${
-                            copied 
-                                ? 'text-emerald-600 border-emerald-200 bg-emerald-50' 
-                                : 'text-red-600 border-red-200 bg-red-50 hover:bg-red-100 hover:text-red-700'
-                        }`}
-                        onClick={handleCopyLink}
-                    >
-                        {copied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
-                        {copied ? 'Link Copied!' : 'Share Link'}
-                    </Button>
+                    {!isPublic && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`gap-1.5 text-[10px] font-black uppercase transition-all border shadow-sm ${
+                                copied 
+                                    ? 'text-emerald-600 border-emerald-200 bg-emerald-50' 
+                                    : 'text-red-600 border-red-300 bg-red-50 hover:bg-red-100 hover:text-red-700 hover:border-red-400 ring-1 ring-red-100/50'
+                            }`}
+                            onClick={handleCopyLink}
+                        >
+                            {copied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
+                            {copied ? 'Link Copied!' : 'Share Link'}
+                        </Button>
+                    )}
                 </div>
             </div>
 
