@@ -77,7 +77,7 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
                             id="email"
                             name="email"
                             type="email"
-                            placeholder="name@example.com"
+                            placeholder="hello@example.com"
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
