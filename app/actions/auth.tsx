@@ -6,7 +6,6 @@ import { hashPassword, comparePassword } from '@/lib/auth-utils';
 import { SignJWT, jwtVerify } from 'jose';
 import crypto from 'crypto';
 
-import { sendOTPEmail } from '@/lib/mail-utils';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-fallback-secret-change-this';
 const secret = new TextEncoder().encode(JWT_SECRET);
@@ -90,45 +89,44 @@ export async function forgotPassword(prevState: any, formData: FormData) {
     }
 
     try {
+        // Only process if user exists in custom users table
         const { data: user } = await supabaseAdmin
             .from('users')
-            .select('id, full_name, email')
+            .select('email')
             .eq('email', email)
             .single();
 
         if (user) {
-            // Generate 6-digit OTP
-            const otp = Math.floor(100000 + Math.random() * 900000).toString();
-            const expiresAt = new Date(Date.now() + 15 * 60000); // 15 minutes
+            // Check if a Supabase Auth user exists for this email
+            const { data: authUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
 
-            // Save OTP to users table
-            const { error: updateError } = await supabaseAdmin
-                .from('users')
-                .update({
-                    otp_code: otp,
-                    otp_expires_at: expiresAt.toISOString()
-                })
-                .eq('id', user.id);
+            if (listError) throw listError;
 
-            if (updateError) {
-                console.error('Error saving OTP:', updateError);
-                throw updateError;
+            const authUser = authUsers.users.find(u => u.email === email);
+
+            if (!authUser) {
+                // Create a shadow auth user so Supabase can send the recovery email
+                const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+                    email,
+                    email_confirm: true,
+                    password: crypto.randomUUID(),
+                });
+
+                if (createError) throw createError;
             }
 
-            // Send Email via SMTP
-            try {
-                await sendOTPEmail(email, otp, user.full_name || 'User');
-                console.log(`OTP sent to ${email}`);
-            } catch (mailErr) {
-                console.error('SMTP Error:', mailErr);
-                return { error: 'Failed to send OTP email. Please check your SMTP settings.' };
-            }
+            // Send recovery email via Supabase's built-in email service
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+            const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+                redirectTo: `${appUrl}/reset-password`,
+            });
+
+            if (resetError) throw resetError;
         }
 
-        return { 
-            success: true, 
-            message: 'If an account exists with that email, we have sent a 6-digit OTP.',
-            email: email // Return email to pre-fill the reset form
+        return {
+            success: true,
+            message: 'If an account exists with that email, check your inbox for a password reset link.',
         };
     } catch (err) {
         console.error('Forgot password error:', err);
@@ -137,12 +135,11 @@ export async function forgotPassword(prevState: any, formData: FormData) {
 }
 
 export async function resetPassword(prevState: any, formData: FormData) {
-    const email = formData.get('email') as string;
-    const otp = formData.get('otp') as string;
+    const token = formData.get('accessToken') as string;
     const password = formData.get('password') as string;
     const confirmPassword = formData.get('confirmPassword') as string;
 
-    if (!email || !otp || !password || !confirmPassword) {
+    if (!token || !password || !confirmPassword) {
         return { error: 'All fields are required' };
     }
 
@@ -151,45 +148,33 @@ export async function resetPassword(prevState: any, formData: FormData) {
     }
 
     try {
-        // Validate user and OTP
-        const { data: user, error: userError } = await supabaseAdmin
-            .from('users')
-            .select('*')
-            .eq('email', email)
-            .single();
+        // Verify the recovery token and get the user's email
+        const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
 
-        if (userError || !user) {
-            return { error: 'Invalid request' };
+        if (authError || !user?.email) {
+            return { error: 'Invalid or expired reset link. Please request a new one.' };
         }
 
-        if (user.otp_code !== otp) {
-            return { error: 'Invalid OTP code' };
-        }
+        const email = user.email;
 
-        if (new Date(user.otp_expires_at) < new Date()) {
-            return { error: 'OTP has expired. Please request a new one.' };
-        }
-
-        // Hash new password
+        // Hash the new password
         const passwordHash = await hashPassword(password);
 
-        // Update user: new password, reset OTP, and update passwords_changed_at
+        // Update the custom users table
         const { error: updateError } = await supabaseAdmin
             .from('users')
-            .update({ 
+            .update({
                 password_hash: passwordHash,
-                otp_code: null,
-                otp_expires_at: null,
-                passwords_changed_at: new Date().toISOString()
+                passwords_changed_at: new Date().toISOString(),
             })
-            .eq('id', user.id);
+            .eq('email', email);
 
         if (updateError) throw updateError;
 
         return { success: true, message: 'Password updated successfully. You can now log in.' };
     } catch (err) {
         console.error('Reset password error:', err);
-        return { error: 'An unexpected error occurred' };
+        return { error: 'Invalid or expired reset link. Please request a new one.' };
     }
 }
 

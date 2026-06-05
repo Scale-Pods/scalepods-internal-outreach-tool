@@ -1,21 +1,33 @@
 'use client';
 
-import { useActionState, useEffect, useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useActionState, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Lock, ArrowRight, Loader2, CheckCircle2, KeyRound, Mail } from 'lucide-react';
+import { Lock, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
 import { resetPassword } from '@/app/actions/auth';
 import Image from 'next/image';
 
-function ResetPasswordForm() {
+export default function ResetPasswordPage() {
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const initialEmail = searchParams.get('email') || '';
+    const [accessToken, setAccessToken] = useState<string | null>(null);
+    const [tokenError, setTokenError] = useState(false);
 
     const [state, action, isPending] = useActionState(resetPassword, null as any);
     const [countdown, setCountdown] = useState(5);
+
+    useEffect(() => {
+        const hash = window.location.hash;
+        const params = new URLSearchParams(hash.replace('#', ''));
+        const token = params.get('access_token');
+        const type = params.get('type');
+        if (token && type === 'recovery') {
+            setAccessToken(token);
+        } else {
+            setTokenError(true);
+        }
+    }, []);
 
     useEffect(() => {
         if (state?.success) {
@@ -34,9 +46,32 @@ function ResetPasswordForm() {
         }
     }, [state?.success, router]);
 
+    if (tokenError) {
+        return (
+            <div className="min-h-screen bg-black selection:bg-emerald-500/30 font-sans flex items-center justify-center p-6">
+                <div className="max-w-md w-full bg-zinc-950/50 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl">
+                    <div className="text-center space-y-4">
+                        <h1 className="text-2xl font-bold text-white">Invalid Reset Link</h1>
+                        <p className="text-zinc-400 text-sm">This password reset link is invalid or has expired. Please request a new one.</p>
+                        <Button onClick={() => router.push('/')} className="w-full h-11 bg-white text-black hover:bg-zinc-200 font-bold rounded-xl transition-all">
+                            Back to Login
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!accessToken) {
+        return (
+            <div className="min-h-screen bg-black selection:bg-emerald-500/30 font-sans flex items-center justify-center p-6">
+                <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-black selection:bg-emerald-500/30 font-sans flex items-center justify-center p-6">
-            {/* Background effects */}
             <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-emerald-500/10 blur-[120px] pointer-events-none"></div>
 
             <div className="max-w-md w-full bg-zinc-950/50 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl relative z-10">
@@ -75,7 +110,7 @@ function ResetPasswordForm() {
                     <div className="space-y-6">
                         <div className="space-y-2 text-center">
                             <h1 className="text-2xl font-bold tracking-tight text-white">Create New Password</h1>
-                            <p className="text-zinc-400 text-sm">Enter the 6-digit OTP sent to your email and your new password.</p>
+                            <p className="text-zinc-400 text-sm">Enter your new password below.</p>
                         </div>
 
                         {state?.error && (
@@ -84,44 +119,8 @@ function ResetPasswordForm() {
                             </div>
                         )}
 
-                        <div className="p-3 text-[10px] font-medium bg-white/5 border border-white/10 text-zinc-500 rounded-lg text-center flex items-center justify-center gap-2">
-                            <KeyRound className="h-3 w-3 text-emerald-500/50" />
-                            Passwords must be changed every 90 days for account security.
-                        </div>
-
-
                         <form action={action} className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="email" className="text-zinc-300 text-xs font-bold uppercase tracking-wider">Email Address</Label>
-                                <div className="relative group">
-                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
-                                    <Input
-                                        id="email"
-                                        name="email"
-                                        type="email"
-                                        defaultValue={initialEmail}
-                                        placeholder="name@example.com"
-                                        required
-                                        className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="otp" className="text-zinc-300 text-xs font-bold uppercase tracking-wider">6-Digit OTP</Label>
-                                <div className="relative group">
-                                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
-                                    <Input
-                                        id="otp"
-                                        name="otp"
-                                        type="text"
-                                        placeholder="123456"
-                                        maxLength={6}
-                                        required
-                                        className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all font-mono tracking-[0.5em] text-center"
-                                    />
-                                </div>
-                            </div>
+                            <input type="hidden" name="accessToken" value={accessToken} />
 
                             <div className="space-y-2">
                                 <Label htmlFor="password" className="text-zinc-300 text-xs font-bold uppercase tracking-wider">New Password</Label>
@@ -172,17 +171,5 @@ function ResetPasswordForm() {
                 )}
             </div>
         </div>
-    );
-}
-
-export default function ResetPasswordPage() {
-    return (
-        <Suspense fallback={
-            <div className="min-h-screen bg-black flex items-center justify-center p-6 text-white font-bold">
-                Loading...
-            </div>
-        }>
-            <ResetPasswordForm />
-        </Suspense>
     );
 }
