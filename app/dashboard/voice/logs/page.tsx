@@ -141,7 +141,7 @@ export default function VoiceLogsPage() {
             return {
                 ...c,
                 name: resolvedName,
-                displayDate: c.startedAt ? format(new Date(c.startedAt), 'PPp') : 'N/A',
+                displayDate: (c.createdAt || c.startedAt) ? format(new Date(c.createdAt || c.startedAt), 'PPp') : 'N/A',
                 displayDuration: formatDuration(c.durationSeconds || 0),
             };
         });
@@ -161,7 +161,7 @@ export default function VoiceLogsPage() {
             if (providerFilter !== "all" && call.source !== providerFilter) return false;
 
             if (dateRange?.from) {
-                const callDate = new Date(call.startedAt || call.createdAt);
+                const callDate = new Date(call.createdAt || call.startedAt);
                 const from = new Date(dateRange.from);
                 from.setHours(0, 0, 0, 0);
                 const to = new Date(dateRange.to || dateRange.from);
@@ -189,8 +189,8 @@ export default function VoiceLogsPage() {
 
         // Apply sorting
         const sortedCalls = [...filteredCalls].sort((a, b) => {
-            if (sortBy === "newest") return new Date(b.startedAt || 0).getTime() - new Date(a.startedAt || 0).getTime();
-            if (sortBy === "oldest") return new Date(a.startedAt || 0).getTime() - new Date(b.startedAt || 0).getTime();
+            if (sortBy === "newest") return new Date(b.createdAt || b.startedAt || 0).getTime() - new Date(a.createdAt || a.startedAt || 0).getTime();
+            if (sortBy === "oldest") return new Date(a.createdAt || a.startedAt || 0).getTime() - new Date(b.createdAt || b.startedAt || 0).getTime();
             if (sortBy === "longest") return (b.durationSeconds || 0) - (a.durationSeconds || 0);
             if (sortBy === "shortest") return (a.durationSeconds || 0) - (b.durationSeconds || 0);
             return 0;

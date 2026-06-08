@@ -81,6 +81,7 @@ export default function ResetPasswordPage() {
                             src="/SP_logo.png"
                             alt="ScalePods Logo"
                             fill
+                            sizes="(max-width: 64px) 100vw, 64px"
                             className="object-contain drop-shadow-[0_0_12px_rgba(16,185,129,0.3)]"
                             priority
                         />

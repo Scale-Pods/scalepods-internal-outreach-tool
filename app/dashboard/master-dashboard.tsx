@@ -45,347 +45,42 @@ import { format, startOfDay, subDays } from "date-fns";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { calculateDuration, formatDuration } from "@/lib/utils";
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { SPLoader } from "@/components/sp-loader";
 import { useData } from "@/context/DataContext";
 
+interface DashboardStats {
+    totalLeads: number; totalICP: number; totalMeta: number; totalEnriched: number;
+    totalEmails: number; totalWhatsApp: number; totalVoice: number;
+    totalEmailReplies: number; totalWhatsappReplies: number;
+    whatsappIcpReplied: number; whatsappMetaReplied: number; enrichedRepliedCount: number;
+    totalReplies: number; totalVoiceSeconds: number;
+    voiceMinutesString: string; totalVoiceCalls: number;
+}
 
-
-export default function MasterDashboard() {
+export default function MasterDashboard({ stats, acquisitionChartData }: { stats: DashboardStats, acquisitionChartData: any[] }) {
+    const router = useRouter();
+    const searchParams = useSearchParams();
     const [isRepliesModalOpen, setIsRepliesModalOpen] = useState(false);
     const [dateLabel, setDateLabel] = useState("Last 7 days");
-    const [dateRange, setDateRange] = useState<any>({
-        from: subDays(new Date(), 7),
-        to: new Date(),
-    });
-
-    const { leads: allLeads, calls: allCalls, loadingLeads, loadingCalls, refreshAll, refreshCalls, voiceBalance, maqsamBalance, loadingBalances } = useData();
-    const [leads, setLeads] = useState<any[]>([]);
-    const [metaLeads, setMetaLeads] = useState<any[]>([]);
-    const [acquisitionChartData, setAcquisitionChartData] = useState<any[]>([]);
-    const [stats, setStats] = useState({
-        totalLeads: 0,
-        totalICP: 0,
-        totalMeta: 0,
-        totalEmails: 0,
-        totalWhatsApp: 0,
-        totalVoice: 0,
-        totalEmailReplies: 0,
-        totalWhatsappReplies: 0,
-        whatsappIcpReplied: 0,
-        whatsappMetaReplied: 0,
-        totalVoiceSeconds: 0,
-        voiceMinutesString: "0m 0s",
-        totalVoiceCalls: 0,
-        totalReplies: 0
-    });
-    const loading = loadingLeads || loadingCalls;
-    const [dbEmailReplies, setDbEmailReplies] = useState<any[]>([]);
-
-    useEffect(() => {
-        if (voiceBalance) {
-            setStats(prev => ({ ...prev, vapiBalance: voiceBalance.vapi?.balance || 0 }));
-        }
-    }, [voiceBalance]);
-
-    // Fetch Email DB data for real counts
-    useEffect(() => {
-        const fetchEmailReplies = async () => {
-            try {
-                const res = await fetch('/api/email/db-data');
-                if (res.ok) {
-                    const data = await res.json();
-                    setDbEmailReplies(data.leadReplies || []);
-                }
-            } catch (err) {
-                console.error("MasterDashboard: Failed to fetch email replies:", err);
-            }
-        };
-        fetchEmailReplies();
-    }, []);
-
-    // Fetch meta_lead_tracker leads
-    useEffect(() => {
-        (async () => {
-            try {
-                const res = await fetch('/api/leads/meta');
-                if (res.ok) {
-                    const data = await res.json();
-                    setMetaLeads(data.leads || []);
-                }
-            } catch (err) {
-                console.error('Failed to fetch meta_lead_tracker:', err);
-            }
-        })();
-    }, []);
-
-    const handleDateUpdate = ({ range, label }: { range: any, label?: string }) => {
-        if (label) {
-            setDateLabel(label);
-        }
-        setDateRange(range);
-        if (range?.from) {
-            const from = new Date(range.from);
+    const handleDateUpdate = (values: any) => {
+        if (values.range?.from) {
+            const from = new Date(values.range.from);
             from.setHours(0, 0, 0, 0);
-            const to = new Date(range.to || range.from);
+            const to = new Date(values.range.to || values.range.from);
             to.setHours(23, 59, 59, 999);
-            refreshCalls(from, to);
+            
+            const params = new URLSearchParams(searchParams.toString());
+            params.set('from', from.toISOString());
+            params.set('to', to.toISOString());
+            router.push(`?${params.toString()}`);
         }
     };
 
-    useEffect(() => {
-        const calculateStats = async () => {
-            if (loadingLeads) return;
+    const loading = false;
 
-            try {
-                // Apply Date Filtering for Leads
-                const filteredLeads = allLeads.filter((lead: any) => {
-                    if (!dateRange?.from) return true;
 
-                    // Extract best available date (created_at, last_contacted, or embedded reply timestamp)
-                    let leadDateStr = lead.last_contacted || lead.created_at;
-
-                    // Detect timestamp from email_replied (matches Received Emails page logic)
-                    if (lead.email_replied && lead.email_replied !== "No" && lead.email_replied !== "none") {
-                        const lines = String(lead.email_replied).trim().split('\n');
-                        const lastLine = lines[lines.length - 1].trim();
-                        const possibleDate = new Date(lastLine);
-                        if (!isNaN(possibleDate.getTime()) && lastLine.includes('-') && lastLine.includes(':')) {
-                            leadDateStr = possibleDate.toISOString();
-                        }
-                    }
-
-                    // Apply same logic for WhatsApp interaction if needed
-                    let hasWPReply = false;
-                    if (lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none") hasWPReply = true;
-                    else {
-                        for (let i = 1; i <= 10; i++) {
-                            const r = lead[`W.P_Replied_${i}`];
-                            if (r && String(r).toLowerCase() !== "no" && String(r).toLowerCase() !== "none") {
-                                hasWPReply = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (hasWPReply) {
-                        // Try to find a timestamp in any reply
-                        let foundDate = false;
-                        if (lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none") {
-                            const lines = String(lead.whatsapp_replied).trim().split('\n');
-                            const lastLine = lines[lines.length - 1].trim();
-                            const possibleDate = new Date(lastLine);
-                            if (!isNaN(possibleDate.getTime()) && lastLine.includes('-') && lastLine.includes(':')) {
-                                leadDateStr = possibleDate.toISOString();
-                                foundDate = true;
-                            }
-                        }
-                    }
-
-                    if (!leadDateStr) return false;
-
-                    const leadDate = new Date(leadDateStr);
-                    const from = new Date(dateRange.from);
-                    from.setHours(0, 0, 0, 0);
-                    const to = dateRange.to ? new Date(dateRange.to) : from;
-                    to.setHours(23, 59, 59, 999);
-
-                    return leadDate >= from && leadDate <= to;
-                });
-
-                setLeads(filteredLeads);
-
-                // Calculate Acquisition Data for the chart
-                const acquisitionMap: { [key: string]: number } = {};
-
-                // Determine graph timeframe: use dateRange or last 7 days of data
-                let startDate = dateRange?.from ? new Date(dateRange.from) : null;
-                let endDate = dateRange?.to ? new Date(dateRange.to) : new Date();
-
-                if (!startDate && filteredLeads.length > 0) {
-                    const oldest = new Date(Math.min(...filteredLeads.map(l => new Date(l.created_at || Date.now()).getTime())));
-                    const thirtyDaysAgo = new Date();
-                    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-                    startDate = oldest > thirtyDaysAgo ? oldest : thirtyDaysAgo;
-                } else if (!startDate) {
-                    startDate = new Date();
-                    startDate.setDate(startDate.getDate() - 7);
-                }
-
-                const current = new Date(startDate);
-                current.setHours(0, 0, 0, 0);
-                const end = new Date(endDate);
-                end.setHours(0, 0, 0, 0);
-
-                while (current <= end) {
-                    const dateStr = current.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    acquisitionMap[dateStr] = 0;
-                    current.setDate(current.getDate() + 1);
-                }
-
-                filteredLeads.forEach((lead: any) => {
-                    const date = new Date(lead.created_at || Date.now());
-                    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    if (acquisitionMap[dateStr] !== undefined) {
-                        acquisitionMap[dateStr]++;
-                    }
-                });
-
-                const chartData = Object.entries(acquisitionMap).map(([name, leads]) => ({
-                    name,
-                    leads
-                })).sort((a, b) => 0);
-
-                setAcquisitionChartData(chartData);
-
-                // Process Vapi Calls from Global Data
-                let totalVoiceSeconds = 0;
-                let totalVoiceCallsCount = 0;
-
-                if (!loadingCalls && Array.isArray(allCalls)) {
-                    const filteredCalls = allCalls.filter((call: any) => {
-                        if (!dateRange?.from) return true;
-                        
-                        const dateStr = call.startedAt || call.createdAt;
-                        if (!dateStr) return false;
-
-                        const callDate = new Date(dateStr);
-                        const from = startOfDay(new Date(dateRange.from));
-                        const to = startOfDay(new Date(dateRange.to || dateRange.from));
-                        to.setHours(23, 59, 59, 999);
-
-                        return callDate >= from && callDate <= to;
-                    });
-                    totalVoiceSeconds = filteredCalls.reduce((acc, call) => acc + calculateDuration(call), 0);
-                    totalVoiceCallsCount = filteredCalls.length;
-                }
-
-                // Helper: check if lead has replied on WhatsApp
-                const hasWPReplied = (l: any) => {
-                    for (let i = 1; i <= 25; i++) {
-                        const r = l[`User_Replied_${i}`];
-                        if (r && String(r).trim() && String(r).toLowerCase() !== 'no' && String(r).toLowerCase() !== 'none') return true;
-                    }
-                    if (l.whatsapp_replied && l.whatsapp_replied !== "No" && l.whatsapp_replied !== "none") return true;
-                    const wtsTrack = l["WTS_Reply_Track"];
-                    if (wtsTrack && String(wtsTrack).trim() !== "" && String(wtsTrack).toLowerCase() !== "no" && String(wtsTrack).toLowerCase() !== "none" && String(wtsTrack).toLowerCase() !== "false") return true;
-                    for (let i = 1; i <= 10; i++) {
-                        const r = l[`W.P_Replied_${i}`];
-                        if (r && String(r).toLowerCase() !== "no" && String(r).toLowerCase() !== "none") return true;
-                    }
-                    return false;
-                };
-
-                let emailSentCount = 0;
-                let whatsappSentCount = 0;
-                let voiceCount = 0;
-                let whatsappReplyCount = 0;
-                let icpRepliedCount = 0;
-                let metaRepliedCount = 0;
-                let enrichedRepliedCount = 0;
-                let icpCount = 0;
-                let metaCount = 0;
-                let enrichedCount = 0;
-
-                filteredLeads.forEach((lead: any) => {
-                    // Split counts for subtitle
-                    if (lead._table === 'meta_lead_tracker' || lead._table === 'Meta Lead') metaCount++;
-                    else if (lead._table === 'ENRICHED_LEADS') enrichedCount++;
-                    else icpCount++;
-
-                    const stages = lead.stages_passed || [];
-                    let hasEmail = false;
-                    stages.forEach((stage: string) => {
-                        if (stage.toLowerCase().includes("email")) hasEmail = true;
-                    });
-                    if (hasEmail) emailSentCount++;
-
-                    let hasWhatsApp = false;
-                    stages.forEach((stage: string) => {
-                        if (stage.toLowerCase().includes("whatsapp")) hasWhatsApp = true;
-                    });
-                    if (!hasWhatsApp) {
-                        if (lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none") hasWhatsApp = true;
-                        for (let i = 1; i <= 10; i++) {
-                            if (lead[`W.P_Replied_${i}`] || lead[`W.P_FollowUp_${i}`]) {
-                                hasWhatsApp = true;
-                                break;
-                            }
-                        }
-                        // Check new schema Whatsapp_1-5 (used by icp_tracker & ENRICHED_LEADS)
-                        if (!hasWhatsApp) {
-                            for (let i = 1; i <= 5; i++) {
-                                if (lead[`Whatsapp_${i}`]) { hasWhatsApp = true; break; }
-                            }
-                        }
-                        if (!hasWhatsApp) {
-                            for (let i = 1; i <= 6; i++) {
-                                if (lead[`W.P_${i}`] || lead.stage_data?.[`WhatsApp ${i}`]) {
-                                    hasWhatsApp = true;
-                                    break;
-                                }
-                            }
-                            if (lead["W.P_FollowUp"] || lead.stage_data?.["WhatsApp FollowUp"]) hasWhatsApp = true;
-                        }
-                    }
-                    if (hasWhatsApp) whatsappSentCount++;
-
-                    let hasVoice = false;
-                    stages.forEach((stage: string) => {
-                        if (stage.toLowerCase().includes("voice")) hasVoice = true;
-                    });
-                    if (hasVoice) voiceCount++;
-
-                    // Count WhatsApp Replied Leads (Unique Leads)
-                    if (hasWPReplied(lead)) {
-                        whatsappReplyCount++;
-                        if (lead._table === 'meta_lead_tracker' || lead._table === 'Meta Lead') metaRepliedCount++;
-                        else if (lead._table === 'ENRICHED_LEADS') enrichedRepliedCount++;
-                        else icpRepliedCount++;
-                    }
-                });
-
-                // Calculate Email Replies from DB - Total ROW count
-                const filteredEmailReplies = dbEmailReplies.filter(r => {
-                    if (!dateRange?.from) return true;
-                    const rd = new Date(r.reply_timestamp || r.created_at);
-                    const from = new Date(dateRange.from); from.setHours(0, 0, 0, 0);
-                    const to = dateRange.to ? new Date(dateRange.to) : from; to.setHours(23, 59, 59, 999);
-                    return rd >= from && rd <= to;
-                });
-                
-                const emailReplyRowCount = filteredEmailReplies.length;
-
-                setStats({
-                    totalLeads: filteredLeads.length,
-                    totalICP: icpCount,
-                    totalMeta: metaCount,
-                    totalEmails: emailSentCount,
-                    totalWhatsApp: whatsappSentCount,
-                    totalVoice: voiceCount,
-                    voiceMinutesString: formatDuration(totalVoiceSeconds),
-                    totalVoiceSeconds: totalVoiceSeconds,
-                    totalVoiceCalls: totalVoiceCallsCount,
-                    totalEmailReplies: emailReplyRowCount,
-                    totalWhatsappReplies: whatsappReplyCount,
-                    whatsappIcpReplied: icpRepliedCount,
-                    whatsappMetaReplied: metaRepliedCount,
-                    totalReplies: emailReplyRowCount + whatsappReplyCount,
-                    totalEnriched: enrichedCount,
-                    enrichedRepliedCount,
-                } as any);
-
-            } catch (e) {
-                console.error("Dashboard calculation error", e);
-            }
-        };
-
-        calculateStats();
-    }, [dateRange, allLeads, allCalls, dbEmailReplies, loadingLeads, loadingCalls]);
-
-    const router = useRouter();
 
     // Derived Pie Chart Data
     const realServiceDistribution = [
@@ -396,7 +91,7 @@ export default function MasterDashboard() {
 
     return (
         <div className="space-y-8 pb-10 relative min-h-[500px]">
-            {loading && leads.length === 0 && <SPLoader />}
+            {loading && <SPLoader />}
             {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -489,7 +184,7 @@ export default function MasterDashboard() {
                     </CardHeader>
                     <CardContent className="pt-2">
                         <div className="w-full" style={{ height: 240, minHeight: 240 }}>
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                                 <AreaChart data={acquisitionChartData}>
                                     <defs>
                                         <linearGradient id="colorLeads" x1="0" y1="0" x2="0" y2="1">
@@ -520,7 +215,7 @@ export default function MasterDashboard() {
                     </CardHeader>
                     <CardContent className="pt-2 flex flex-col items-center justify-center">
                         <div className="w-full" style={{ height: 220, minHeight: 220 }}>
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                                 <PieChart>
                                     <Pie
                                         data={realServiceDistribution}

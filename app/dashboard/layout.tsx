@@ -12,7 +12,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DataProvider, useData } from "@/context/DataContext";
 import { MaqsamBalanceDetail } from "@/components/dashboard/maqsam-balance-detail";
 import { calculateDuration } from "@/lib/utils";
@@ -103,6 +103,9 @@ function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolea
                         {icon}
                         <span>{title}</span>
                     </DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Wallet balance details and recharge actions.
+                    </DialogDescription>
                 </DialogHeader>
                 <div className="py-2 space-y-6">
                     {type === 'vapi' && (

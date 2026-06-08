@@ -75,9 +75,22 @@ export default function VoiceAnalyticsPage() {
         const positiveCount = tableLeads.filter((l: any) => {
             const s1 = String(l.voice_sentiment || "").trim();
             const s2 = String(l.voice2_sentiment || "").trim();
-            const isPos = (s: string) => s.toLowerCase().includes('expression of interest') || s.toLowerCase().includes('callback- plan postponed');
+            const isPos = (s: string) => {
+                const lower = s.toLowerCase().trim();
+                return lower.includes('expression of interest') || 
+                       lower.includes('callback- plan postponed') ||
+                       lower.includes('callback plan postponed') ||
+                       lower.includes('callback-plan postponed');
+            };
             return isPos(s1) || isPos(s2);
         }).length;
+
+        const leadsWithSentiment = tableLeads.filter((l: any) => {
+            const s1 = String(l.voice_sentiment || "").trim();
+            const s2 = String(l.voice2_sentiment || "").trim();
+            return s1 !== "" || s2 !== "";
+        });
+        const totalSentiment = leadsWithSentiment.length;
 
         const effectiveTotal = Math.max(archiveCount, tableLeads.length);
 
@@ -85,7 +98,7 @@ export default function VoiceAnalyticsPage() {
             totalCalls: effectiveTotal,
             pickUpRate: archiveCount > 0 ? (pickUpCount / archiveCount) * 100 : 0,
             completionRate: archiveCount > 0 ? (completionCount / archiveCount) * 100 : 0,
-            positiveRate: effectiveTotal > 0 ? (positiveCount / effectiveTotal) * 100 : 0
+            positiveRate: totalSentiment > 0 ? (positiveCount / totalSentiment) * 100 : 0
         };
     };
 
@@ -106,7 +119,20 @@ export default function VoiceAnalyticsPage() {
             const d1 = l.Voice_1_Date ? new Date(l.Voice_1_Date) : null;
             const d2 = l.Voice_2_Date ? new Date(l.Voice_2_Date) : null;
             const d3 = l.Voice_3_Date ? new Date(l.Voice_3_Date) : null;
-            return (d1 && d1 >= from && d1 <= to) || (d2 && d2 >= from && d2 <= to) || (d3 && d3 >= from && d3 <= to);
+            const vlc = l["Voice Last Contacted"] ? new Date(l["Voice Last Contacted"]) : null;
+            const vlc2 = l.voice_last_contacted ? new Date(l.voice_last_contacted) : null;
+            
+            const hasVoiceDate = d1 || d2 || d3 || vlc || vlc2;
+            if (hasVoiceDate) {
+                return (d1 && d1 >= from && d1 <= to) || 
+                       (d2 && d2 >= from && d2 <= to) || 
+                       (d3 && d3 >= from && d3 <= to) ||
+                       (vlc && vlc >= from && vlc <= to) ||
+                       (vlc2 && vlc2 >= from && vlc2 <= to);
+            }
+            
+            const created = l.created_at ? new Date(l.created_at) : null;
+            return !!(created && created >= from && created <= to);
         };
 
         const icpLeads = leads?.filter(l => l._table === 'icp_tracker' && filterLeadsByDate(l)) || [];

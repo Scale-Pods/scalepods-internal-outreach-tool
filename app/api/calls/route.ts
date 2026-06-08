@@ -174,8 +174,8 @@ async function fetchArchive(from: Date, to: Date) {
     const secretKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
     if (!supabaseUrl || !secretKey) return [];
 
-    // Use started_at for filtering as requested
-    const url = `${supabaseUrl.replace(/\/$/, "")}/rest/v1/vapi_call_logs?started_at=gte.${from.toISOString()}&started_at=lte.${to.toISOString()}&order=started_at.desc`;
+    // Use created_at for filtering as requested
+    const url = `${supabaseUrl.replace(/\/$/, "")}/rest/v1/vapi_call_logs?created_at=gte.${from.toISOString()}&created_at=lte.${to.toISOString()}&order=created_at.desc&limit=10000`;
     const headers = { 
         "apikey": secretKey, 
         "Authorization": `Bearer ${secretKey}`,

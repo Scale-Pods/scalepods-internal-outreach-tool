@@ -1,6 +1,6 @@
 'use client';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AuthForms } from "./auth-forms";
 import Image from "next/image";
 
@@ -16,6 +16,7 @@ export function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalP
             <DialogContent className="max-w-md p-0 overflow-hidden bg-zinc-950 border-white/10 shadow-2xl rounded-3xl">
                 <DialogHeader className="sr-only">
                     <DialogTitle>Authentication</DialogTitle>
+                    <DialogDescription>Sign in or request a password reset.</DialogDescription>
                 </DialogHeader>
                 <div className="relative p-8 pt-12">
                     {/* Background effects */}
