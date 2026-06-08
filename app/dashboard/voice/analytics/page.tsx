@@ -14,12 +14,13 @@ import { format, startOfDay, subDays } from "date-fns";
 import { useData } from "@/context/DataContext";
 
 export default function VoiceAnalyticsPage() {
-    const { calls: globalCalls, loadingCalls, voiceBalance, leads, refreshCalls } = useData();
+    const { calls: globalCalls, loadingCalls, voiceBalance, refreshCalls } = useData();
     const [statusFilter, setStatusFilter] = useState("all");
     const [providerFilter, setProviderFilter] = useState("all");
     const [calls, setCalls] = useState<any[]>([]);
     const [loadingLocal, setLoadingLocal] = useState(false);
-    const loading = loadingLocal || loadingCalls;
+    const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+    const loading = loadingLocal || loadingCalls || loadingAnalytics;
     const [dateRange, setDateRange] = useState<any>({
         from: subDays(new Date(), 7),
         to: new Date(),
@@ -59,48 +60,35 @@ export default function VoiceAnalyticsPage() {
 
         setCalls(filteredCalls);
         processAnalytics(filteredCalls);
-    }, [globalCalls, loadingCalls, dateRange, providerFilter, leads]); // Added leads dependency
+    }, [globalCalls, loadingCalls, dateRange, providerFilter]);
 
-    const calculateTableStats = (tableLeads: any[], archiveCalls: any[]) => {
-        if (archiveCalls.length === 0 && tableLeads.length === 0) return { pickUpRate: 0, completionRate: 0, positiveRate: 0, totalCalls: 0 };
-        
-        const archiveCount = archiveCalls.length;
-        const pickUpCount = archiveCalls.filter((c: any) => (c.durationSeconds || 0) > 18).length;
-        const completionCount = archiveCalls.filter((c: any) => {
-            const status = String(c.status || "").toLowerCase();
-            return status.includes('assistant-ended-call') || status.includes('customer-ended-call') || 
-                   status.includes('assistant ended call') || status.includes('customer ended call');
-        }).length;
-
-        const positiveCount = tableLeads.filter((l: any) => {
-            const s1 = String(l.voice_sentiment || "").trim();
-            const s2 = String(l.voice2_sentiment || "").trim();
-            const isPos = (s: string) => {
-                const lower = s.toLowerCase().trim();
-                return lower.includes('expression of interest') || 
-                       lower.includes('callback- plan postponed') ||
-                       lower.includes('callback plan postponed') ||
-                       lower.includes('callback-plan postponed');
-            };
-            return isPos(s1) || isPos(s2);
-        }).length;
-
-        const leadsWithSentiment = tableLeads.filter((l: any) => {
-            const s1 = String(l.voice_sentiment || "").trim();
-            const s2 = String(l.voice2_sentiment || "").trim();
-            return s1 !== "" || s2 !== "";
-        });
-        const totalSentiment = leadsWithSentiment.length;
-
-        const effectiveTotal = Math.max(archiveCount, tableLeads.length);
-
-        return {
-            totalCalls: effectiveTotal,
-            pickUpRate: archiveCount > 0 ? (pickUpCount / archiveCount) * 100 : 0,
-            completionRate: archiveCount > 0 ? (completionCount / archiveCount) * 100 : 0,
-            positiveRate: totalSentiment > 0 ? (positiveCount / totalSentiment) * 100 : 0
+    useEffect(() => {
+        const fetchServerStats = async () => {
+            if (!dateRange?.from) return;
+            setLoadingAnalytics(true);
+            try {
+                const params = new URLSearchParams();
+                params.append('from', new Date(dateRange.from).toISOString());
+                const toDate = dateRange.to || dateRange.from;
+                params.append('to', new Date(toDate).toISOString());
+                if (providerFilter !== 'all') {
+                    params.append('provider', providerFilter);
+                }
+                const res = await fetch(`/api/voice/analytics?${params.toString()}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setIcpStats(data.icpStats || { pickUpRate: 0, completionRate: 0, positiveRate: 0, totalCalls: 0 });
+                    setEnrichedStats(data.enrichedStats || { pickUpRate: 0, completionRate: 0, positiveRate: 0, totalCalls: 0 });
+                }
+            } catch (err) {
+                console.error("Error fetching voice analytics:", err);
+            } finally {
+                setLoadingAnalytics(false);
+            }
         };
-    };
+
+        fetchServerStats();
+    }, [dateRange, providerFilter]);
 
     const processAnalytics = (data: any[]) => {
         const totalCallsArchive = data.length;
@@ -108,70 +96,6 @@ export default function VoiceAnalyticsPage() {
         const dayMap = new Map();
         const durationBuckets = { '0-30s': 0, '30s-1m': 0, '1-2m': 0, '2-5m': 0, '5m+': 0 };
         let inboundSum = 0, outboundSum = 0;
-
-        // Split leads by table
-        const from = dateRange?.from ? startOfDay(new Date(dateRange.from)) : null;
-        const to = dateRange?.to ? startOfDay(new Date(dateRange.to)) : from;
-        if (to) to.setHours(23, 59, 59, 999);
-
-        const filterLeadsByDate = (l: any) => {
-            if (!from || !to) return true;
-            const d1 = l.Voice_1_Date ? new Date(l.Voice_1_Date) : null;
-            const d2 = l.Voice_2_Date ? new Date(l.Voice_2_Date) : null;
-            const d3 = l.Voice_3_Date ? new Date(l.Voice_3_Date) : null;
-            const vlc = l["Voice Last Contacted"] ? new Date(l["Voice Last Contacted"]) : null;
-            const vlc2 = l.voice_last_contacted ? new Date(l.voice_last_contacted) : null;
-            
-            const hasVoiceDate = d1 || d2 || d3 || vlc || vlc2;
-            if (hasVoiceDate) {
-                return (d1 && d1 >= from && d1 <= to) || 
-                       (d2 && d2 >= from && d2 <= to) || 
-                       (d3 && d3 >= from && d3 <= to) ||
-                       (vlc && vlc >= from && vlc <= to) ||
-                       (vlc2 && vlc2 >= from && vlc2 <= to);
-            }
-            
-            const created = l.created_at ? new Date(l.created_at) : null;
-            return !!(created && created >= from && created <= to);
-        };
-
-        const icpLeads = leads?.filter(l => l._table === 'icp_tracker' && filterLeadsByDate(l)) || [];
-        const enrichedLeads = leads?.filter(l => l._table === 'ENRICHED_LEADS' && filterLeadsByDate(l)) || [];
-
-        // Distribute archive calls to tables based on phone number matching (Robust check)
-        const getCleanPhones = (ls: any[]) => {
-            const set = new Set<string>();
-            ls.forEach(l => {
-                const p1 = String(l.phone || "").replace(/\D/g, '');
-                const p2 = String(l.personal_phone || "").replace(/\D/g, '');
-                const p3 = String(l.company_phone_number || "").replace(/\D/g, '');
-                if (p1) set.add(p1);
-                if (p2) set.add(p2);
-                if (p3) set.add(p3);
-            });
-            return set;
-        };
-
-        const icpPhones = getCleanPhones(icpLeads);
-        const enrichedPhones = getCleanPhones(enrichedLeads);
-
-        const icpArchive = data.filter(c => {
-            const cp = String(c.phone || "").replace(/\D/g, '');
-            if (!cp) return false;
-            // Robust check: full match or last 9 digits match
-            return Array.from(icpPhones).some(p => p === cp || (cp.length > 8 && p.endsWith(cp.slice(-9))) || (p.length > 8 && cp.endsWith(p.slice(-9))));
-        });
-        const enrichedArchive = data.filter(c => {
-            const cp = String(c.phone || "").replace(/\D/g, '');
-            if (!cp) return false;
-            return Array.from(enrichedPhones).some(p => p === cp || (cp.length > 8 && p.endsWith(cp.slice(-9))) || (p.length > 8 && cp.endsWith(p.slice(-9))));
-        });
-
-        console.log(`Analytics Debug: ICP Leads: ${icpLeads.length}, ICP Matched Calls: ${icpArchive.length}`);
-        console.log(`Analytics Debug: Enriched Leads: ${enrichedLeads.length}, Enriched Matched Calls: ${enrichedArchive.length}`);
-
-        setIcpStats(calculateTableStats(icpLeads, icpArchive));
-        setEnrichedStats(calculateTableStats(enrichedLeads, enrichedArchive));
 
         let lifetimeVapiUsedSum = 0;
         globalCalls.forEach((call: any) => {

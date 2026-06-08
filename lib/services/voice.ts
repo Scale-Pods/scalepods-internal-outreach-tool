@@ -21,34 +21,34 @@ export async function getVoiceStats(fromDate: Date, toDate: Date, providerFilter
         const toFull = new Date(toDate);
         toFull.setHours(23, 59, 59, 999);
 
-        // ── 1. Fetch ALL vapi_call_logs (created_at as primary date) ──────────
-        // .range(0, 9999) bypasses Supabase's default PostgREST row cap
-        const { data: allCallsRaw, error: callsErr } = await supabaseAdmin
+        const fromStr = fromFull.toISOString();
+        const toStr = toFull.toISOString();
+
+        // ── 1. Fetch vapi_call_logs in the date range (database level) ──────────
+        let query = supabaseAdmin
             .from('vapi_call_logs')
             .select('id, created_at, started_at, customer_phone, customer_name, duration_seconds, status, cost_usd, source, transcript, summary, recording_url, vapi_account, type, "assistantId"')
-            .order('created_at', { ascending: false })
-            .range(0, 9999);
+            .gte('created_at', fromStr)
+            .lte('created_at', toStr)
+            .order('created_at', { ascending: false });
 
+        if (providerFilter !== "all") {
+            query = query.eq('source', providerFilter);
+        }
+
+        const { data: filteredCallsRaw, error: callsErr } = await query;
         if (callsErr) console.error("vapi_call_logs fetch error:", callsErr);
-        const allCalls = allCallsRaw || [];
+        const filteredCalls = filteredCallsRaw || [];
 
-        // Lifetime VAPI cost (all time)
+        // Estimate lifetime VAPI cost (limit to 50k records of cost_usd only to be fast and memory-efficient)
+        const { data: allCostData } = await supabaseAdmin
+            .from('vapi_call_logs')
+            .select('cost_usd')
+            .limit(50000);
         let lifetimeCostVapi = 0;
-        allCalls.forEach((c: any) => {
+        (allCostData || []).forEach((c: any) => {
             lifetimeCostVapi += typeof c.cost_usd === 'number' ? c.cost_usd : 0;
         });
-
-        // ── 2. Filter by created_at date range ────────────────────────────────
-        const rangeCalls = allCalls.filter((call: any) => {
-            const dt = call.created_at ? new Date(call.created_at) : null;
-            if (!dt || isNaN(dt.getTime())) return false;
-            return dt >= fromFull && dt <= toFull;
-        });
-
-        // Apply provider filter
-        const filteredCalls = providerFilter === "all"
-            ? rangeCalls
-            : rangeCalls.filter((c: any) => c.source === providerFilter || c.vapi_account === providerFilter);
 
         // ── 3. Core metrics ───────────────────────────────────────────────────
         let totalDuration = 0, totalCost = 0, successCount = 0;
@@ -92,16 +92,24 @@ export async function getVoiceStats(fromDate: Date, toDate: Date, providerFilter
             }
         });
 
-        // Fetch voice_sentiment and voice2_sentiment for leads in the date range (using "Voice Last Contacted" or created_at)
+        // Fetch voice_sentiment and voice2_sentiment for leads in the date range (using database-level OR filter)
+        const orConditions = [
+            `and("Voice Last Contacted".gte.${fromStr},"Voice Last Contacted".lte.${toStr})`,
+            `and(voice_last_contacted.gte.${fromStr},voice_last_contacted.lte.${toStr})`,
+            `and(Voice_1_Date.gte.${fromStr},Voice_1_Date.lte.${toStr})`,
+            `and(Voice_2_Date.gte.${fromStr},Voice_2_Date.lte.${toStr})`,
+            `and(created_at.gte.${fromStr},created_at.lte.${toStr})`
+        ].join(',');
+
         const [icpSentimentRaw, enrichedSentimentRaw] = await Promise.all([
             supabaseAdmin
                 .from('icp_tracker')
                 .select('voice_sentiment, voice2_sentiment, created_at, "Voice Last Contacted"')
-                .limit(50000),
+                .or(orConditions),
             supabaseAdmin
                 .from('ENRICHED_LEADS')
                 .select('voice_sentiment, voice2_sentiment, created_at, "Voice Last Contacted"')
-                .limit(50000),
+                .or(orConditions),
         ]);
 
         const icpSentiments = icpSentimentRaw.data || [];
@@ -113,20 +121,11 @@ export async function getVoiceStats(fromDate: Date, toDate: Date, providerFilter
             (row.voice2_sentiment && String(row.voice2_sentiment).trim() !== '')
         );
 
-        // Filter to date range using "Voice Last Contacted" or created_at
-        const sentimentsInRange = allSentiments.filter((row: any) => {
-            const dt = row["Voice Last Contacted"]
-                ? new Date(row["Voice Last Contacted"])
-                : row.created_at ? new Date(row.created_at) : null;
-            if (!dt || isNaN(dt.getTime())) return false;
-            return dt >= fromFull && dt <= toFull;
-        });
-
-        const positiveSentimentCount = sentimentsInRange.filter((row: any) =>
+        const positiveSentimentCount = allSentiments.filter((row: any) =>
             isPositiveSentiment(row.voice_sentiment) || isPositiveSentiment(row.voice2_sentiment)
         ).length;
 
-        const totalSentimentCount = sentimentsInRange.length;
+        const totalSentimentCount = allSentiments.length;
 
         // ── 5. Chart data ─────────────────────────────────────────────────────
         const dailyVolume = Array.from(dayMap.entries())
