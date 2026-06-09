@@ -11,7 +11,7 @@ import { TrendingUp, Users, MessageSquare, Send, RefreshCw, X, RotateCcw } from 
 import { Button } from "@/components/ui/button";
 import { SPLoader } from "@/components/sp-loader";
 import { useData } from "@/context/DataContext";
-import { startOfDay, endOfDay } from "date-fns";
+import { subDays, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 
 // Helper: check if lead has replied — matches chat page logic
@@ -58,7 +58,7 @@ const hasWhatsappActivity = (lead: any) => {
 export default function WhatsappAnalyticsPage() {
     const { leads: allLeads, loadingLeads } = useData();
     const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
-        from: undefined, to: undefined
+        from: subDays(new Date(), 7), to: new Date()
     });
 
     const loading = loadingLeads;

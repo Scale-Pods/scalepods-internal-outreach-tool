@@ -19,10 +19,10 @@ export async function GET(request: Request) {
         }
 
         const { searchParams } = new URL(request.url);
-        // Default to last 30 days if not specified
+        // Default to last 7 days if not specified
         const endDate = new Date();
         const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 30);
+        startDate.setDate(startDate.getDate() - 7);
 
         const start = searchParams.get('start_date') || startDate.toISOString().split('T')[0];
         const end = searchParams.get('end_date') || endDate.toISOString().split('T')[0];

@@ -188,7 +188,7 @@ export default function WhatsappChatPage() {
     });
 
     const [dateRange, setDateRange] = useState<any>({
-        from: subDays(new Date(), 30),
+        from: subDays(new Date(), 7),
         to: new Date(),
     });
 

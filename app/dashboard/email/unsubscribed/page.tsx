@@ -54,7 +54,7 @@ export default function UnsubscribedPage() {
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [dateRange, setDateRange] = useState<any>({
-        from: subDays(new Date(), 30), // Default to 30 days for unsubscribes
+        from: subDays(new Date(), 7),
         to: new Date(),
     });
     const [currentPage, setCurrentPage] = useState(1);
