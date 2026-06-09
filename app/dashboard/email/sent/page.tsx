@@ -88,6 +88,7 @@ export default function SentEmailsPage() {
     const [dbReplyCount, setDbReplyCount] = useState(0);
     const [campaignsDB, setCampaignsDB] = useState<any[]>([]);
     const [leadRepliesDB, setLeadRepliesDB] = useState<any[]>([]);
+    const [emailStats, setEmailStats] = useState<any>(null);
     const [loadingDB, setLoadingDB] = useState(true);
     const loading = loadingLeads || loadingDB;
     const [searchQuery, setSearchQuery] = useState("");
@@ -232,12 +233,17 @@ export default function SentEmailsPage() {
         handleDateUpdate({ range: dateRange });
     }, []);
 
-    // Fetch DB data for real-time reply count
+    // Fetch DB data for reply count and email stats
     useEffect(() => {
         const fetchDB = async () => {
             setLoadingDB(true);
             try {
-                const res = await fetch('/api/email/db-data');
+                const dr = dateRange || { from: subDays(new Date(), 7), to: new Date() };
+                const from = new Date(dr.from);
+                from.setHours(0, 0, 0, 0);
+                const to = new Date(dr.to || dr.from);
+                to.setHours(23, 59, 59, 999);
+                const res = await fetch(`/api/email/db-data?from=${from.toISOString()}&to=${to.toISOString()}`);
                 if (!res.ok) throw new Error('Failed to fetch');
                 const json = await res.json();
                 const allReplies = json.leadReplies || [];
@@ -245,6 +251,7 @@ export default function SentEmailsPage() {
                 setDbReplyCount(allReplies.length);
                 setLeadRepliesDB(allReplies);
                 setCampaignsDB(allCampaigns);
+                setEmailStats(json.emailStats || null);
             } catch (err) {
                 console.error("Error fetching DB replies:", err);
             } finally {
@@ -252,7 +259,7 @@ export default function SentEmailsPage() {
             }
         };
         fetchDB();
-    }, []);
+    }, [dateRange]);
 
 
     const filteredEmails = useMemo(() => {
@@ -295,24 +302,20 @@ export default function SentEmailsPage() {
         });
     }, [sentEmails, searchQuery, dateRange, filterStage, filterStatus]);
 
-    // Compute stats
+    // Compute stats — use server-computed emailStats matching dashboard logic
     const stats = useMemo(() => {
-        const total = filteredEmails.length;
-        
-        // Count total replies from leadRepliesDB for the leads that are currently filtered
-        const filteredLeadEmails = new Set(filteredEmails.map(e => e.email.toLowerCase()));
-        const replied = leadRepliesDB.filter(r => 
-            r.lead_email_id && filteredLeadEmails.has(String(r.lead_email_id).toLowerCase())
-        ).length;
-
-        const totalStagesSent = filteredEmails.reduce((sum, e) => sum + e.stagesSent, 0);
-        
-        // For rate, we still want unique leads who replied relative to total leads
-        const uniqueLeadsReplied = filteredEmails.filter(e => e.replied).length;
-        const replyRate = total > 0 ? Math.round((uniqueLeadsReplied / total) * 100) : 0;
-        
-        return { total, replied, totalStagesSent, replyRate };
-    }, [filteredEmails, leadRepliesDB]);
+        if (emailStats) {
+            const contacted = emailStats.leadsContacted || 0;
+            const replied = emailStats.repliedLeads || 0;
+            return {
+                contacted,
+                sent: emailStats.totalEmails || 0,
+                replied,
+                replyRate: contacted > 0 ? Math.round((replied / contacted) * 100) : 0
+            };
+        }
+        return { contacted: 0, sent: 0, replied: 0, replyRate: 0 };
+    }, [emailStats]);
 
     const totalPages = Math.ceil(filteredEmails.length / ITEMS_PER_PAGE);
     const paginatedEmails = filteredEmails.slice(
@@ -342,7 +345,7 @@ export default function SentEmailsPage() {
                 <Card className="bg-white border-border shadow-sm">
                     <CardContent className="p-3 flex items-center justify-between">
                         <div>
-                            <h3 className="text-lg font-bold text-slate-900">{loading ? "..." : stats.total}</h3>
+                            <h3 className="text-lg font-bold text-slate-900">{loading ? "..." : stats.contacted}</h3>
                             <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Contacted</p>
                         </div>
                         <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
@@ -353,7 +356,7 @@ export default function SentEmailsPage() {
                 <Card className="bg-white border-border shadow-sm">
                     <CardContent className="p-3 flex items-center justify-between">
                         <div>
-                            <h3 className="text-lg font-bold text-slate-900">{loading ? "..." : stats.totalStagesSent}</h3>
+                            <h3 className="text-lg font-bold text-slate-900">{loading ? "..." : stats.sent}</h3>
                             <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Sent</p>
                         </div>
                         <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
@@ -422,7 +425,7 @@ export default function SentEmailsPage() {
                         className="text-slate-500 h-9 text-xs ml-auto bg-slate-100 hover:bg-slate-200"
                         onClick={() => {
                             setSearchQuery("");
-                            setDateRange(undefined);
+                            setDateRange({ from: subDays(new Date(), 7), to: new Date() });
                             setFilterStage("all");
                             setFilterStatus("all");
                             setPage(1);
