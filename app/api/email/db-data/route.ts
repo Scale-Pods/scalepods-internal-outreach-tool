@@ -3,27 +3,27 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
-function countEmailsSent(lead: any): number {
-    let count = 0;
-    for (let i = 1; i <= 6; i++) {
-        if (lead[`Email_${i}`] && String(lead[`Email_${i}`]).trim()) count++;
-    }
-    return count;
-}
+async function countTableEmailStats(tableName: string, fromISO: string, toISO: string) {
+    const base = () => supabaseAdmin.from(tableName).select('*', { count: 'exact', head: true })
+        .gte('"Email Last Contacted"', fromISO)
+        .lte('"Email Last Contacted"', toISO);
 
-function isInDateRange(lead: any, fromD: Date, toD: Date): boolean {
-    const elc = lead["Email Last Contacted"];
-    if (elc) {
-        const d = new Date(elc);
-        if (!isNaN(d.getTime())) return d >= fromD && d <= toD;
-    }
-    for (let i = 1; i <= 6; i++) {
-        if (lead[`Email_${i}`] && String(lead[`Email_${i}`]).trim()) {
-            const d = new Date(lead.created_at);
-            if (!isNaN(d.getTime())) return d >= fromD && d <= toD;
-        }
-    }
-    return false;
+    // Run all count queries in parallel — each gets its own builder instance
+    const [contactedRes, repliedRes, ...stageRes] = await Promise.all([
+        base(),
+        base().eq('"Replied"', 'yes'),
+        ...[1, 2, 3, 4, 5, 6].map(i =>
+            base().not(`"Email_${i}"`, 'is', null)
+        )
+    ]);
+
+    const emailCounts = stageRes.map(r => r.count || 0);
+    return {
+        contacted: contactedRes.count || 0,
+        replied: repliedRes.count || 0,
+        totalEmails: emailCounts.reduce((a, b) => a + b, 0),
+        emailCounts
+    };
 }
 
 export async function GET(req: Request) {
@@ -35,6 +35,8 @@ export async function GET(req: Request) {
     fromDate.setHours(0, 0, 0, 0);
     const toDate = toParam ? new Date(toParam) : new Date();
     toDate.setHours(23, 59, 59, 999);
+    const fromISO = fromDate.toISOString();
+    const toISO = toDate.toISOString();
 
     try {
         // Fetch Campaign Analytics
@@ -52,10 +54,10 @@ export async function GET(req: Request) {
             .select('*');
 
         if (fromParam) {
-            repliesQuery = repliesQuery.gte('reply_timestamp', fromDate.toISOString());
+            repliesQuery = repliesQuery.gte('reply_timestamp', fromISO);
         }
         if (toParam) {
-            repliesQuery = repliesQuery.lte('reply_timestamp', toDate.toISOString());
+            repliesQuery = repliesQuery.lte('reply_timestamp', toISO);
         }
 
         const { data: leadReplies, error: repliesError } = await repliesQuery
@@ -64,60 +66,32 @@ export async function GET(req: Request) {
         let allReplies: any[] = [];
         if (repliesError) {
             console.error('Lead Replies Error (reply_timestamp):', repliesError);
-            const { data: fallbackReplies, error: fallbackError } = await supabaseAdmin
+            const { data: fallbackReplies } = await supabaseAdmin
                 .from('instantly_lead_replies')
                 .select('*')
                 .order('created_at', { ascending: false });
-            if (!fallbackError) allReplies = fallbackReplies || [];
+            allReplies = fallbackReplies || [];
         } else {
             allReplies = leadReplies || [];
         }
 
-        // Compute email stats matching dashboard logic
-        const { data: icpLeads } = await supabaseAdmin
-            .from('icp_tracker')
-            .select('id, created_at, "Email Last Contacted", "Email_1", "Email_2", "Email_3", "Email_4", "Email_5", "Email_6", "Replied"')
-            .limit(50000);
+        // Use efficient aggregate count queries instead of fetching 50k rows
+        const [icpStats, enrichedStats] = await Promise.all([
+            countTableEmailStats('icp_tracker', fromISO, toISO),
+            countTableEmailStats('ENRICHED_LEADS', fromISO, toISO)
+        ]);
 
-        const { data: enrichedLeads } = await supabaseAdmin
-            .from('ENRICHED_LEADS')
-            .select('"Url", created_at, "Email Last Contacted", "Email_1", "Email_2", "Email_3", "Email_4", "Email_5", "Email_6", "Replied"')
-            .limit(50000);
-
-        const allLocalLeads = [
-            ...(icpLeads || []),
-            ...(enrichedLeads || [])
-        ];
-
-        let totalEmails = 0, leadsContacted = 0, repliedLeads = 0;
-        const emailCounts = [0, 0, 0, 0, 0, 0];
-
-        allLocalLeads.forEach((lead: any) => {
-            if (!isInDateRange(lead, fromDate, toDate)) return;
-
-            let hasAnyEmail = false;
-            for (let i = 1; i <= 6; i++) {
-                if (lead[`Email_${i}`] && String(lead[`Email_${i}`]).trim()) {
-                    hasAnyEmail = true;
-                    emailCounts[i - 1]++;
-                    totalEmails++;
-                }
-            }
-            if (hasAnyEmail) leadsContacted++;
-
-            const rep = lead["Replied"] || "";
-            if (String(rep).toLowerCase() === "yes") repliedLeads++;
-        });
+        const emailStats = {
+            totalEmails: icpStats.totalEmails + enrichedStats.totalEmails,
+            leadsContacted: icpStats.contacted + enrichedStats.contacted,
+            repliedLeads: icpStats.replied + enrichedStats.replied,
+            emailCounts: icpStats.emailCounts.map((c, i) => c + enrichedStats.emailCounts[i])
+        };
 
         return NextResponse.json({
             campaignAnalytics: campaignAnalytics || [],
             leadReplies: allReplies,
-            emailStats: {
-                totalEmails,
-                leadsContacted,
-                repliedLeads,
-                emailCounts
-            }
+            emailStats
         });
     } catch (error: any) {
         console.error('Email DB Data API Error:', error);

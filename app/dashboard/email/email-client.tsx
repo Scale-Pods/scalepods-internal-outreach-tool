@@ -113,11 +113,11 @@ export default function EmailDashboardClient({
                 </div>
             </div>
 
-            {/* 4 Top Metric Cards — Real data from ICP Tracker + instantly_lead_replies */}
+            {/* 4 Top Metric Cards — all from date-filtered localData (ICP tracker) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
-                    title="Total Leads"
-                    value={metrics.totalLeads}
+                    title="Contacted Leads"
+                    value={localData.leadsContacted}
                     icon={<Users className="h-5 w-5" />}
                     iconBg="bg-indigo-50 text-indigo-600"
                     onClick={() => router.push('/dashboard/email/sent')}
@@ -131,7 +131,7 @@ export default function EmailDashboardClient({
                 />
                 <MetricCard
                     title="Total Replies"
-                    value={loading ? "..." : dbReplyCount}
+                    value={localData.repliedLeads}
                     icon={<Reply className="h-5 w-5" />}
                     iconBg="bg-emerald-50 text-emerald-600"
                     onClick={() => router.push('/dashboard/email/received')}

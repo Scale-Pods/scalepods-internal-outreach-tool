@@ -39,62 +39,33 @@ export interface AggregatedMetrics {
     clickRate: number;
 }
 
-// Count emails sent for a lead (Email_1 to Email_6)
-function countEmailsSent(lead: any): number {
-    let count = 0;
-    for (let i = 1; i <= 6; i++) {
-        if (lead[`Email_${i}`] && String(lead[`Email_${i}`]).trim()) count++;
-    }
-    return count;
-}
+function countTable(tableName: string, fromISO: string, toISO: string) {
+    const base = () => supabaseAdmin.from(tableName).select('*', { count: 'exact', head: true })
+        .gte('"Email Last Contacted"', fromISO)
+        .lte('"Email Last Contacted"', toISO);
 
-// Check if lead was contacted in date range using "Email Last Contacted"
-function isInDateRange(lead: any, fromD: Date, toD: Date): boolean {
-    // Primary: use "Email Last Contacted" timestamp
-    const elc = lead["Email Last Contacted"];
-    if (elc) {
-        const d = new Date(elc);
-        if (!isNaN(d.getTime())) return d >= fromD && d <= toD;
-    }
-    // Fallback: if any Email_N is set, use created_at
-    for (let i = 1; i <= 6; i++) {
-        if (lead[`Email_${i}`] && String(lead[`Email_${i}`]).trim()) {
-            const d = new Date(lead.created_at);
-            if (!isNaN(d.getTime())) return d >= fromD && d <= toD;
-        }
-    }
-    return false;
+    return Promise.all([
+        base(),
+        base().eq('"Replied"', 'yes'),
+        ...[1, 2, 3, 4, 5, 6].map(i => base().not(`"Email_${i}"`, 'is', null))
+    ]);
 }
 
 export async function getEmailStats(fromD: Date, toD: Date) {
     try {
-        // Set to full day boundaries
         const fromFull = new Date(fromD);
         fromFull.setHours(0, 0, 0, 0);
         const toFull = new Date(toD);
         toFull.setHours(23, 59, 59, 999);
+        const fromISO = fromFull.toISOString();
+        const toISO = toFull.toISOString();
 
-        // Fetch Instantly campaign analytics
+        // Fetch campaign analytics (cumulative, can't date-filter)
         const { data: campaignAnalytics } = await supabaseAdmin
             .from('instantly_campaign_analytics')
             .select('*');
 
-        // Fetch lead replies within date range
-        let repliesQuery = supabaseAdmin
-            .from('instantly_lead_replies')
-            .select('*')
-            .gte('reply_timestamp', fromFull.toISOString())
-            .lte('reply_timestamp', toFull.toISOString());
-
-        const { data: leadReplies, error: repliesError } = await repliesQuery
-            .order('reply_timestamp', { ascending: false });
-
-        // Fallback if reply_timestamp filter fails
-        const allReplies = repliesError
-            ? await supabaseAdmin.from('instantly_lead_replies').select('*').order('created_at', { ascending: false }).then(r => r.data || [])
-            : (leadReplies || []);
-
-        // Build campaign metrics from Instantly
+        // Build campaign metrics
         const rawCampaigns = campaignAnalytics || [];
         const dataRows = rawCampaigns.filter((r: any) => r.record_id !== 1 && r.campaign_id !== '000_HEADER');
 
@@ -127,44 +98,41 @@ export async function getEmailStats(fromD: Date, toD: Date) {
             };
         });
 
-        // Fetch ICP leads for local email counting
-        const { data: icpLeads } = await supabaseAdmin
-            .from('icp_tracker')
-            .select('id, created_at, "Email Last Contacted", "Email_1", "Email_2", "Email_3", "Email_4", "Email_5", "Email_6", "Replied"')
-            .limit(50000);
+        // Fetch lead replies within date range
+        let repliesQuery = supabaseAdmin
+            .from('instantly_lead_replies')
+            .select('*')
+            .gte('reply_timestamp', fromISO)
+            .lte('reply_timestamp', toISO);
 
-        // Fetch ENRICHED leads for local email counting
-        const { data: enrichedLeads } = await supabaseAdmin
-            .from('ENRICHED_LEADS')
-            .select('"Url", created_at, "Email Last Contacted", "Email_1", "Email_2", "Email_3", "Email_4", "Email_5", "Email_6", "Replied"')
-            .limit(50000);
+        const { data: leadReplies, error: repliesError } = await repliesQuery
+            .order('reply_timestamp', { ascending: false });
 
-        const allLeads = [
-            ...(icpLeads || []),
-            ...(enrichedLeads || [])
-        ];
+        const allReplies = repliesError
+            ? await supabaseAdmin.from('instantly_lead_replies').select('*').order('created_at', { ascending: false }).then(r => r.data || [])
+            : (leadReplies || []);
 
-        let totalEmails = 0, leadsContacted = 0, repliedLeads = 0;
-        const emailCounts = [0, 0, 0, 0, 0, 0]; // Email_1 ... Email_6
+        // Use aggregate count queries instead of fetching 50k rows
+        const [icpResults, enrichedResults] = await Promise.all([
+            countTable('icp_tracker', fromISO, toISO),
+            countTable('ENRICHED_LEADS', fromISO, toISO)
+        ]);
 
-        allLeads.forEach((lead: any) => {
-            const inRange = isInDateRange(lead, fromFull, toFull);
-            if (!inRange) return;
-
-            let hasAnyEmail = false;
-            for (let i = 1; i <= 6; i++) {
-                if (lead[`Email_${i}`] && String(lead[`Email_${i}`]).trim()) {
-                    hasAnyEmail = true;
-                    emailCounts[i - 1]++;
-                    totalEmails++;
-                }
-            }
-
-            if (hasAnyEmail) leadsContacted++;
-
-            const rep = lead["Replied"] || "";
-            if (String(rep).toLowerCase() === "yes") repliedLeads++;
+        const extract = (results: Awaited<ReturnType<typeof countTable>>) => ({
+            contacted: results[0].count || 0,
+            replied: results[1].count || 0,
+            stageCounts: results.slice(2).map(r => r.count || 0)
         });
+
+        const icp = extract(icpResults);
+        const enriched = extract(enrichedResults);
+
+        const localData = {
+            leadsContacted: icp.contacted + enriched.contacted,
+            repliedLeads: icp.replied + enriched.replied,
+            totalEmails: [...icp.stageCounts, ...enriched.stageCounts].reduce((a, b) => a + b, 0),
+            emailCounts: icp.stageCounts.map((c, i) => c + enriched.stageCounts[i])
+        };
 
         const EMPTY_METRICS: AggregatedMetrics = {
             totalLeads: 0, totalContacted: 0, totalEmailsSent: 0, totalUniqueOpens: 0, totalUniqueReplies: 0,
@@ -196,7 +164,7 @@ export async function getEmailStats(fromD: Date, toD: Date) {
             metrics,
             recentReplies: allReplies.slice(0, 4),
             dbReplyCount: allReplies.length,
-            localData: { totalEmails, emailCounts, leadsContacted, repliedLeads }
+            localData
         };
     } catch (e) {
         console.error("Email stats error:", e);

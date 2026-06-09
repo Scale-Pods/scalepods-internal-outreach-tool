@@ -79,8 +79,11 @@ export default function EmailAnalyticsPage() {
 
             setGeneralData(generalJson);
 
-            // Fetch DB Analytics
-            const dbRes = await fetch('/api/email/db-data');
+            // Fetch DB Analytics with date range
+            const dbParams = new URLSearchParams();
+            if (startDate) dbParams.append('from', start ? start.toISOString() : '');
+            if (endDate) dbParams.append('to', end ? end.toISOString() : '');
+            const dbRes = await fetch(`/api/email/db-data?${dbParams.toString()}`);
             if (dbRes.ok) {
                 const dbJson = await dbRes.json();
                 setDbCampaigns(dbJson.campaignAnalytics || []);
@@ -333,8 +336,8 @@ export default function EmailAnalyticsPage() {
                     />
                     <MetricCard
                         label="Total Leads"
-                        value={totalCampaignLeads > 0 ? totalCampaignLeads.toLocaleString() : totalLeads.toLocaleString()}
-                        subtext={totalCampaignLeads > 0 ? "From Campaigns" : "Global Leads"}
+                        value={totalLeads.toLocaleString()}
+                        subtext="Date Filtered"
                         icon={Users}
                         iconBg="bg-slate-50"
                         iconColor="text-slate-600"

@@ -176,12 +176,12 @@ export default function UnsubscribedPage() {
 
                 {/* Metrics */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatCard title="Total Unsubscribed" value={filteredResults.length.toString()} />
+                    <StatCard title="Unsubscribed" value={filteredResults.length.toString()} />
                     <StatCard
-                        title="Recent (30d)"
-                        value={unsubscribed.length.toString()}
+                        title="In Date Range"
+                        value={filteredResults.length.toString()}
                         color="text-amber-600"
-                        tooltip="Total records found in the system for this criteria."
+                        tooltip="Records matching the selected date range."
                     />
                 </div>
 
