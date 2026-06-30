@@ -146,7 +146,7 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
 
     // Fetch all rows from all three lead tables (no DB-level date filter —
     // we filter in-memory because the "contacted" date may differ from created_at)
-    const [icpRows, metaRows, enrichedRows, emailReplies, voiceCalls, hubspotCount] = await Promise.all([
+    const [icpRows, metaRows, enrichedRows, emailReplies, voiceCalls, hubspotRows] = await Promise.all([
       fetchTable("icp_tracker", ICP_DASHBOARD_COLUMNS),
       fetchTable("meta_lead_tracker", META_DASHBOARD_COLUMNS),
       fetchTable("ENRICHED_LEADS", ENRICHED_DASHBOARD_COLUMNS),
@@ -160,11 +160,7 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
         .select('started_at, duration_seconds, status')
         .gte('started_at', fromFull.toISOString())
         .lte('started_at', toFull.toISOString()),
-      supabaseAdmin
-        .from('hubspot_lead')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', fromFull.toISOString())
-        .lte('created_at', toFull.toISOString()),
+      fetchTable("hubspot_lead", ICP_DASHBOARD_COLUMNS)
     ]);
 
     const allLeads = [
@@ -224,6 +220,22 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
       }
     });
 
+    let hubspotLeads = 0, hubspotEmailSent = 0, hubspotWhatsappSent = 0, hubspotVoiceContacted = 0, hubspotWhatsappReply = 0;
+    
+    hubspotRows.forEach((lead: any) => {
+      const dateStr = extractDate(lead);
+      if (!dateStr) return;
+      const leadDate = new Date(dateStr);
+      if (isNaN(leadDate.getTime())) return;
+      if (leadDate < fromFull || leadDate > toFull) return;
+
+      hubspotLeads++;
+      if (hasEmailSent(lead)) hubspotEmailSent++;
+      if (hasWhatsappSent(lead)) hubspotWhatsappSent++;
+      if (hasVoiceSent(lead)) hubspotVoiceContacted++;
+      if (hasWhatsappReplied(lead)) hubspotWhatsappReply++;
+    });
+
     const acquisitionChartData = Object.entries(acquisitionMap).map(([name, leads]) => ({ name, leads }));
 
     function formatDuration(totalSeconds: number) {
@@ -250,7 +262,14 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
         totalVoiceSeconds,
         voiceMinutesString: formatDuration(totalVoiceSeconds),
         totalVoiceCalls,
-        totalHubspotLeads: hubspotCount.count || 0,
+        totalHubspotLeads: hubspotLeads,
+        hubspot: {
+            leads: hubspotLeads,
+            emails: hubspotEmailSent,
+            whatsapp: hubspotWhatsappSent,
+            voice: hubspotVoiceContacted,
+            replies: hubspotWhatsappReply
+        }
       },
       acquisitionChartData,
     };

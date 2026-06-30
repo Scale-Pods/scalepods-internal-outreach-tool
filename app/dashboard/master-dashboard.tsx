@@ -58,6 +58,13 @@ interface DashboardStats {
     totalReplies: number; totalVoiceSeconds: number;
     voiceMinutesString: string; totalVoiceCalls: number;
     totalHubspotLeads: number;
+    hubspot?: {
+        leads: number;
+        emails: number;
+        whatsapp: number;
+        voice: number;
+        replies: number;
+    }
 }
 
 export default function MasterDashboard({ stats, acquisitionChartData }: { stats: DashboardStats, acquisitionChartData: any[] }) {
@@ -104,78 +111,125 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                 </div>
             </div>
 
-            {/* Top Metric Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {/* Cold Outreach Section */}
+            <div className="mt-8 mb-4">
+                <h2 className="text-xl font-bold text-slate-800 mb-4">Cold Outreach bot</h2>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                    <MetricCard
+                        title="Total Leads"
+                        value={loading ? "..." : stats.totalLeads.toLocaleString()}
+                        change="Real-time"
+                        isUp={true}
+                        icon={<Users className="h-6 w-6" />}
+                        color="text-blue-600"
+                        bg="bg-blue-50"
+                        border="border-blue-100"
+                        onClick={() => router.push('/dashboard/leads')}
+                        subtitle={`ICP: ${stats.totalICP} | Meta: ${stats.totalMeta} | Enriched: ${(stats as any).totalEnriched || 0}`}
+                    />
+                    <MetricCard
+                        title="Emails Sent"
+                        value={loading ? "..." : stats.totalEmails.toLocaleString()}
+                        change="Real-time"
+                        isUp={true}
+                        icon={<Mail className="h-6 w-6" />}
+                        color="text-emerald-600"
+                        bg="bg-emerald-50"
+                        border="border-emerald-100"
+                        onClick={() => router.push('/dashboard/email/sent')}
+                    />
+                    <MetricCard
+                        title="WhatsApp Chats"
+                        value={loading ? "..." : stats.totalWhatsApp.toLocaleString()}
+                        change="Real-time"
+                        isUp={true}
+                        icon={<MessageCircle className="h-6 w-6" />}
+                        color="text-purple-600"
+                        bg="bg-purple-50"
+                        border="border-purple-100"
+                        onClick={() => router.push('/dashboard/whatsapp/chat')}
+                    />
+                    <MetricCard
+                        title="Voice Calls"
+                        value={loading ? "..." : (stats as any).totalVoiceCalls?.toLocaleString() || "0"}
+                        change={`${(stats as any).voiceMinutesString || "0m 0s"}`}
+                        isUp={true}
+                        icon={<Activity className="h-6 w-6" />}
+                        color="text-orange-600"
+                        bg="bg-orange-50"
+                        border="border-orange-100"
+                        onClick={() => router.push('/dashboard/voice')}
+                    />
+                    <MetricCard
+                        title="Total Replies"
+                        value={loading ? "..." : (stats.totalReplies).toLocaleString()}
+                        change={`${stats.totalLeads > 0 ? ((stats.totalReplies / stats.totalLeads) * 100).toFixed(1) : 0}% Rate`}
+                        isUp={true}
+                        icon={<Expand className="h-6 w-6" />}
+                        color="text-indigo-600"
+                        bg="bg-indigo-50"
+                        border="border-indigo-100"
+                        onClick={() => setIsRepliesModalOpen(true)}
+                        subtitle={`Email: ${stats.totalEmailReplies} + WA: ${stats.totalWhatsappReplies} (ICP: ${stats.whatsappIcpReplied || 0} Meta: ${stats.whatsappMetaReplied || 0} Enriched: ${(stats as any).enrichedRepliedCount || 0})`}
+                    />
+                </div>
+            </div>
 
-                <MetricCard
-                    title="Total Leads"
-                    value={loading ? "..." : stats.totalLeads.toLocaleString()}
-                    change="Real-time"
-                    isUp={true}
-                    icon={<Users className="h-6 w-6" />}
-                    color="text-blue-600"
-                    bg="bg-blue-50"
-                    border="border-borderlue-100"
-                    onClick={() => router.push('/dashboard/leads')}
-                    subtitle={`ICP: ${stats.totalICP} | Meta: ${stats.totalMeta} | Enriched: ${(stats as any).totalEnriched || 0}`}
-                />
-                <MetricCard
-                    title="Total Emails Sent"
-                    value={loading ? "..." : stats.totalEmails.toLocaleString()}
-                    change="Real-time"
-                    isUp={true}
-                    icon={<Mail className="h-6 w-6" />}
-                    color="text-emerald-600"
-                    bg="bg-emerald-50"
-                    border="border-bordermerald-100"
-                    onClick={() => router.push('/dashboard/email/sent')}
-                />
-                <MetricCard
-                    title="Total WhatsApp Chats"
-                    value={loading ? "..." : stats.totalWhatsApp.toLocaleString()}
-                    change="Real-time"
-                    isUp={true}
-                    icon={<MessageCircle className="h-6 w-6" />}
-                    color="text-purple-600"
-                    bg="bg-purple-50"
-                    border="border-purple-100"
-                    onClick={() => router.push('/dashboard/whatsapp/chat')}
-                />
-                <MetricCard
-                    title="Total Voice Calls"
-                    value={loading ? "..." : (stats as any).totalVoiceCalls?.toLocaleString() || "0"}
-                    change={`${(stats as any).voiceMinutesString || "0m 0s"}`}
-                    isUp={true}
-                    icon={<Activity className="h-6 w-6" />}
-                    color="text-orange-600"
-                    bg="bg-orange-50"
-                    border="border-orange-100"
-                    onClick={() => router.push('/dashboard/voice')}
-                />
-                
-                <MetricCard
-                    title="Total Replies"
-                    value={loading ? "..." : (stats.totalReplies).toLocaleString()}
-                    change={`${stats.totalLeads > 0 ? ((stats.totalReplies / stats.totalLeads) * 100).toFixed(1) : 0}% Rate`}
-                    isUp={true}
-                    icon={<Expand className="h-6 w-6" />}
-                    color="text-indigo-600"
-                    bg="bg-indigo-50"
-                    border="border-indigo-100"
-                    onClick={() => setIsRepliesModalOpen(true)}
-                    subtitle={`Email: ${stats.totalEmailReplies} + WA: ${stats.totalWhatsappReplies} (ICP: ${stats.whatsappIcpReplied || 0} Meta: ${stats.whatsappMetaReplied || 0} Enriched: ${(stats as any).enrichedRepliedCount || 0})`}
-                />
-                <MetricCard
-                    title="HubSpot Leads"
-                    value={loading ? "..." : stats.totalHubspotLeads.toLocaleString()}
-                    change="Real-time"
-                    isUp={true}
-                    icon={<TrendingUp className="h-6 w-6" />}
-                    color="text-cyan-600"
-                    bg="bg-cyan-50"
-                    border="border-cyan-100"
-                    onClick={() => router.push('/dashboard/hubspot-leads')}
-                />
+            {/* Hot CRM Outreach Section */}
+            <div className="mb-8 mt-8">
+                <h2 className="text-xl font-bold text-slate-800 mb-4">Hot CRM outreach bot</h2>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                    <MetricCard
+                        title="Total Leads"
+                        value={loading ? "..." : (stats.hubspot?.leads || 0).toLocaleString()}
+                        change="Real-time"
+                        isUp={true}
+                        icon={<Users className="h-6 w-6" />}
+                        color="text-cyan-600"
+                        bg="bg-cyan-50"
+                        border="border-cyan-100"
+                    />
+                    <MetricCard
+                        title="Emails Sent"
+                        value={loading ? "..." : (stats.hubspot?.emails || 0).toLocaleString()}
+                        change="Real-time"
+                        isUp={true}
+                        icon={<Mail className="h-6 w-6" />}
+                        color="text-emerald-600"
+                        bg="bg-emerald-50"
+                        border="border-emerald-100"
+                    />
+                    <MetricCard
+                        title="WhatsApp Chats"
+                        value={loading ? "..." : (stats.hubspot?.whatsapp || 0).toLocaleString()}
+                        change="Real-time"
+                        isUp={true}
+                        icon={<MessageCircle className="h-6 w-6" />}
+                        color="text-purple-600"
+                        bg="bg-purple-50"
+                        border="border-purple-100"
+                    />
+                    <MetricCard
+                        title="Voice Calls"
+                        value={loading ? "..." : (stats.hubspot?.voice || 0).toLocaleString()}
+                        change="Real-time"
+                        isUp={true}
+                        icon={<Activity className="h-6 w-6" />}
+                        color="text-orange-600"
+                        bg="bg-orange-50"
+                        border="border-orange-100"
+                    />
+                    <MetricCard
+                        title="Total Replies"
+                        value={loading ? "..." : (stats.hubspot?.replies || 0).toLocaleString()}
+                        change={`${(stats.hubspot?.leads || 0) > 0 ? (((stats.hubspot?.replies || 0) / (stats.hubspot?.leads || 1)) * 100).toFixed(1) : 0}% Rate`}
+                        isUp={true}
+                        icon={<Expand className="h-6 w-6" />}
+                        color="text-indigo-600"
+                        bg="bg-indigo-50"
+                        border="border-indigo-100"
+                    />
+                </div>
             </div>
 
 
