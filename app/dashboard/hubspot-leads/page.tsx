@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, Suspense } from "react";
+import { useEffect, useState, useCallback, Suspense, useRef } from "react";
+import * as XLSX from "xlsx";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -11,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { SPLoader } from "@/components/sp-loader";
-import { Users, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { Users, ChevronLeft, ChevronRight, Search, X, Upload } from "lucide-react";
 import { format } from "date-fns";
 
 interface HubspotLead {
@@ -90,10 +91,12 @@ function PaginationFooter({ totalItems, currentPage, itemsPerPage, onPageChange 
 function HubspotLeadsContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [leads, setLeads] = useState<HubspotLead[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [isUploading, setIsUploading] = useState(false);
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
@@ -148,6 +151,41 @@ function HubspotLeadsContent() {
         }
     };
 
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+            const res = await fetch('/api/hubspot-leads/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(jsonData),
+            });
+            const result = await res.json();
+            
+            if (res.ok) {
+                alert(`Successfully uploaded ${result.count} leads.`);
+                fetchLeads(page);
+            } else {
+                alert(`Error uploading leads: ${result.error}`);
+            }
+        } catch (error) {
+            console.error("Upload error:", error);
+            alert("An error occurred while uploading the file.");
+        } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
+        }
+    };
+
     const hasActiveFilters = search || statusFilter !== 'all' || repliedFilter !== 'all';
 
     return (
@@ -162,7 +200,23 @@ function HubspotLeadsContent() {
                         {totalCount.toLocaleString()} leads in selected date range
                     </p>
                 </div>
-                <div className="shrink-0">
+                <div className="flex items-center gap-3 shrink-0">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                    />
+                    <Button
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                        className="bg-white"
+                    >
+                        <Upload className="mr-2 h-4 w-4" />
+                        {isUploading ? "Uploading..." : "Upload Leads"}
+                    </Button>
                     <DateRangePicker onUpdate={handleDateUpdate} />
                 </div>
             </div>

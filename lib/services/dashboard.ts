@@ -76,7 +76,7 @@ async function fetchTable(tableName: string, columns: string, limit = 50000) {
   try {
     const { data, error } = await supabaseAdmin
       .from(tableName)
-      .select(columns, { count: 'exact', head: false })
+      .select(columns)
       .limit(limit);
     if (error) {
       console.error(`Error fetching ${tableName}:`, error);
