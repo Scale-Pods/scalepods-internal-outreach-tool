@@ -21,7 +21,7 @@ export async function GET() {
     let hasMore = true;
 
     while (hasMore) {
-        const url = `${baseUrl}/master_leads_unique?select=phone,Loop&offset=${offset}&limit=${limit}`;
+        const url = `${baseUrl}/master_leads_unique?select=company_phone_number,Loop,lifecyclestage&offset=${offset}&limit=${limit}`;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000);
 

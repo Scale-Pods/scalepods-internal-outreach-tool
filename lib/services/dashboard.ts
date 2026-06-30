@@ -146,7 +146,7 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
 
     // Fetch all rows from all three lead tables (no DB-level date filter —
     // we filter in-memory because the "contacted" date may differ from created_at)
-    const [icpRows, metaRows, enrichedRows, emailReplies, voiceCalls] = await Promise.all([
+    const [icpRows, metaRows, enrichedRows, emailReplies, voiceCalls, hubspotCount] = await Promise.all([
       fetchTable("icp_tracker", ICP_DASHBOARD_COLUMNS),
       fetchTable("meta_lead_tracker", META_DASHBOARD_COLUMNS),
       fetchTable("ENRICHED_LEADS", ENRICHED_DASHBOARD_COLUMNS),
@@ -160,6 +160,11 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
         .select('started_at, duration_seconds, status')
         .gte('started_at', fromFull.toISOString())
         .lte('started_at', toFull.toISOString()),
+      supabaseAdmin
+        .from('hubspot_lead')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', fromFull.toISOString())
+        .lte('created_at', toFull.toISOString()),
     ]);
 
     const allLeads = [
@@ -245,6 +250,7 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
         totalVoiceSeconds,
         voiceMinutesString: formatDuration(totalVoiceSeconds),
         totalVoiceCalls,
+        totalHubspotLeads: hubspotCount.count || 0,
       },
       acquisitionChartData,
     };

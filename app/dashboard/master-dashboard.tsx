@@ -57,6 +57,7 @@ interface DashboardStats {
     whatsappIcpReplied: number; whatsappMetaReplied: number; enrichedRepliedCount: number;
     totalReplies: number; totalVoiceSeconds: number;
     voiceMinutesString: string; totalVoiceCalls: number;
+    totalHubspotLeads: number;
 }
 
 export default function MasterDashboard({ stats, acquisitionChartData }: { stats: DashboardStats, acquisitionChartData: any[] }) {
@@ -104,7 +105,7 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
             </div>
 
             {/* Top Metric Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
 
                 <MetricCard
                     title="Total Leads"
@@ -163,6 +164,17 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                     border="border-indigo-100"
                     onClick={() => setIsRepliesModalOpen(true)}
                     subtitle={`Email: ${stats.totalEmailReplies} + WA: ${stats.totalWhatsappReplies} (ICP: ${stats.whatsappIcpReplied || 0} Meta: ${stats.whatsappMetaReplied || 0} Enriched: ${(stats as any).enrichedRepliedCount || 0})`}
+                />
+                <MetricCard
+                    title="HubSpot Leads"
+                    value={loading ? "..." : stats.totalHubspotLeads.toLocaleString()}
+                    change="Real-time"
+                    isUp={true}
+                    icon={<TrendingUp className="h-6 w-6" />}
+                    color="text-cyan-600"
+                    bg="bg-cyan-50"
+                    border="border-cyan-100"
+                    onClick={() => router.push('/dashboard/hubspot-leads')}
                 />
             </div>
 

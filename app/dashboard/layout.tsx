@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity } from "lucide-react";
+import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import {
@@ -236,6 +236,7 @@ function DashboardContent({
                 { title: "Lead Scrapper", href: "/dashboard/lead-scrapper", icon: Search },
                 { title: "Leads", href: "/dashboard/leads", icon: Users },
                 { title: "Credentials", href: "/dashboard/credentials", icon: Key },
+                { title: "HubSpot Lead", href: "/dashboard/hubspot-leads", icon: Building2 },
             ]
         },
         email: {

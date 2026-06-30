@@ -19,15 +19,18 @@ import { useData, DataContext } from "@/context/DataContext";
 interface WhatsAppChatDetailProps {
     customerId: string;
     onClose?: () => void;
-    sourceTable?: 'icp_tracker' | 'meta_lead_tracker' | 'ENRICHED_LEADS';
+    sourceTable?: 'icp_tracker' | 'meta_lead_tracker' | 'ENRICHED_LEADS' | 'hubspot_lead';
     metaLeads?: any[];
+    hubspotLeads?: any[];
     isPublic?: boolean;
 }
 
 const DEFAULT_META_LEADS: any[] = [];
 const EMPTY_ARRAY: any[] = [];
 
-export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tracker', metaLeads = DEFAULT_META_LEADS, isPublic = false }: WhatsAppChatDetailProps) {
+const DEFAULT_HUBSPOT_LEADS: any[] = [];
+
+export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tracker', metaLeads = DEFAULT_META_LEADS, hubspotLeads = DEFAULT_HUBSPOT_LEADS, isPublic = false }: WhatsAppChatDetailProps) {
     const dataContext = useContext(DataContext);
     const allLeads = dataContext?.leads || EMPTY_ARRAY;
     const loadingLeads = dataContext?.loadingLeads || false;
@@ -56,7 +59,14 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                 // If not public and we have leads in context, find it there
                 if (!isPublic && allLeads && allLeads.length > 0) {
                     const searchVal = String(customerId).toLowerCase().trim();
-                    const dataSource = (sourceTable === 'meta_lead_tracker' && metaLeads.length > 0) ? metaLeads : allLeads;
+                    let dataSource: any[];
+                    if (sourceTable === 'meta_lead_tracker' && metaLeads.length > 0) {
+                        dataSource = metaLeads;
+                    } else if (sourceTable === 'hubspot_lead' && hubspotLeads.length > 0) {
+                        dataSource = hubspotLeads;
+                    } else {
+                        dataSource = allLeads;
+                    }
 
                     const found = dataSource.find((l: any) => {
                         if (l.id && String(l.id).toLowerCase() === searchVal) return true;
@@ -180,12 +190,17 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                     }
                 }
             } else {
-                // --- Meta Lead Tracker Flow ---
+                // --- Meta Lead Tracker / HubSpot Lead Flow (same Whatsapp schema) ---
                 for (let i = 1; i <= 5; i++) {
                     const raw = f[`Whatsapp_${i}`];
                     if (!raw) continue;
+                    const tsRaw: string | null = f[`Whatsapp_${i}_status`] || null;
                     const msg = parseMsg(raw, `Whatsapp ${i}`, 'bot', seq++);
-                    if (msg) timeline.push(msg);
+                    if (msg) {
+                        (msg as any).tsStatus = tsRaw;
+                        if (!msg.date) msg.date = parseTsDate(tsRaw);
+                        timeline.push(msg);
+                    }
                 }
 
                 for (let j = 1; j <= 25; j++) {
@@ -198,7 +213,20 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                     const botReply = f[`Bot_Replied_${j}`];
                     if (botReply && String(botReply).trim()) {
                         const bMsg = parseMsg(botReply, `Bot Reply ${j}`, 'bot', seq++);
-                        if (bMsg) timeline.push(bMsg);
+                        if (bMsg) {
+                            const botStatus = f[`Bot_Replied_Status_${j}`] || null;
+                            (bMsg as any).tsStatus = botStatus;
+                            timeline.push(bMsg);
+                        }
+                    }
+                }
+
+                // Fallback: top-level Replied / WTS_Reply_Track
+                if (!timeline.some(m => m.type === 'user')) {
+                    const repliedVal = f.Replied || f.WTS_Reply_Track;
+                    if (repliedVal && String(repliedVal).toLowerCase() !== "no" && String(repliedVal).toLowerCase() !== "none") {
+                        const rMsg = parseMsg(repliedVal, "User Reply", 'user', seq++);
+                        if (rMsg) timeline.push(rMsg);
                     }
                 }
             }
@@ -248,7 +276,7 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                 </div>
                 <div className="flex items-center gap-2">
                     <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-none text-[10px] font-bold uppercase">
-                        {sourceTable === 'icp_tracker' ? 'ICP Tracker' : sourceTable === 'ENRICHED_LEADS' ? 'Enriched Leads' : 'Meta Lead'}
+                        {sourceTable === 'icp_tracker' ? 'ICP Tracker' : sourceTable === 'ENRICHED_LEADS' ? 'Enriched Leads' : sourceTable === 'hubspot_lead' ? 'HubSpot Lead' : 'Meta Lead'}
                     </Badge>
                     {!isPublic && (
                         <Button
@@ -353,7 +381,7 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                                 <div>
                                     <span className="text-[10px] font-bold text-slate-400 uppercase">Source Table</span>
                                     <p className="font-bold text-blue-600 mt-1 text-xs">
-                                        {sourceTable === 'icp_tracker' ? 'icp_tracker' : sourceTable === 'ENRICHED_LEADS' ? 'ENRICHED_LEADS' : 'meta_lead_tracker'}
+                                        {sourceTable === 'icp_tracker' ? 'icp_tracker' : sourceTable === 'ENRICHED_LEADS' ? 'ENRICHED_LEADS' : sourceTable === 'hubspot_lead' ? 'hubspot_lead' : 'meta_lead_tracker'}
                                     </p>
                                 </div>
                                 {lead.lifecyclestage && (

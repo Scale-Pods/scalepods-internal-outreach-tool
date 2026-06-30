@@ -36,7 +36,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { subDays, startOfDay, endOfDay } from "date-fns";
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 
-type SourceTable = 'icp_tracker' | 'meta_lead_tracker' | 'ENRICHED_LEADS';
+type SourceTable = 'icp_tracker' | 'meta_lead_tracker' | 'ENRICHED_LEADS' | 'hubspot_lead';
 
 // --- Sorting & Activity Helpers ---
 const getMsgDate = (raw: any) => {
@@ -110,26 +110,33 @@ export default function WhatsappChatPage() {
     const [sourceTable, setSourceTable] = useState<SourceTable>('icp_tracker');
     const [metaLeads, setMetaLeads] = useState<any[]>([]);
     const [loadingMeta, setLoadingMeta] = useState(false);
+    const [hubspotLeads, setHubspotLeads] = useState<any[]>([]);
+    const [loadingHubspot, setLoadingHubspot] = useState(false);
 
     // Loop data from master_leads_unique
     const [loopMap, setLoopMap] = useState<Record<string, string>>({});
+    const [lifecycleMap, setLifecycleMap] = useState<Record<string, string>>({});
 
     useEffect(() => {
-        // Fetch loop data on mount
         (async () => {
             try {
                 const res = await fetch('/api/leads/loops');
                 if (res.ok) {
                     const data = await res.json();
-                    const map: Record<string, string> = {};
+                    const lMap: Record<string, string> = {};
+                    const lcMap: Record<string, string> = {};
                     (data.data || []).forEach((row: any) => {
-                        const phoneVal = row.phone || row.Phone;
-                        if (phoneVal && row.Loop) {
+                        const phoneVal = row.company_phone_number || row.phone || row.Phone;
+                        if (phoneVal) {
                             const normalized = String(phoneVal).replace(/\D/g, '');
-                            if (normalized) map[normalized] = row.Loop;
+                            if (normalized) {
+                                if (row.Loop) lMap[normalized] = row.Loop;
+                                if (row.lifecyclestage) lcMap[normalized] = row.lifecyclestage;
+                            }
                         }
                     });
-                    setLoopMap(map);
+                    setLoopMap(lMap);
+                    setLifecycleMap(lcMap);
                 }
             } catch (err) {
                 console.error('Failed to fetch loop data:', err);
@@ -152,13 +159,34 @@ export default function WhatsappChatPage() {
         }
     }, []);
 
+    const fetchHubspotLeads = useCallback(async () => {
+        setLoadingHubspot(true);
+        try {
+            // Fetch all hubspot leads (no pagination for chat view — we filter client-side)
+            const res = await fetch('/api/hubspot-leads/all');
+            if (res.ok) {
+                const data = await res.json();
+                setHubspotLeads(data.leads || []);
+            }
+        } catch (err) {
+            console.error('Failed to fetch hubspot_lead:', err);
+        } finally {
+            setLoadingHubspot(false);
+        }
+    }, []);
+
     useEffect(() => {
         if (sourceTable === 'meta_lead_tracker' && metaLeads.length === 0) {
             fetchMetaLeads();
         }
+        if (sourceTable === 'hubspot_lead' && hubspotLeads.length === 0) {
+            fetchHubspotLeads();
+        }
     }, [sourceTable]);
 
-    const loading = sourceTable === 'icp_tracker' ? loadingLeads : loadingMeta;
+    const loading = sourceTable === 'icp_tracker' ? loadingLeads
+        : sourceTable === 'hubspot_lead' ? loadingHubspot
+        : loadingMeta;
 
     // URL Sync for chat
     const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -247,6 +275,18 @@ export default function WhatsappChatPage() {
                 return false;
             });
             setLeads(wpLeads);
+        } else if (sourceTable === 'hubspot_lead') {
+            const wpLeads = hubspotLeads.filter((lead: any) => {
+                for (let i = 1; i <= 5; i++) {
+                    if (lead[`Whatsapp_${i}`]) return true;
+                }
+                for (let i = 1; i <= 25; i++) {
+                    if (lead[`User_Replied_${i}`] && String(lead[`User_Replied_${i}`]).toLowerCase() !== 'no') return true;
+                    if (lead[`Bot_Replied_${i}`]) return true;
+                }
+                return false;
+            });
+            setLeads(wpLeads as any);
         } else {
             // meta_lead_tracker — show all leads that have any Whatsapp_ field
             const wpLeads = metaLeads.filter((lead: any) => {
@@ -262,7 +302,7 @@ export default function WhatsappChatPage() {
             });
             setLeads(wpLeads as any);
         }
-    }, [allLeads, loadingLeads, sourceTable, metaLeads, loadingMeta]);
+    }, [allLeads, loadingLeads, sourceTable, metaLeads, loadingMeta, hubspotLeads, loadingHubspot]);
 
     const filteredLeads = useMemo(() => {
         return leads.filter(l => {
@@ -544,6 +584,17 @@ export default function WhatsappChatPage() {
                             <Database className="h-3.5 w-3.5" />
                             Enriched Leads
                         </button>
+                        <button
+                            onClick={() => { setSourceTable('hubspot_lead'); setCurrentPage(1); }}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                                sourceTable === 'hubspot_lead'
+                                    ? 'bg-white text-slate-900 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                            <Database className="h-3.5 w-3.5" />
+                            HubSpot Lead
+                        </button>
                     </div>
                     <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
                     <Button variant="outline" size="sm" onClick={() => window.location.reload()} className="gap-2 h-10 px-4">
@@ -641,7 +692,7 @@ export default function WhatsappChatPage() {
                                         {paginatedLeads.map((lead: any, idx) => {
                                             const uniqueId = String(lead.id || lead.phone || lead.Phone || lead.company_phone_number || `meta_${idx}`);
                                             return (
-                                                <CustomerRow key={uniqueId} lead={lead} onClick={() => setSelectedLeadId(uniqueId)} loopMap={loopMap} />
+                                                <CustomerRow key={uniqueId} lead={lead} onClick={() => setSelectedLeadId(uniqueId)} loopMap={loopMap} lifecycleMap={lifecycleMap} />
                                             );
                                         })}
                                     </tbody>
@@ -676,7 +727,7 @@ export default function WhatsappChatPage() {
             <Dialog open={!!selectedLeadId} onOpenChange={(open) => !open && setSelectedLeadId(null)}>
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden p-6 gap-0">
                     <DialogHeader className="sr-only"><DialogTitle>WhatsApp Chat Detail</DialogTitle></DialogHeader>
-                    {selectedLeadId && <WhatsAppChatDetail customerId={selectedLeadId} onClose={() => setSelectedLeadId(null)} sourceTable={sourceTable} metaLeads={metaLeads} />}
+                    {selectedLeadId && <WhatsAppChatDetail customerId={selectedLeadId} onClose={() => setSelectedLeadId(null)} sourceTable={sourceTable} metaLeads={metaLeads} hubspotLeads={hubspotLeads} />}
                 </DialogContent>
             </Dialog>
         </div>
@@ -732,7 +783,7 @@ function FilterOption({ label, checked, onCheckedChange }: any) {
     );
 }
 
-function CustomerRow({ lead: leadRaw, onClick, loopMap = {} }: { lead: ConsolidatedLead; onClick: () => void; loopMap?: Record<string, string> }) {
+function CustomerRow({ lead: leadRaw, onClick, loopMap = {}, lifecycleMap = {} }: { lead: ConsolidatedLead; onClick: () => void; loopMap?: Record<string, string>; lifecycleMap?: Record<string, string> }) {
     const lead = leadRaw as any;
     const latestDate = getLeadLatestActivity(lead);
 
@@ -817,8 +868,13 @@ function CustomerRow({ lead: leadRaw, onClick, loopMap = {} }: { lead: Consolida
 
     const displayPhone = lead.phone || lead.Phone || lead.company_phone_number || '';
     const displayName = lead.name || lead.Name || lead.full_name || displayPhone || 'Unknown';
-    // Use _table source for Loop column as requested
-    const displayLoop = lead._table === 'icp_tracker' ? 'ICP Tracker' : lead._table === 'ENRICHED_LEADS' ? 'Enriched Leads' : 'Meta Lead';
+    const displayLoop = lead._table === 'icp_tracker' ? 'ICP Tracker'
+        : lead._table === 'ENRICHED_LEADS' ? 'Enriched Leads'
+        : lead._table === 'hubspot_lead' ? 'HubSpot Lead'
+        : 'Meta Lead';
+    // Resolve lifecycle stage: row-level field first (HubSpot carries it), then lookup map
+    const normalizedPhone = displayPhone.replace(/\D/g, '');
+    const displayLifecycle = lead.lifecyclestage || (normalizedPhone ? lifecycleMap[normalizedPhone] : null);
 
     return (
         <tr className="hover:bg-slate-50 transition-colors cursor-pointer group" onClick={onClick}>
@@ -836,9 +892,9 @@ function CustomerRow({ lead: leadRaw, onClick, loopMap = {} }: { lead: Consolida
                 )}
             </td>
             <td className="px-4 py-3 text-center">
-                {lead.lifecyclestage ? (
+                {displayLifecycle ? (
                     <Badge variant="outline" className="text-[10px] uppercase font-bold border-purple-100 text-purple-600 bg-purple-50">
-                        {lead.lifecyclestage}
+                        {displayLifecycle}
                     </Badge>
                 ) : (
                     <span className="text-slate-300 text-[10px]">—</span>
