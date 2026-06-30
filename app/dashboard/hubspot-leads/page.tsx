@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -87,7 +87,7 @@ function PaginationFooter({ totalItems, currentPage, itemsPerPage, onPageChange 
     );
 }
 
-export default function HubspotLeadsPage() {
+function HubspotLeadsContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -330,5 +330,13 @@ export default function HubspotLeadsPage() {
                 </CardContent>
             </Card>
         </div>
+    );
+}
+
+export default function HubspotLeadsPage() {
+    return (
+        <Suspense fallback={<SPLoader />}>
+            <HubspotLeadsContent />
+        </Suspense>
     );
 }
