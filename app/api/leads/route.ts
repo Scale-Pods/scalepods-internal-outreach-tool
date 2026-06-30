@@ -81,21 +81,70 @@ export async function GET(req: Request) {
         const leads = await getOrSetCache(cacheKey, 5 * 60 * 1000, async () => {
             const icpDateCol = typeParam === 'whatsapp' ? 'Whatsapp Last Contacted' : 'Email Last Contacted';
             
-            const [icpLeads, metaLeads, enrichedLeads] = await Promise.all([
+            const [icpLeads, metaLeads, enrichedLeads, masterLeads] = await Promise.all([
                 fetchTableTurbo("icp_tracker", icpDateCol),
                 fetchTableTurbo("meta_lead_tracker", "created_at"),
-                fetchTableTurbo("ENRICHED_LEADS", icpDateCol)
+                fetchTableTurbo("ENRICHED_LEADS", icpDateCol),
+                fetchTableTurbo("master_leads_unique")
             ]);
 
+            const lifecycleMap = new Map();
+            if (masterLeads) {
+                masterLeads.forEach((m: any) => {
+                    if (m.company_phone_number && m.lifecyclestage) {
+                        const cleanedPhone = String(m.company_phone_number).replace(/\D/g, '');
+                        lifecycleMap.set(cleanedPhone, m.lifecyclestage);
+                    }
+                });
+            }
+
+            const formatLifecycleStage = (stage: string) => {
+                if (!stage) return stage;
+                const s = String(stage).toLowerCase().trim();
+                switch (s) {
+                    case "3773603577": return "Not Interested/DND";
+                    case "3736289008": return "Will Buy Later";
+                    case "opportunity": return "Meeting Booked";
+                    case "salesqualifiedlead": return "Attempting Contact";
+                    case "3737191101": return "Connected";
+                    case "marketingqualifiedlead": return "Junk";
+                    default: return stage;
+                }
+            };
+
+            const getLifecycle = (phoneRaw: any) => {
+                if (!phoneRaw) return undefined;
+                const cleaned = String(phoneRaw).replace(/\D/g, '');
+                const rawStage = lifecycleMap.get(cleaned);
+                return rawStage ? formatLifecycleStage(rawStage) : undefined;
+            };
 
             return [
-                ...(icpLeads || []).map((l: any) => ({ 
-                    ...l, _table: 'icp_tracker', phone: l.personal_phone, 
-                    name: l.full_name || `${l.first_name || ''} ${l.last_name || ''}`.trim() || 'Guest',
-                    Voice_1: l["Voice_1_Status"], Voice_2: l["Voice_2_Status"]
-                })),
-                ...(metaLeads || []).map((l: any) => ({ ...l, _table: 'meta_lead_tracker', phone: l.company_phone_number, name: l.full_name || 'Guest' })),
-                ...(enrichedLeads || []).map((l: any) => ({ ...l, _table: 'ENRICHED_LEADS', phone: l.company_phone_number, name: `${l["First Name"] || ''} ${l["Last Name"] || ''}`.trim() || 'Guest' }))
+                ...(icpLeads || []).map((l: any) => {
+                    const phone = l.personal_phone;
+                    return { 
+                        ...l, _table: 'icp_tracker', phone, 
+                        lifecyclestage: getLifecycle(phone),
+                        name: l.full_name || `${l.first_name || ''} ${l.last_name || ''}`.trim() || 'Guest',
+                        Voice_1: l["Voice_1_Status"], Voice_2: l["Voice_2_Status"]
+                    };
+                }),
+                ...(metaLeads || []).map((l: any) => {
+                    const phone = l.company_phone_number;
+                    return { 
+                        ...l, _table: 'meta_lead_tracker', phone, 
+                        lifecyclestage: getLifecycle(phone),
+                        name: l.full_name || 'Guest' 
+                    };
+                }),
+                ...(enrichedLeads || []).map((l: any) => {
+                    const phone = l.company_phone_number;
+                    return { 
+                        ...l, _table: 'ENRICHED_LEADS', phone, 
+                        lifecyclestage: getLifecycle(phone),
+                        name: `${l["First Name"] || ''} ${l["Last Name"] || ''}`.trim() || 'Guest' 
+                    };
+                })
             ];
         });
 

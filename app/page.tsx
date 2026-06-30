@@ -25,7 +25,7 @@ export default function LandingPage() {
                                 src="/SP_logo.png"
                                 alt="ScalePods Logo"
                                 fill
-                                sizes="(max-width: 160px) 100vw, 160px"
+                                sizes="160px"
                                 className="object-contain brightness-0 invert drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]"
                                 priority
                             />

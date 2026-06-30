@@ -356,6 +356,14 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                                         {sourceTable === 'icp_tracker' ? 'icp_tracker' : sourceTable === 'ENRICHED_LEADS' ? 'ENRICHED_LEADS' : 'meta_lead_tracker'}
                                     </p>
                                 </div>
+                                {lead.lifecyclestage && (
+                                    <div>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Lifecycle Stage</span>
+                                        <Badge className="mt-1 bg-purple-100 text-purple-700 hover:bg-purple-100 border-none text-[10px] font-bold uppercase block w-fit">
+                                            {lead.lifecyclestage}
+                                        </Badge>
+                                    </div>
+                                )}
                             </div>
                         </CardContent>
                     </Card>

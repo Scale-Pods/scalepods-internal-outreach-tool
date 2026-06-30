@@ -630,6 +630,7 @@ export default function WhatsappChatPage() {
                                         <tr>
                                             <th className="px-4 py-3">Lead</th>
                                             <th className="px-4 py-3 text-center">Loop</th>
+                                            <th className="px-4 py-3 text-center">Lifecycle Stage</th>
                                             <th className="px-4 py-3 text-center">Messages Sent</th>
                                             <th className="px-4 py-3 text-center">Status</th>
                                             <th className="px-4 py-3 text-center">Message Status</th>
@@ -830,6 +831,15 @@ function CustomerRow({ lead: leadRaw, onClick, loopMap = {} }: { lead: Consolida
             <td className="px-4 py-3 text-center">
                 {displayLoop ? (
                     <Badge variant="outline" className="text-[10px] uppercase font-bold border-borderlue-100 text-blue-600 bg-blue-50">{displayLoop}</Badge>
+                ) : (
+                    <span className="text-slate-300 text-[10px]">—</span>
+                )}
+            </td>
+            <td className="px-4 py-3 text-center">
+                {lead.lifecyclestage ? (
+                    <Badge variant="outline" className="text-[10px] uppercase font-bold border-purple-100 text-purple-600 bg-purple-50">
+                        {lead.lifecyclestage}
+                    </Badge>
                 ) : (
                     <span className="text-slate-300 text-[10px]">—</span>
                 )}

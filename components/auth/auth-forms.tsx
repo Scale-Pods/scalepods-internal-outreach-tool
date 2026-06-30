@@ -40,7 +40,7 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
                         src="/SP_logo.png"
                         alt="ScalePods Logo"
                         fill
-                        sizes="(max-width: 112px) 100vw, 112px"
+                        sizes="112px"
                         className="object-contain drop-shadow-[0_0_15px_rgba(16,185,129,0.2)]"
                         priority
                     />
