@@ -236,8 +236,7 @@ function DashboardContent({
                 { title: "Lead Scrapper", href: "/dashboard/lead-scrapper", icon: Search },
                 { title: "Leads", href: "/dashboard/leads", icon: Users },
                 { title: "Upload Leads", href: "/dashboard/upload-leads", icon: Upload },
-                { title: "Credentials", href: "/dashboard/credentials", icon: Key },
-                { title: "HubSpot Lead", href: "/dashboard/hubspot-leads", icon: Building2 },
+                { title: "Credentials", href: "/dashboard/credentials", icon: Key }
             ]
         },
         email: {
