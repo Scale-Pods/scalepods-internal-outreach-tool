@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef } from "react";
-import * as XLSX from "xlsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle } from "lucide-react";
@@ -11,8 +10,6 @@ export default function UploadLeadsPage() {
     const [isUploading, setIsUploading] = useState(false);
     const [uploadStatus, setUploadStatus] = useState<{ type: 'success' | 'error' | null, message: string }>({ type: null, message: "" });
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [tName, setTName] = useState<string>("ENRICHED_LEADS");
-    const [loopValue, setLoopValue] = useState<string>("Intro");
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -29,30 +26,28 @@ export default function UploadLeadsPage() {
         setUploadStatus({ type: null, message: "" });
         
         try {
-            const data = await selectedFile.arrayBuffer();
-            const workbook = XLSX.read(data);
-            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            const formData = new FormData();
+            formData.append("data", selectedFile);
+            formData.append("webhookUrl", "https://n8n.srv1010832.hstgr.cloud/webhook/upload-leads-xls");
 
-            const res = await fetch('/api/master-leads/upload', {
+            const res = await fetch('/api/upload-leads', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ leads: jsonData, t_name: tName, loop: loopValue }),
+                body: formData,
             });
             const result = await res.json();
             
-            if (res.ok) {
-                setUploadStatus({ type: 'success', message: `Successfully uploaded ${result.count} leads to Master Database.` });
+            if (res.ok && result.ok) {
+                setUploadStatus({ type: 'success', message: `Successfully sent ${selectedFile.name} to the webhook.` });
                 setSelectedFile(null);
                 if (fileInputRef.current) {
                     fileInputRef.current.value = "";
                 }
             } else {
-                setUploadStatus({ type: 'error', message: `Error uploading leads: ${result.error}` });
+                setUploadStatus({ type: 'error', message: `Error uploading leads: ${result.response || result.error || res.statusText}` });
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Upload error:", error);
-            setUploadStatus({ type: 'error', message: "An unexpected error occurred while parsing or uploading the file." });
+            setUploadStatus({ type: 'error', message: `An unexpected error occurred: ${error.message}` });
         } finally {
             setIsUploading(false);
         }
@@ -61,17 +56,16 @@ export default function UploadLeadsPage() {
     return (
         <div className="space-y-6 pb-10 max-w-4xl mx-auto pt-10">
             <div>
-                <h1 className="text-3xl font-bold text-slate-900">Upload Master Leads</h1>
+                <h1 className="text-3xl font-bold text-slate-900">Upload Leads to Webhook</h1>
                 <p className="text-slate-500 mt-2">
-                    Import leads directly into the master_leads_unique database table using an Excel or CSV file.
+                    Import leads directly by uploading an Excel or CSV file to trigger the webhook.
                 </p>
             </div>
 
             <Card className="border border-slate-200 shadow-sm bg-white">
                 <CardHeader className="bg-slate-50 border-b border-slate-100">
                     <CardTitle className="text-lg">File Upload</CardTitle>
-                    <CardDescription>Upload a .csv or .xlsx file containing full_name, company_phone_number, and Personal Email</CardDescription>
-                </CardHeader>
+                    </CardHeader>
                 <CardContent className="p-8">
                     <div className="flex flex-col items-center justify-center p-10 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50/50 hover:bg-slate-50 transition-colors">
                         <FileSpreadsheet className="h-16 w-16 text-slate-400 mb-4" />
@@ -99,35 +93,7 @@ export default function UploadLeadsPage() {
                                 <p className="text-slate-800 font-bold text-lg mb-1">{selectedFile.name}</p>
                                 <p className="text-slate-500 text-sm mb-6">{(selectedFile.size / 1024).toFixed(2)} KB</p>
                                 
-                                <div className="grid grid-cols-2 gap-4 mb-6 text-left">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-slate-700">Target Table (t_name)</label>
-                                        <select 
-                                            value={tName} 
-                                            onChange={(e) => setTName(e.target.value)}
-                                            className="w-full flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
-                                            <option value="ENRICHED_LEADS">ENRICHED_LEADS</option>
-                                            <option value="LinkedIn_leads">LinkedIn_leads</option>
-                                            <option value="gmap_leadsv2">gmap_leadsv2</option>
-                                            <option value="hubspot_lead">hubspot_lead</option>
-                                            <option value="icp_tracker">icp_tracker</option>
-                                            <option value="meta_lead_tracker">meta_lead_tracker</option>
-                                        </select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-slate-700">Loop</label>
-                                        <select 
-                                            value={loopValue} 
-                                            onChange={(e) => setLoopValue(e.target.value)}
-                                            className="w-full flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
-                                            <option value="Intro">Intro</option>
-                                            <option value="Followup">Followup</option>
-                                            <option value="nurture">nurture</option>
-                                        </select>
-                                    </div>
-                                </div>
+
                                 
                                 <div className="flex gap-3 justify-center">
                                     <Button 
