@@ -55,156 +55,24 @@ import {
 } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 
-const INDUSTRIES = [
-    "real estate",
-    "marketing & advertising",
-    "information technology & services",
-    "computer software",
-    "consumer services",
-    "hospitality"
-];
 
-const FUNCTIONAL_LEVELS = [
-    "c_suite", "finance", "product_management", "engineering", 
-    "design", "education", "human_resources", "information_technology", 
-    "legal", "marketing", "operations", "sales", "support"
-];
-
-const SENIORITY_LEVELS = [
-     "founder", "owner", "c_suite", "director", "partner", "vp",
-      "head", "manager", "senior", "entry", "trainee"
-];
-
-const CITIES = [
-    "california, us", "texas, us", "england, united kingdom", "new york, us", "florida, us", 
-    "illinois, us", "moscow, russia", "bavaria, germany", "pennsylvania, us", "virginia, us", 
-    "ohio, us", "massachusetts, us", "georgia, us", "michigan, us", "north carolina, us", 
-    "berlin, germany", "new jersey, us", "île-de-france, france", "maharashtra, india", 
-    "ontario, canada", "beijing, china", "colorado, us", "minnesota, us", "karnataka, india", 
-    "hamburg, germany", "shanghai, china", "flanders, belgium", "arizona, us", "ciudad de méxico, mexico",
-    "tamil nadu, india", "hesse, germany", "dubai, united arab emirates", "jakarta, indonesia"
-];
-
-const LOCATIONS = [
-    "united states", "united kingdom", "india", "germany", "france", "china", "canada", 
-    "netherlands", "mexico", "belgium", "japan", "brazil", "australia", "poland", 
-    "thailand", "sweden", "portugal", "spain", "italy", "vietnam", "nigeria", "singapore", 
-    "hong kong", "ireland", "israel", "switzerland", "turkey", "romania", "south korea", 
-    "indonesia", "united arab emirates", "saudi arabia", "austria", "philippines", 
-    "malaysia", "argentina", "ukraine", "denmark", "norway", "finland", "new zealand"
-];
-
-const SIZES = [
-    "1-10", "11-20", "21-50", "51-100", "101-200", "201-500", "501-1000", 
-    "1001-2000", "2001-5000", "5001-10000", "10001-20000", "20001-50000", "50000+"
-];
-
-// Creatable Multi-Select Wrapper Component - Moved outside to prevent flickering
-const MultiSelect = ({ label, options, selected, onChange, placeholder }: { label: string, options: string[], selected: string[], onChange: (val: string[]) => void, placeholder?: string }) => {
-    const [inputValue, setInputValue] = useState("");
-    
-    const toggle = (val: string) => {
-        const cleanVal = val.trim();
-        if (!cleanVal) return;
-        if (selected.includes(cleanVal)) {
-            onChange(selected.filter(s => s !== cleanVal));
-        } else {
-            onChange([...selected, cleanVal]);
-        }
-        setInputValue("");
-    };
-
-    const filteredOptions = options.filter(opt => opt.toLowerCase().includes(inputValue.toLowerCase()));
-    const isCustomAllowed = inputValue.length > 0 && !options.map(o => o.toLowerCase()).includes(inputValue.toLowerCase());
-
-    return (
-        <div className="space-y-1 font-bold">
-            <Label className="text-[9px] uppercase font-black text-slate-400 tracking-widest">{label}</Label>
-            <Popover>
-                <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full h-9 rounded-lg justify-between border-slate-100 bg-white hover:bg-slate-50 font-bold transition-all text-xs truncate px-3">
-                        <span className="truncate text-slate-700 font-bold">
-                            {selected.length > 0 ? selected.join(", ") : (placeholder || `Select ${label}...`)}
-                        </span>
-                        <ChevronsUpDown className="h-3 w-3 opacity-30 shrink-0 ml-2" />
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[280px] p-0 shadow-2xl border-slate-100" align="start">
-                    <Command className="rounded-xl overflow-hidden">
-                        <div className="flex items-center border-b px-3 bg-slate-50/50">
-                            <Search className="mr-2 h-3.5 w-3.5 shrink-0 opacity-40" />
-                            <input
-                                placeholder={`Search or type custom ${label}...`}
-                                value={inputValue}
-                                onChange={(e) => setInputValue(e.target.value)}
-                                onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); toggle(inputValue); } }}
-                                className="flex h-9 w-full rounded-md bg-transparent py-3 text-[11px] outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-50 font-bold"
-                            />
-                        </div>
-                        <ScrollArea className="max-h-[200px] overflow-auto">
-                            <CommandGroup className="p-1">
-                                {isCustomAllowed && (
-                                    <CommandItem
-                                        onSelect={() => toggle(inputValue)}
-                                        className="flex items-center gap-2 cursor-pointer font-black text-[10px] text-blue-600 bg-blue-50/50 rounded-lg mb-1"
-                                    >
-                                        <Plus className="h-3 w-3" />
-                                        Add "{inputValue}"
-                                    </CommandItem>
-                                )}
-                                {filteredOptions.length === 0 && !isCustomAllowed && (
-                                    <div className="py-6 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest">No results</div>
-                                )}
-                                {filteredOptions.map((opt) => (
-                                    <CommandItem
-                                        key={opt}
-                                        onSelect={() => toggle(opt)}
-                                        className="flex items-center gap-2 cursor-pointer font-bold text-[11px] rounded-lg mb-0.5"
-                                    >
-                                        <div className={cn(
-                                            "h-3.5 w-3.5 border rounded-sm flex items-center justify-center transition-all",
-                                            selected.includes(opt) ? "bg-blue-600 border-blue-600 text-white" : "border-slate-300"
-                                        )}>
-                                            {selected.includes(opt) && <Check className="h-2.5 w-2.5" />}
-                                        </div>
-                                        {opt}
-                                    </CommandItem>
-                                ))}
-                            </CommandGroup>
-                        </ScrollArea>
-                    </Command>
-                </PopoverContent>
-            </Popover>
-            {selected.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1.5 animate-in fade-in slide-in-from-top-1 duration-300">
-                    {selected.map(s => (
-                        <Badge key={s} className="bg-slate-100 hover:bg-slate-200 text-slate-600 border-none px-2 py-0.5 rounded font-black uppercase text-[7px] tracking-tighter transition-all flex items-center gap-1 shadow-sm">
-                            {s}
-                            <X className="h-2 w-2 cursor-pointer hover:text-red-500" onClick={() => toggle(s)} />
-                        </Badge>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-};
 
 export default function LinkedInScrapper() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [formData, setFormData] = useState({
-        company_industry: [] as string[],
-        company_keywords: "",
-        contact_city: [] as string[],
-        contact_location: [] as string[],
-        email_status: "validated",
-        fetch_count: 20,
-        file_name: "",
-        functional_level: [] as string[],
-        seniority_level: [] as string[],
-        size: [] as string[]
+        prompt: ""
     });
+    
+    const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
+    const [executeData, setExecuteData] = useState({
+        campaign_name: "",
+        url: "",
+        max_results: 20
+    });
+    const [executing, setExecuting] = useState(false);
+
     
     // History and Pending States
     const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -218,21 +86,7 @@ export default function LinkedInScrapper() {
     });
 
 
-    const [currentKeyword, setCurrentKeyword] = useState("");
-    const addKeyword = () => {
-        if (!currentKeyword.trim()) return;
-        const keywords = formData.company_keywords ? formData.company_keywords.split(',').filter(Boolean) : [];
-        if (!keywords.includes(currentKeyword.trim())) {
-            const newKeywords = [...keywords, currentKeyword.trim()].join(',');
-            setFormData({...formData, company_keywords: newKeywords});
-        }
-        setCurrentKeyword("");
-    };
 
-    const removeKeyword = (k: string) => {
-        const keywords = formData.company_keywords.split(',').filter(s => s !== k).join(',');
-        setFormData({...formData, company_keywords: keywords});
-    };
 
     useEffect(() => {
         fetchCampaigns();
@@ -308,19 +162,7 @@ export default function LinkedInScrapper() {
         e.preventDefault();
         setLoading(true);
         try {
-            // Strictly following requested JSON structure for the backend
-            const payload = {
-                company_industry: formData.company_industry.map(i => i.toLowerCase()),
-                company_keywords: formData.company_keywords.split(',').map(k => k.trim()).filter(Boolean),
-                contact_city: formData.contact_city.map(c => c), // Keep casing for custom entries
-                contact_location: formData.contact_location.map(l => l), // Keep casing for custom entries
-                email_status: [formData.email_status],
-                fetch_count: formData.fetch_count,
-                file_name: formData.file_name,
-                functional_level: formData.functional_level.map(f => f.toLowerCase()),
-                seniority_level: formData.seniority_level.map(s => s.toLowerCase()),
-                size: formData.size
-            };
+            const payload = { prompt: formData.prompt };
 
             const response = await fetch("/api/webhook/linkedin", {
                 method: "POST",
@@ -329,35 +171,72 @@ export default function LinkedInScrapper() {
             });
 
             if (response.ok) {
+                const data = await response.json();
+                let url = "";
+                
+                // Try to extract searchUrl from the specific format
+                if (Array.isArray(data) && data[0]?.message?.content?.searchUrl) {
+                    url = data[0].message.content.searchUrl;
+                } else if (data.searchUrl) {
+                    url = data.searchUrl;
+                } else {
+                    const text = JSON.stringify(data);
+                    const match = text.match(/"searchUrl"\s*:\s*"([^"]+)"/);
+                    if (match) url = match[1];
+                }
+
+                if (url) {
+                    setGeneratedUrl(url);
+                    setExecuteData(prev => ({ ...prev, url }));
+                } else {
+                    console.error("No searchUrl found in response", data);
+                }
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleExecute = async (e: React.SyntheticEvent) => {
+        e.preventDefault();
+        setExecuting(true);
+        try {
+            const payload = {
+                campaign_name: executeData.campaign_name,
+                url: executeData.url,
+                max_results: executeData.max_results
+            };
+
+            const response = await fetch("/api/webhook/linkedin-execute", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
                 setSubmitted(true);
-                // Track as pending locally so user sees it instantly
                 const newPending = {
-                    campaign_name: formData.file_name,
+                    campaign_name: executeData.campaign_name,
                     scrape_date: new Date().toISOString().split('T')[0],
                     leads: [],
                     isPending: true
                 };
                 setPendingRuns(prev => [newPending, ...prev]);
 
-                // Clear the fields properly
-                setFormData({
-                    company_industry: [],
-                    company_keywords: "",
-                    contact_city: [],
-                    contact_location: [],
-                    email_status: "validated",
-                    fetch_count: 20,
-                    file_name: "",
-                    functional_level: [],
-                    seniority_level: [],
-                    size: []
+                setExecuteData({
+                    campaign_name: "",
+                    url: "",
+                    max_results: 20
                 });
+                setGeneratedUrl(null);
                 setTimeout(() => setSubmitted(false), 5000);
             }
         } catch (error) {
             console.error(error);
         } finally {
-            setLoading(false);
+            setExecuting(false);
         }
     };
 
@@ -395,7 +274,7 @@ export default function LinkedInScrapper() {
                         </div>
                         <div>
                             <h1 className="text-base font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                                LinkedIn Scraper <span className="text-[8px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full font-black uppercase tracking-widest">V2</span>
+                                Apollo Scraper <span className="text-[8px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full font-black uppercase tracking-widest">V2</span>
                             </h1>
                             <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest leading-none">Table: LinkedIn_leads</p>
                         </div>
@@ -421,140 +300,105 @@ export default function LinkedInScrapper() {
             </div>
 
             {/* Main Configuration Layout - Optimized Density */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                {/* Left Config Panel - Wide */}
-                <Card className="lg:col-span-9 border-none shadow-sm bg-white rounded-xl overflow-hidden ring-1 ring-slate-100 flex flex-col">
-                    <CardHeader className="border-b border-slate-50 p-3 flex flex-row items-center gap-2 bg-slate-50/30">
-                        <Layout className="h-3.5 w-3.5 text-slate-400" />
-                        <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-500">Core Configuration</CardTitle>
+            {/* Main Configuration Layout - Simplified */}
+            <div className="max-w-3xl space-y-4">
+                <Card className="border-none shadow-sm bg-white rounded-xl overflow-hidden ring-1 ring-slate-100">
+                    <CardHeader className="border-b border-slate-50 p-4 bg-slate-50/30">
+                        <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-500">Generate Search URL</CardTitle>
                     </CardHeader>
-                    <CardContent className="p-4 flex-1">
+                    <CardContent className="p-4 space-y-4">
                         <form id="linkedin-form" onSubmit={handleSubmit} className="space-y-4 font-bold">
-                            <div className="space-y-1 font-bold">
-                                <Label className="text-[9px] uppercase font-black text-slate-400 tracking-widest">Campaign Name</Label>
-                                <Input 
-                                    placeholder="e.g. Q2 International Outreach"
-                                    className="h-9 rounded-lg border-slate-100 bg-white font-bold text-xs"
-                                    value={formData.file_name}
-                                    onChange={(e) => setFormData({...formData, file_name: e.target.value})}
+                            <div className="space-y-2 font-bold">
+                                <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Describe your target audience</Label>
+                                <textarea 
+                                    placeholder="e.g., CEOs of software companies in New York with 50-200 employees..."
+                                    className="flex w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 min-h-[100px] resize-y"
+                                    value={formData.prompt}
+                                    onChange={(e) => setFormData({...formData, prompt: e.target.value})}
                                     required
                                 />
                             </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <MultiSelect 
-                                    label="Target Industries" 
-                                    options={INDUSTRIES} 
-                                    selected={formData.company_industry} 
-                                    onChange={(val) => setFormData({...formData, company_industry: val})} 
-                                />
-                                <MultiSelect 
-                                    label="Function" 
-                                    options={FUNCTIONAL_LEVELS} 
-                                    selected={formData.functional_level} 
-                                    onChange={(val) => setFormData({...formData, functional_level: val})} 
-                                />
-                                <MultiSelect 
-                                    label="Seniority" 
-                                    options={SENIORITY_LEVELS} 
-                                    selected={formData.seniority_level} 
-                                    onChange={(val) => setFormData({...formData, seniority_level: val})} 
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-50">
-                                <MultiSelect 
-                                    label="Global Cities" 
-                                    options={CITIES} 
-                                    selected={formData.contact_city} 
-                                    onChange={(val) => setFormData({...formData, contact_city: val})} 
-                                />
-                                <MultiSelect 
-                                    label="Worldwide Region" 
-                                    options={LOCATIONS} 
-                                    selected={formData.contact_location} 
-                                    onChange={(val) => setFormData({...formData, contact_location: val})} 
-                                />
-                            </div>
+                            <Button 
+                                type="submit"
+                                disabled={loading}
+                                className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-xl h-12 font-black uppercase tracking-[0.1em] text-sm shadow-lg shadow-slate-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                            >
+                                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+                                Generate Search URL
+                            </Button>
                         </form>
                     </CardContent>
                 </Card>
 
-                {/* Right Sidebar - Compact */}
-                <div className="lg:col-span-3 space-y-3">
-                    <Card className="border-none shadow-sm bg-white rounded-xl overflow-hidden ring-1 ring-slate-100">
-                        <CardHeader className="p-3 border-b border-slate-50 bg-slate-50/30">
-                            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-500">Extraction Filters</CardTitle>
+                {generatedUrl && (
+                    <Card className="border-none shadow-sm bg-blue-50/50 rounded-xl overflow-hidden ring-1 ring-blue-100 animate-in fade-in slide-in-from-top-2">
+                        <CardHeader className="p-4 border-b border-blue-100/50 bg-blue-100/30">
+                            <CardTitle className="text-xs font-black uppercase tracking-widest text-blue-600">Generated URL</CardTitle>
                         </CardHeader>
-                        <CardContent className="p-3 space-y-4 font-bold">
-                            <div className="space-y-1 font-bold">
-                                <Label className="text-[9px] uppercase font-black text-slate-400 tracking-widest">Fetch Limit</Label>
-                                <Input 
-                                    type="number"
-                                    className="h-9 rounded-lg bg-slate-50/50 border-slate-100 font-bold text-xs"
-                                    value={formData.fetch_count}
-                                    onChange={(e) => setFormData({...formData, fetch_count: parseInt(e.target.value)})}
-                                />
-                            </div>
-
-                            <div className="space-y-2 font-bold">
-                                <Label className="text-[9px] uppercase font-black text-slate-400 tracking-widest">Keywords</Label>
-                                <div className="flex gap-1.5">
-                                    <Input 
-                                        placeholder="Add..."
-                                        className="h-8 rounded-lg border-slate-100 bg-white font-bold text-[10px]"
-                                        value={currentKeyword}
-                                        onChange={(e) => setCurrentKeyword(e.target.value)}
-                                        onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); addKeyword(); } }}
-                                    />
-                                    <Button type="button" onClick={addKeyword} size="sm" className="h-8 px-2 bg-slate-900 rounded-lg">
-                                        <Plus className="h-3 w-3" />
-                                    </Button>
-                                </div>
-                                <div className="flex flex-wrap gap-1 min-h-[30px] p-2 bg-slate-50/50 rounded-lg border border-dashed border-slate-200">
-                                    {formData.company_keywords ? formData.company_keywords.split(',').map((k, i) => (
-                                        <Badge key={i} className="bg-blue-600 text-white px-1.5 py-0 rounded flex items-center gap-1 font-bold uppercase text-[7px] tracking-tighter">
-                                            {k}
-                                            <X className="h-2 w-2 cursor-pointer" onClick={() => removeKeyword(k)} />
-                                        </Badge>
-                                    )) : (
-                                        <span className="text-[7px] text-slate-400 font-black uppercase italic opacity-50">None</span>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-4 pt-2 border-t border-slate-50">
-                                <MultiSelect 
-                                    label="Company Size" 
-                                    options={SIZES} 
-                                    selected={formData.size} 
-                                    onChange={(val) => setFormData({...formData, size: val})} 
-                                />
-                                <div className="space-y-1 font-bold">
-                                    <Label className="text-[9px] uppercase font-black text-slate-400 tracking-widest">Email</Label>
-                                    <Select defaultValue="validated" onValueChange={(val) => setFormData({...formData, email_status: val})}>
-                                        <SelectTrigger className="h-9 rounded-lg border-slate-100 font-bold bg-slate-50/50 text-xs">
-                                            <SelectValue placeholder="Status" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="validated">Validated</SelectItem>
-                                            <SelectItem value="all">All</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                        <CardContent className="p-4 space-y-3 font-bold">
+                            <div className="p-3 bg-white rounded-lg border border-blue-100 text-xs font-medium text-slate-600 break-all h-24 overflow-auto relative group">
+                                {generatedUrl}
+                                <Button 
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => navigator.clipboard.writeText(generatedUrl)}
+                                    className="absolute top-2 right-2 h-7 px-3 text-[10px] uppercase font-black shadow-sm bg-blue-600 text-white hover:bg-blue-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    Copy
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>
+                )}
 
-                    <Button 
-                        form="linkedin-form"
-                        disabled={loading}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-12 font-black uppercase tracking-[0.1em] text-sm shadow-lg shadow-blue-100 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-                    >
-                        {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-                        Start Engine
-                    </Button>
-                </div>
+                <Card className="border-none shadow-sm bg-white rounded-xl overflow-hidden ring-1 ring-slate-100">
+                    <CardHeader className="p-4 border-b border-slate-50 bg-slate-50/30">
+                        <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-500">Start Enrichment</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4">
+                        <div id="execute-form" className="space-y-4 font-bold">
+                            <div className="space-y-2 font-bold">
+                                <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Campaign Name</Label>
+                                <Input 
+                                    placeholder="e.g. Q2 Outreach"
+                                    className="h-10 rounded-lg border-slate-200 bg-slate-50/50 font-bold text-sm"
+                                    value={executeData.campaign_name}
+                                    onChange={(e) => setExecuteData({...executeData, campaign_name: e.target.value})}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2 font-bold">
+                                <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Search URL</Label>
+                                <Input 
+                                    placeholder="Paste search URL..."
+                                    className="h-10 rounded-lg border-slate-200 bg-slate-50/50 font-bold text-sm"
+                                    value={executeData.url}
+                                    onChange={(e) => setExecuteData({...executeData, url: e.target.value})}
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2 font-bold">
+                                <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest">Max Results</Label>
+                                <Input 
+                                    type="number"
+                                    className="h-10 rounded-lg bg-slate-50/50 border-slate-200 font-bold text-sm"
+                                    value={executeData.max_results}
+                                    onChange={(e) => setExecuteData({...executeData, max_results: parseInt(e.target.value)})}
+                                    required
+                                />
+                            </div>
+                            <Button 
+                                type="button"
+                                onClick={handleExecute}
+                                disabled={executing || !executeData.campaign_name || !executeData.url || !executeData.max_results}
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-12 font-black uppercase tracking-[0.1em] text-xs shadow-lg shadow-blue-100 transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2"
+                            >
+                                {executing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Rocket className="h-5 w-5" />}
+                                Start Enrichment
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
 
             {/* Recent Runs Section */}
