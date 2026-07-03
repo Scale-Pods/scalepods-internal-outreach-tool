@@ -52,7 +52,7 @@ export default function ResetPasswordPage() {
                 <div className="max-w-md w-full bg-zinc-950/50 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl">
                     <div className="text-center space-y-4">
                         <h1 className="text-2xl font-bold text-white">Invalid Reset Link</h1>
-                        <p className="text-zinc-400 text-sm">This password reset link is invalid or has expired. Please request a new one.</p>
+                        <p className="text-zinc-400 text-sm">This password reset link is invalid or has expired. Please request a new one .</p>
                         <Button onClick={() => router.push('/')} className="w-full h-11 bg-white text-black hover:bg-zinc-200 font-bold rounded-xl transition-all">
                             Back to Login
                         </Button>
