@@ -274,50 +274,49 @@ export default function VoiceLogsPage() {
                     </div>
                 </div>
 
-                {/* Account Type Filter Tabs */}
-                <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-1.5 shadow-sm w-fit">
-                    <button
-                        onClick={() => setAccountFilter('all')}
-                        className={cn(
-                            "flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200",
-                            accountFilter === 'all'
-                                ? 'bg-slate-900 text-white shadow-sm'
-                                : 'text-slate-600 hover:bg-slate-50'
-                        )}
-                    >
-                        <Phone className="h-3.5 w-3.5" />
-                        All
-                        <span className={cn("text-[10px] font-black px-1.5 py-0.5 rounded-full", accountFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600')}>{allCallsMapped.length}</span>
-                    </button>
-                    <button
-                        onClick={() => setAccountFilter('cold')}
-                        className={cn(
-                            "flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200",
-                            accountFilter === 'cold'
-                                ? 'bg-blue-600 text-white shadow-sm'
-                                : 'text-blue-600 hover:bg-blue-50'
-                        )}
-                    >
-                        <Snowflake className="h-3.5 w-3.5" />
-                        Cold Leads
-                        <span className={cn("text-[10px] font-black px-1.5 py-0.5 rounded-full", accountFilter === 'cold' ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-700')}>{coldCount}</span>
-                    </button>
-                    <button
-                        onClick={() => setAccountFilter('hubspot')}
-                        className={cn(
-                            "flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200",
-                            accountFilter === 'hubspot'
-                                ? 'bg-orange-500 text-white shadow-sm'
-                                : 'text-orange-600 hover:bg-orange-50'
-                        )}
-                    >
-                        <Flame className="h-3.5 w-3.5" />
-                        HubSpot Leads
-                        <span className={cn("text-[10px] font-black px-1.5 py-0.5 rounded-full", accountFilter === 'hubspot' ? 'bg-white/20 text-white' : 'bg-orange-50 text-orange-700')}>{hubspotCount}</span>
-                    </button>
-                </div>
-
                 <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-xl border border-border shadow-sm">
+                    {/* Account Type Filter Tabs */}
+                    <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-1 shrink-0">
+                        <button
+                            onClick={() => setAccountFilter('all')}
+                            className={cn(
+                                "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-200",
+                                accountFilter === 'all'
+                                    ? 'bg-slate-900 text-white shadow-sm'
+                                    : 'text-slate-600 hover:bg-slate-200/50'
+                            )}
+                        >
+                            <Phone className="h-3.5 w-3.5" />
+                            All
+                            <span className={cn("text-[10px] font-black px-1.5 py-0.5 rounded-full", accountFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700')}>{allCallsMapped.length}</span>
+                        </button>
+                        <button
+                            onClick={() => setAccountFilter('cold')}
+                            className={cn(
+                                "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-200",
+                                accountFilter === 'cold'
+                                    ? 'bg-blue-600 text-white shadow-sm'
+                                    : 'text-blue-600 hover:bg-blue-100/50'
+                            )}
+                        >
+                            <Snowflake className="h-3.5 w-3.5" />
+                            Cold Leads
+                            <span className={cn("text-[10px] font-black px-1.5 py-0.5 rounded-full", accountFilter === 'cold' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700')}>{coldCount}</span>
+                        </button>
+                        <button
+                            onClick={() => setAccountFilter('hubspot')}
+                            className={cn(
+                                "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-200",
+                                accountFilter === 'hubspot'
+                                    ? 'bg-orange-500 text-white shadow-sm'
+                                    : 'text-orange-600 hover:bg-orange-100/50'
+                            )}
+                        >
+                            <Flame className="h-3.5 w-3.5" />
+                            HubSpot Leads
+                            <span className={cn("text-[10px] font-black px-1.5 py-0.5 rounded-full", accountFilter === 'hubspot' ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-700')}>{hubspotCount}</span>
+                        </button>
+                    </div>
                     <div className="relative w-[220px]">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
                         <Input
