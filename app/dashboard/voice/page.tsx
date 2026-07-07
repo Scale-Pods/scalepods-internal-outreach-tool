@@ -28,6 +28,10 @@ export default async function VoiceDashboardPage({
             dailyVolume={data.dailyVolume}
             hourlyDistribution={data.hourlyDistribution}
             statusBreakdown={data.statusBreakdown}
+            coldStats={data.cold.stats}
+            coldDailyVolume={data.cold.dailyVolume}
+            hubspotStats={data.hubspot.stats}
+            hubspotDailyVolume={data.hubspot.dailyVolume}
         />
     );
 }

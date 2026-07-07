@@ -4,23 +4,51 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { RefreshCw, ChevronLeft, ChevronRight, User, Download, Search, Info, Activity, Phone } from "lucide-react";
+import { RefreshCw, ChevronLeft, ChevronRight, User, Search, Info, Activity, Phone, Snowflake, Flame } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SPLoader } from "@/components/sp-loader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import React, { useState, useEffect } from "react";
 import { CallDetailsModal } from "@/components/voice/call-details-modal";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { format, parseISO, subDays } from "date-fns";
-import { calculateDuration, formatDuration, cn } from "@/lib/utils";
+import { format, subDays } from "date-fns";
+import { formatDuration, cn } from "@/lib/utils";
 import { useData } from "@/context/DataContext";
 
-// Progressive fetch for missing metadata (phone numbers/direction)
+const COLD_LEADS_ACCOUNT = "scalepods internal outreach - cold leads";
+const HUBSPOT_LEADS_ACCOUNT = "hubspot leads";
+
+function getAccountType(vapiAccount: string | null | undefined): 'cold' | 'hubspot' | 'other' {
+    const val = (vapiAccount || '').toLowerCase().trim();
+    if (val === COLD_LEADS_ACCOUNT) return 'cold';
+    if (val === HUBSPOT_LEADS_ACCOUNT) return 'hubspot';
+    return 'other';
+}
+
+function AccountBadge({ vapiAccount }: { vapiAccount: string | null | undefined }) {
+    const type = getAccountType(vapiAccount);
+    if (type === 'cold') {
+        return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                <Snowflake className="h-2.5 w-2.5" />
+                Cold Leads
+            </span>
+        );
+    }
+    if (type === 'hubspot') {
+        return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200">
+                <Flame className="h-2.5 w-2.5" />
+                HubSpot
+            </span>
+        );
+    }
+    return null;
+}
+
 // Static cells that rely on pre-fetched and normalized data from the API
 const DynamicRowCells = ({ call, leads }: { call: any, leads: any[] }) => {
-    // RESOLVE: Prioritize backend names, then Leads database, then Vapi/Maqsam metadata
     let guestName = call.name || "Guest";
     const guestNum = call.phone || "Unknown";
     let realType = call.type || (call.isInbound ? "Inbound" : "Outbound");
@@ -28,7 +56,6 @@ const DynamicRowCells = ({ call, leads }: { call: any, leads: any[] }) => {
     if (realType.toLowerCase().includes('inbound')) realType = 'Inbound';
     const isInboundState = call.isInbound;
 
-    // Eagerly resolve name from our Leads database based on phone if Guest
     if ((!guestName || guestName === "Guest" || guestName === "Unknown") && call.phone && leads) {
         const targetPhone = call.phone.replace(/\D/g, '');
         if (targetPhone && targetPhone.length > 5) {
@@ -55,7 +82,7 @@ const DynamicRowCells = ({ call, leads }: { call: any, leads: any[] }) => {
                     {realType}
                 </Badge>
             </TableCell>
-            <TableCell className="text-slate-600 font-medium">{formatDuration(call.durationSeconds)}</TableCell>
+            <TableCell className="text-slate-600 font-medium">{formatDuration(call.durationSeconds || 0)}</TableCell>
             <TableCell className="text-slate-500 text-xs">{call.country || 'Unknown'}</TableCell>
             <TableCell className="font-bold text-emerald-600">
                 <Popover>
@@ -98,6 +125,7 @@ const DynamicRowCells = ({ call, leads }: { call: any, leads: any[] }) => {
     );
 };
 
+type AccountFilter = 'all' | 'cold' | 'hubspot';
 
 export default function VoiceLogsPage() {
     const { calls: globalCalls, loadingCalls, refreshAll, leads, loadingLeads, refreshCalls } = useData();
@@ -112,7 +140,7 @@ export default function VoiceLogsPage() {
     });
     const [statusFilter, setStatusFilter] = useState("all");
     const [typeFilter, setTypeFilter] = useState("all");
-    const [providerFilter, setProviderFilter] = useState("all");
+    const [accountFilter, setAccountFilter] = useState<AccountFilter>("all");
     const [phoneFilter, setPhoneFilter] = useState("");
     const [sortBy, setSortBy] = useState("newest");
 
@@ -126,7 +154,6 @@ export default function VoiceLogsPage() {
         const mappedCalls = globalCalls.map((c: any) => {
             const isInbound = c.isInbound === true;
 
-            // Eagerly resolve name from our Leads database based on phone
             let resolvedName = c.name;
             if ((!resolvedName || resolvedName === "Guest" || resolvedName === "Unknown") && c.phone && leads) {
                 const targetPhone = c.phone.replace(/\D/g, '');
@@ -143,22 +170,25 @@ export default function VoiceLogsPage() {
                 name: resolvedName,
                 displayDate: (c.createdAt || c.startedAt) ? format(new Date(c.createdAt || c.startedAt), 'PPp') : 'N/A',
                 displayDuration: formatDuration(c.durationSeconds || 0),
+                accountType: c.accountType || getAccountType(c.vapi_account),
             };
         });
 
         setAllCallsMapped(mappedCalls);
     }, [globalCalls, loadingCalls, leads, loadingLeads]);
 
-    // Reset to page 1 ONLY when the user explicitly changes a filter — not when background data enrichment updates allCallsMapped.
+    // Reset to page 1 when filter changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [dateRange, statusFilter, typeFilter, providerFilter, phoneFilter, sortBy]);
+    }, [dateRange, statusFilter, typeFilter, accountFilter, phoneFilter, sortBy]);
 
-    // Re-apply filtering whenever data or filters change (no page reset here).
+    // Re-apply filtering whenever data or filters change
     useEffect(() => {
         const filteredCalls = allCallsMapped.filter((call: any) => {
-            // Priority 1: Provider Filter
-            if (providerFilter !== "all" && call.source !== providerFilter) return false;
+            // Account type filter
+            if (accountFilter !== "all") {
+                if (call.accountType !== accountFilter) return false;
+            }
 
             if (dateRange?.from) {
                 const callDate = new Date(call.createdAt || call.startedAt);
@@ -168,7 +198,6 @@ export default function VoiceLogsPage() {
                 to.setHours(23, 59, 59, 999);
                 if (callDate < from || callDate > to) return false;
             }
-
 
             if (statusFilter !== "all" && call.status !== statusFilter) return false;
             if (typeFilter !== "all" && call.type?.toLowerCase() !== typeFilter.toLowerCase()) return false;
@@ -197,7 +226,7 @@ export default function VoiceLogsPage() {
         });
 
         setCalls(sortedCalls);
-    }, [allCallsMapped, dateRange, statusFilter, typeFilter, providerFilter, phoneFilter, sortBy]);
+    }, [allCallsMapped, dateRange, statusFilter, typeFilter, accountFilter, phoneFilter, sortBy]);
 
     const handleRefresh = () => {
         const from = new Date(dateRange.from);
@@ -213,6 +242,10 @@ export default function VoiceLogsPage() {
     };
 
     const paginatedCalls = calls.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+    // Count per category from all mapped (before date filter)
+    const coldCount = allCallsMapped.filter(c => c.accountType === 'cold').length;
+    const hubspotCount = allCallsMapped.filter(c => c.accountType === 'hubspot').length;
 
     return (
         <div className="space-y-6 pb-10 pt-6 relative min-h-[500px]">
@@ -239,6 +272,49 @@ export default function VoiceLogsPage() {
                             Refresh
                         </Button>
                     </div>
+                </div>
+
+                {/* Account Type Filter Tabs */}
+                <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl p-1.5 shadow-sm w-fit">
+                    <button
+                        onClick={() => setAccountFilter('all')}
+                        className={cn(
+                            "flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200",
+                            accountFilter === 'all'
+                                ? 'bg-slate-900 text-white shadow-sm'
+                                : 'text-slate-600 hover:bg-slate-50'
+                        )}
+                    >
+                        <Phone className="h-3.5 w-3.5" />
+                        All
+                        <span className={cn("text-[10px] font-black px-1.5 py-0.5 rounded-full", accountFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600')}>{allCallsMapped.length}</span>
+                    </button>
+                    <button
+                        onClick={() => setAccountFilter('cold')}
+                        className={cn(
+                            "flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200",
+                            accountFilter === 'cold'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-blue-600 hover:bg-blue-50'
+                        )}
+                    >
+                        <Snowflake className="h-3.5 w-3.5" />
+                        Cold Leads
+                        <span className={cn("text-[10px] font-black px-1.5 py-0.5 rounded-full", accountFilter === 'cold' ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-700')}>{coldCount}</span>
+                    </button>
+                    <button
+                        onClick={() => setAccountFilter('hubspot')}
+                        className={cn(
+                            "flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200",
+                            accountFilter === 'hubspot'
+                                ? 'bg-orange-500 text-white shadow-sm'
+                                : 'text-orange-600 hover:bg-orange-50'
+                        )}
+                    >
+                        <Flame className="h-3.5 w-3.5" />
+                        HubSpot Leads
+                        <span className={cn("text-[10px] font-black px-1.5 py-0.5 rounded-full", accountFilter === 'hubspot' ? 'bg-white/20 text-white' : 'bg-orange-50 text-orange-700')}>{hubspotCount}</span>
+                    </button>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-xl border border-border shadow-sm">
@@ -299,19 +375,24 @@ export default function VoiceLogsPage() {
                                 <TableHead>Country</TableHead>
                                 <TableHead>Cost</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead>Account</TableHead>
                                 <TableHead className="w-[200px]">Date & Time</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading && calls.length === 0 ? (
-                                <TableRow><TableCell colSpan={8} className="h-24 text-center">Loading calls...</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={9} className="h-24 text-center">Loading calls...</TableCell></TableRow>
                             ) : calls.length === 0 ? (
-                                <TableRow><TableCell colSpan={8} className="h-24 text-center text-slate-500">No calls matching filters.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={9} className="h-24 text-center text-slate-500">No calls matching filters.</TableCell></TableRow>
                             ) : (
                                 (paginatedCalls as any[]).map((call) => (
                                     <TableRow
                                         key={call.id}
-                                        className="cursor-pointer hover:bg-slate-50/50 transition-colors"
+                                        className={cn(
+                                            "cursor-pointer hover:bg-slate-50/50 transition-colors",
+                                            call.accountType === 'cold' && "border-l-2 border-l-blue-400",
+                                            call.accountType === 'hubspot' && "border-l-2 border-l-orange-400"
+                                        )}
                                         onClick={() => handleRowClick(call)}
                                     >
                                         <DynamicRowCells call={call} leads={leads} />
@@ -319,6 +400,9 @@ export default function VoiceLogsPage() {
                                             <Badge variant="outline" className={`text-[10px] uppercase border-${call.status === 'answered' ? 'emerald' : 'slate'}-200 text-${call.status === 'answered' ? 'emerald' : 'slate'}-600`}>
                                                 {call.status}
                                             </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <AccountBadge vapiAccount={call.vapi_account} />
                                         </TableCell>
                                         <TableCell className="text-slate-500 text-xs">{call.displayDate}</TableCell>
                                     </TableRow>

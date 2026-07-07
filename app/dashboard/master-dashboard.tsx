@@ -58,6 +58,9 @@ interface DashboardStats {
     totalReplies: number; totalVoiceSeconds: number;
     voiceMinutesString: string; totalVoiceCalls: number;
     totalHubspotLeads: number;
+    // Bifurcated voice call counts from vapi_account column
+    coldVoiceCallsCount: number;
+    hubspotVoiceCallsCount: number;
     hubspot?: {
         leads: number;
         emails: number;
@@ -151,7 +154,7 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                     />
                     <MetricCard
                         title="Voice Calls"
-                        value={loading ? "..." : (stats as any).totalVoiceCalls?.toLocaleString() || "0"}
+                        value={loading ? "..." : ((stats as any).coldVoiceCallsCount ?? (stats as any).totalVoiceCalls ?? 0).toLocaleString()}
                         change={`${(stats as any).voiceMinutesString || "0m 0s"}`}
                         isUp={true}
                         icon={<Activity className="h-6 w-6" />}
@@ -159,6 +162,7 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                         bg="bg-orange-50"
                         border="border-orange-100"
                         onClick={() => router.push('/dashboard/voice')}
+                        subtitle="Cold Leads bot calls (vapi_account: cold leads)"
                     />
                     <MetricCard
                         title="Total Replies"
@@ -212,12 +216,13 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                     <MetricCard
                         title="Voice Calls"
                         value={loading ? "..." : (stats.hubspot?.voice || 0).toLocaleString()}
-                        change="Real-time"
+                        change="HubSpot bot calls"
                         isUp={true}
                         icon={<Activity className="h-6 w-6" />}
                         color="text-orange-600"
                         bg="bg-orange-50"
                         border="border-orange-100"
+                        subtitle="HubSpot leads bot calls (vapi_account: hubspot leads)"
                     />
                     <MetricCard
                         title="Total Replies"

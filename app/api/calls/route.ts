@@ -198,6 +198,13 @@ async function fetchArchive(from: Date, to: Date) {
                 // Total Cost is Agent + Telephony
                 const totalCost = agentCost + telCost;
 
+                const isInbound = (db.type || '').toLowerCase() === 'inbound';
+                // Classify account type based on vapi_account column
+                const vapiAcc = (db.vapi_account || '').toLowerCase().trim();
+                let accountType: 'cold' | 'hubspot' | 'other' = 'other';
+                if (vapiAcc === 'scalepods internal outreach - cold leads') accountType = 'cold';
+                else if (vapiAcc === 'hubspot leads') accountType = 'hubspot';
+
                 return {
                     id: db.id,
                     name: db.customer_name,
@@ -217,8 +224,10 @@ async function fetchArchive(from: Date, to: Date) {
                     audio_url: db.recording_url,
                     transcript: db.transcript,
                     type: db.type,
+                    isInbound,
                     assistantId: db.assistantId,
                     vapi_account: db.vapi_account,
+                    accountType,
                     createdAt: db.created_at,
                     country: getCountryName(db.customer_phone)
                 };

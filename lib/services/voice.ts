@@ -1,6 +1,17 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { format, getHours } from "date-fns";
 
+// vapi_account values
+export const COLD_LEADS_ACCOUNT = "Scalepods Internal outreach - cold leads";
+export const HUBSPOT_LEADS_ACCOUNT = "hubspot leads";
+
+function classifyAccount(vapiAccount: string | null | undefined): 'cold' | 'hubspot' | 'other' {
+    const val = (vapiAccount || '').toLowerCase().trim();
+    if (val === COLD_LEADS_ACCOUNT.toLowerCase()) return 'cold';
+    if (val === HUBSPOT_LEADS_ACCOUNT.toLowerCase()) return 'hubspot';
+    return 'other';
+}
+
 const POSITIVE_SENTIMENTS = [
     "expression of interest",
     "callback- plan postponed",
@@ -14,6 +25,73 @@ function isPositiveSentiment(val: any): boolean {
     return POSITIVE_SENTIMENTS.some(s => lower.includes(s));
 }
 
+function buildMetrics(calls: any[]) {
+    let totalDuration = 0, totalCost = 0, successCount = 0;
+    let pickedUpCount = 0;
+    let completedCount = 0;
+    const dayMap = new Map<string, { count: number; display: string; totalDuration: number }>();
+    const hourMap = new Array(24).fill(0);
+    const statusBreakdown: Record<string, number> = {};
+
+    calls.forEach((call: any) => {
+        const duration = typeof call.duration_seconds === 'number' ? call.duration_seconds : 0;
+        const cost = typeof call.cost_usd === 'number' ? call.cost_usd : 0;
+        const rawStatus = (call.status || '').toLowerCase().trim();
+
+        if (['done', 'ended', 'completed', 'success', 'answered'].includes(rawStatus)) successCount++;
+        if (duration > 18) pickedUpCount++;
+        if (rawStatus === 'customer-ended-call' || rawStatus === 'assistant-ended-call') completedCount++;
+
+        totalDuration += duration;
+        totalCost += cost;
+        statusBreakdown[rawStatus] = (statusBreakdown[rawStatus] || 0) + 1;
+
+        const dt = new Date(call.created_at);
+        if (!isNaN(dt.getTime())) {
+            const dayKey = format(dt, 'yyyy-MM-dd');
+            const displayKey = format(dt, 'MMM dd');
+            if (!dayMap.has(dayKey)) dayMap.set(dayKey, { count: 0, display: displayKey, totalDuration: 0 });
+            const entry = dayMap.get(dayKey)!;
+            entry.count++;
+            entry.totalDuration += duration;
+            hourMap[getHours(dt)]++;
+        }
+    });
+
+    const total = calls.length;
+    const dailyVolume = Array.from(dayMap.entries())
+        .map(([dayKey, d]) => ({
+            dayKey,
+            name: d.display,
+            calls: d.count,
+            totalDuration: Math.round(d.totalDuration / 60)
+        }))
+        .sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+
+    const hourlyDistribution = hourMap
+        .map((calls, hour) => ({ name: `${hour.toString().padStart(2, '0')}:00`, calls }))
+        .filter((_, i) => i % 3 === 0);
+
+    return {
+        stats: {
+            totalCalls: total,
+            totalDuration,
+            avgDuration: total > 0 ? totalDuration / total : 0,
+            totalCost,
+            avgCost: total > 0 ? totalCost / total : 0,
+            successRate: total > 0 ? (successCount / total) * 100 : 0,
+            successCount,
+            pickupRate: total > 0 ? (pickedUpCount / total) * 100 : 0,
+            pickedUpCount,
+            completionRate: total > 0 ? (completedCount / total) * 100 : 0,
+            completedCount,
+        },
+        dailyVolume,
+        hourlyDistribution,
+        statusBreakdown,
+    };
+}
+
 export async function getVoiceStats(fromDate: Date, toDate: Date, providerFilter: string = "all") {
     try {
         const fromFull = new Date(fromDate);
@@ -24,7 +102,7 @@ export async function getVoiceStats(fromDate: Date, toDate: Date, providerFilter
         const fromStr = fromFull.toISOString();
         const toStr = toFull.toISOString();
 
-        // ── 1. Fetch vapi_call_logs in the date range (database level) ──────────
+        // ── 1. Fetch vapi_call_logs in the date range ──────────
         let query = supabaseAdmin
             .from('vapi_call_logs')
             .select('id, created_at, started_at, customer_phone, customer_name, duration_seconds, status, cost_usd, source, transcript, summary, recording_url, vapi_account, type, "assistantId"')
@@ -40,7 +118,7 @@ export async function getVoiceStats(fromDate: Date, toDate: Date, providerFilter
         if (callsErr) console.error("vapi_call_logs fetch error:", callsErr);
         const filteredCalls = filteredCallsRaw || [];
 
-        // Estimate lifetime VAPI cost (limit to 50k records of cost_usd only to be fast and memory-efficient)
+        // Estimate lifetime VAPI cost
         const { data: allCostData } = await supabaseAdmin
             .from('vapi_call_logs')
             .select('cost_usd')
@@ -50,121 +128,43 @@ export async function getVoiceStats(fromDate: Date, toDate: Date, providerFilter
             lifetimeCostVapi += typeof c.cost_usd === 'number' ? c.cost_usd : 0;
         });
 
-        // ── 3. Core metrics ───────────────────────────────────────────────────
-        let totalDuration = 0, totalCost = 0, successCount = 0;
-        let pickedUpCount = 0;       // duration_seconds > 18
-        let completedCount = 0;      // customer-ended-call OR assistant-ended-call
+        // ── 2. Bifurcate by vapi_account ─────────────────────────────────────
+        const coldCalls = filteredCalls.filter(c => classifyAccount((c as any).vapi_account) === 'cold');
+        const hubspotCalls = filteredCalls.filter(c => classifyAccount((c as any).vapi_account) === 'hubspot');
 
-        const dayMap = new Map<string, { count: number; display: string; totalDuration: number }>();
-        const hourMap = new Array(24).fill(0);
-        const statusBreakdown: Record<string, number> = {};
-
-        filteredCalls.forEach((call: any) => {
-            const duration = typeof call.duration_seconds === 'number' ? call.duration_seconds : 0;
-            const cost = typeof call.cost_usd === 'number' ? call.cost_usd : 0;
-            const rawStatus = (call.status || '').toLowerCase().trim();
-
-            // Success (general ended/completed)
-            if (['done', 'ended', 'completed', 'success', 'answered'].includes(rawStatus)) successCount++;
-
-            // Call Pick-up Rate: duration > 18 seconds means someone actually answered
-            if (duration > 18) pickedUpCount++;
-
-            // Call Completion Rate: ended by either party
-            if (rawStatus === 'customer-ended-call' || rawStatus === 'assistant-ended-call') completedCount++;
-
-            totalDuration += duration;
-            totalCost += cost;
-
-            // Status breakdown for pie chart
-            statusBreakdown[rawStatus] = (statusBreakdown[rawStatus] || 0) + 1;
-
-            // Daily grouping
-            const dt = new Date(call.created_at);
-            if (!isNaN(dt.getTime())) {
-                const dayKey = format(dt, 'yyyy-MM-dd');
-                const displayKey = format(dt, 'MMM dd');
-                if (!dayMap.has(dayKey)) dayMap.set(dayKey, { count: 0, display: displayKey, totalDuration: 0 });
-                const entry = dayMap.get(dayKey)!;
-                entry.count++;
-                entry.totalDuration += duration;
-                hourMap[getHours(dt)]++;
-            }
-        });
-
-        // Fetch voice_sentiment and voice2_sentiment for leads in the date range (using database-level OR filter)
-        const orConditions = [
-            `and("Voice Last Contacted".gte.${fromStr},"Voice Last Contacted".lte.${toStr})`,
-            `and(voice_last_contacted.gte.${fromStr},voice_last_contacted.lte.${toStr})`,
-            `and(Voice_1_Date.gte.${fromStr},Voice_1_Date.lte.${toStr})`,
-            `and(Voice_2_Date.gte.${fromStr},Voice_2_Date.lte.${toStr})`,
-            `and(created_at.gte.${fromStr},created_at.lte.${toStr})`
-        ].join(',');
-
-        const [icpSentimentRaw, enrichedSentimentRaw] = await Promise.all([
-            supabaseAdmin
-                .from('icp_tracker')
-                .select('voice_sentiment, voice2_sentiment, created_at, "Voice Last Contacted"')
-                .or(orConditions),
-            supabaseAdmin
-                .from('ENRICHED_LEADS')
-                .select('voice_sentiment, voice2_sentiment, created_at, "Voice Last Contacted"')
-                .or(orConditions),
-        ]);
-
-        const icpSentiments = icpSentimentRaw.data || [];
-        const enrichedSentiments = enrichedSentimentRaw.data || [];
-        
-        // Filter out leads with no sentiment data
-        const allSentiments = [...icpSentiments, ...enrichedSentiments].filter((row: any) =>
-            (row.voice_sentiment && String(row.voice_sentiment).trim() !== '') ||
-            (row.voice2_sentiment && String(row.voice2_sentiment).trim() !== '')
-        );
-
-        const positiveSentimentCount = allSentiments.filter((row: any) =>
-            isPositiveSentiment(row.voice_sentiment) || isPositiveSentiment(row.voice2_sentiment)
-        ).length;
-
-        const totalSentimentCount = allSentiments.length;
-
-        // ── 5. Chart data ─────────────────────────────────────────────────────
-        const dailyVolume = Array.from(dayMap.entries())
-            .map(([dayKey, d]) => ({
-                dayKey,
-                name: d.display,
-                calls: d.count,
-                totalDuration: Math.round(d.totalDuration / 60)
-            }))
-            .sort((a, b) => a.dayKey.localeCompare(b.dayKey));
-
-        const hourlyDistribution = hourMap
-            .map((calls, hour) => ({ name: `${hour.toString().padStart(2, '0')}:00`, calls }))
-            .filter((_, i) => i % 3 === 0);
+        // ── 3. Build metrics for all / cold / hubspot ─────────────────────────
+        const allMetrics = buildMetrics(filteredCalls);
+        const coldMetrics = buildMetrics(coldCalls);
+        const hubspotMetrics = buildMetrics(hubspotCalls);
 
         const total = filteredCalls.length;
 
         return {
             stats: {
+                ...allMetrics.stats,
                 totalCalls: total,
-                totalDuration,
-                avgDuration: total > 0 ? totalDuration / total : 0,
-                totalCost,
-                avgCost: total > 0 ? totalCost / total : 0,
-                successRate: total > 0 ? (successCount / total) * 100 : 0,
                 lifetimeCostVapi,
-                successCount,
-                // New metrics
-                pickupRate: total > 0 ? (pickedUpCount / total) * 100 : 0,
-                pickedUpCount,
-                completionRate: total > 0 ? (completedCount / total) * 100 : 0,
-                completedCount,
-                positiveResponseRate: totalSentimentCount > 0 ? (positiveSentimentCount / totalSentimentCount) * 100 : 0,
-                positiveSentimentCount,
-                totalSentimentCount,
+                positiveResponseRate: 0,
+                positiveSentimentCount: 0,
+                totalSentimentCount: 0,
+                // Bifurcated counts
+                coldCallsCount: coldCalls.length,
+                hubspotCallsCount: hubspotCalls.length,
             },
-            dailyVolume,
-            hourlyDistribution,
-            statusBreakdown,
+            dailyVolume: allMetrics.dailyVolume,
+            hourlyDistribution: allMetrics.hourlyDistribution,
+            statusBreakdown: allMetrics.statusBreakdown,
+            // Bifurcated data for sub-views
+            cold: {
+                stats: coldMetrics.stats,
+                dailyVolume: coldMetrics.dailyVolume,
+                hourlyDistribution: coldMetrics.hourlyDistribution,
+            },
+            hubspot: {
+                stats: hubspotMetrics.stats,
+                dailyVolume: hubspotMetrics.dailyVolume,
+                hourlyDistribution: hubspotMetrics.hourlyDistribution,
+            },
             recentCalls: filteredCalls.map((c: any) => ({
                 id: c.id,
                 created_at: c.created_at,
@@ -177,7 +177,8 @@ export async function getVoiceStats(fromDate: Date, toDate: Date, providerFilter
                 summary: c.summary || null,
                 recording_url: c.recording_url || null,
                 transcript: c.transcript || null,
-                vapi_account: c.vapi_account || 'normal',
+                vapi_account: c.vapi_account || null,
+                accountType: classifyAccount(c.vapi_account),
             })),
         };
     } catch (e) {
@@ -190,10 +191,13 @@ export async function getVoiceStats(fromDate: Date, toDate: Date, providerFilter
                 pickupRate: 0, pickedUpCount: 0,
                 completionRate: 0, completedCount: 0,
                 positiveResponseRate: 0, positiveSentimentCount: 0, totalSentimentCount: 0,
+                coldCallsCount: 0, hubspotCallsCount: 0,
             },
             dailyVolume: [],
             hourlyDistribution: [],
             statusBreakdown: {},
+            cold: { stats: { totalCalls: 0, totalDuration: 0, avgDuration: 0, totalCost: 0, avgCost: 0, successRate: 0, successCount: 0, pickupRate: 0, pickedUpCount: 0, completionRate: 0, completedCount: 0 }, dailyVolume: [], hourlyDistribution: [] },
+            hubspot: { stats: { totalCalls: 0, totalDuration: 0, avgDuration: 0, totalCost: 0, avgCost: 0, successRate: 0, successCount: 0, pickupRate: 0, pickedUpCount: 0, completionRate: 0, completedCount: 0 }, dailyVolume: [], hourlyDistribution: [] },
             recentCalls: [],
         };
     }

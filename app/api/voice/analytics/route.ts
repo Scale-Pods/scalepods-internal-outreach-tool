@@ -1,10 +1,43 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
-// Helper: Normalize phone numbers
+const COLD_LEADS_ACCOUNT = "Scalepods Internal outreach - cold leads";
+const HUBSPOT_LEADS_ACCOUNT = "hubspot leads";
+
+// Normalize phone: strip all non-digits
 function cleanPhone(num: any): string {
     if (!num) return "";
     return String(num).replace(/\D/g, '');
+}
+
+// Add + prefix if missing (for matching customer_phone stored with +)
+function normalizeCustomerPhone(num: any): string {
+    if (!num) return "";
+    const str = String(num).trim();
+    return str.startsWith('+') ? str.replace(/\D/g, '') : str.replace(/\D/g, '');
+}
+
+// Phone suffix match (last 9 digits)
+function phonesMatch(a: string, b: string): boolean {
+    if (!a || !b) return false;
+    const ca = a.replace(/\D/g, '');
+    const cb = b.replace(/\D/g, '');
+    if (!ca || !cb) return false;
+    return ca === cb ||
+        (ca.length > 8 && cb.length > 8 && ca.slice(-9) === cb.slice(-9));
+}
+
+const POSITIVE_SENTIMENTS = [
+    "expression of interest",
+    "callback- plan postponed",
+    "callback plan postponed",
+    "callback-plan postponed",
+];
+
+function isPositiveSentiment(val: any): boolean {
+    if (!val) return false;
+    const lower = String(val).trim().toLowerCase();
+    return POSITIVE_SENTIMENTS.some(s => lower.includes(s));
 }
 
 export async function GET(req: Request) {
@@ -24,10 +57,10 @@ export async function GET(req: Request) {
         const fromStr = fromDate.toISOString();
         const toStr = toDate.toISOString();
 
-        // 1. Fetch Call Logs in date range (lightweight select)
+        // 1. Fetch ALL Call Logs in date range with vapi_account
         let callsQuery = supabaseAdmin
             .from('vapi_call_logs')
-            .select('id, customer_phone, duration_seconds, status, source, created_at')
+            .select('id, customer_phone, duration_seconds, status, source, created_at, vapi_account')
             .gte('created_at', fromStr)
             .lte('created_at', toStr)
             .order('created_at', { ascending: false });
@@ -40,107 +73,114 @@ export async function GET(req: Request) {
         if (callsError) throw callsError;
         const allCalls = rawCalls || [];
 
-        // 2. Fetch Leads in date range (using database-level OR filtering)
-        const orConditions = [
-            `and("Voice Last Contacted".gte.${fromStr},"Voice Last Contacted".lte.${toStr})`,
-            `and(voice_last_contacted.gte.${fromStr},voice_last_contacted.lte.${toStr})`,
-            `and(Voice_1_Date.gte.${fromStr},Voice_1_Date.lte.${toStr})`,
-            `and(Voice_2_Date.gte.${fromStr},Voice_2_Date.lte.${toStr})`,
-            `and(created_at.gte.${fromStr},created_at.lte.${toStr})`
-        ].join(',');
+        // Bifurcate calls by vapi_account
+        const coldCalls = allCalls.filter(c =>
+            (c.vapi_account || '').toLowerCase().trim() === COLD_LEADS_ACCOUNT.toLowerCase()
+        );
+        const hubspotCalls = allCalls.filter(c =>
+            (c.vapi_account || '').toLowerCase().trim() === HUBSPOT_LEADS_ACCOUNT.toLowerCase()
+        );
 
-        const [icpRes, enrichedRes] = await Promise.all([
-            supabaseAdmin
-                .from('icp_tracker')
-                .select('id, voice_sentiment, voice2_sentiment, created_at, "Voice Last Contacted", voice_last_contacted, Voice_1_Date, Voice_2_Date, personal_phone, company_phone_number')
-                .or(orConditions),
-            supabaseAdmin
-                .from('ENRICHED_LEADS')
-                .select('id, voice_sentiment, voice2_sentiment, created_at, "Voice Last Contacted", voice_last_contacted, Voice_1_Date, Voice_2_Date, personal_phone, company_phone_number')
-                .or(orConditions)
-        ]);
+        // Build a set of normalized customer phones for each segment
+        const coldPhones = new Set(coldCalls.map(c => normalizeCustomerPhone(c.customer_phone)));
+        const hubspotPhones = new Set(hubspotCalls.map(c => normalizeCustomerPhone(c.customer_phone)));
 
-        if (icpRes.error) throw icpRes.error;
-        if (enrichedRes.error) throw enrichedRes.error;
+        // ── 2. Fetch ENRICHED_LEADS for Cold Leads positive response rate ──────
+        // Match on company_phone_number, use voice_sentiment + voice2_sentiment
+        const { data: enrichedRaw, error: enrichedErr } = await supabaseAdmin
+            .from('ENRICHED_LEADS')
+            .select('company_phone_number, voice_sentiment, voice2_sentiment');
 
-        const icpLeads = icpRes.data || [];
-        const enrichedLeads = enrichedRes.data || [];
+        if (enrichedErr) console.error("ENRICHED_LEADS fetch error:", enrichedErr);
+        const enrichedLeads = enrichedRaw || [];
 
-        // 3. Helper to calculate stats
-        const calculateStats = (leads: any[], sourceCalls: any[]) => {
-            if (sourceCalls.length === 0 && leads.length === 0) {
-                return { pickUpRate: 0, completionRate: 0, positiveRate: 0, totalCalls: 0 };
-            }
+        // ── 3. Fetch hubspot_lead for Hot Leads positive response rate ──────────
+        // Match on company_phone_number, use v1_sentiment, v2_sentiment, v3_sentiment
+        const { data: hubspotLeadsRaw, error: hubspotLeadsErr } = await supabaseAdmin
+            .from('hubspot_lead')
+            .select('company_phone_number, v1_sentiment, v2_sentiment, v3_sentiment');
 
-            // Map phones to a Set
-            const phoneSet = new Set<string>();
-            leads.forEach(l => {
-                const p1 = cleanPhone(l.phone);
-                const p2 = cleanPhone(l.personal_phone);
-                const p3 = cleanPhone(l.company_phone_number);
-                if (p1) phoneSet.add(p1);
-                if (p2) phoneSet.add(p2);
-                if (p3) phoneSet.add(p3);
-            });
+        if (hubspotLeadsErr) console.error("hubspot_lead fetch error:", hubspotLeadsErr);
+        const hubspotLeads = hubspotLeadsRaw || [];
 
-            // Match calls by phone number
-            const matchedCalls = sourceCalls.filter(c => {
-                const cp = cleanPhone(c.customer_phone);
-                if (!cp) return false;
-                return Array.from(phoneSet).some(p => 
-                    p === cp || 
-                    (cp.length > 8 && p.endsWith(cp.slice(-9))) || 
-                    (p.length > 8 && cp.endsWith(p.slice(-9)))
-                );
-            });
-
-            const archiveCount = matchedCalls.length;
-            const pickUpCount = matchedCalls.filter((c: any) => (c.duration_seconds || 0) > 18).length;
-            
-            const completionCount = matchedCalls.filter((c: any) => {
-                const status = String(c.status || "").toLowerCase();
-                return status.includes('assistant-ended-call') || 
-                       status.includes('customer-ended-call') || 
-                       status.includes('assistant ended call') || 
-                       status.includes('customer ended call');
+        // ── 4. Calculate stats helper ─────────────────────────────────────────
+        function calcCallStats(calls: any[]) {
+            const total = calls.length;
+            const pickedUp = calls.filter(c => (c.duration_seconds || 0) > 18).length;
+            const completed = calls.filter(c => {
+                const s = String(c.status || '').toLowerCase();
+                return s.includes('assistant-ended-call') || s.includes('customer-ended-call') ||
+                    s.includes('assistant ended call') || s.includes('customer ended call');
             }).length;
-
-            const positiveCount = leads.filter((l: any) => {
-                const s1 = String(l.voice_sentiment || "").trim();
-                const s2 = String(l.voice2_sentiment || "").trim();
-                const isPos = (s: string) => {
-                    const lower = s.toLowerCase().trim();
-                    return lower.includes('expression of interest') || 
-                           lower.includes('callback- plan postponed') ||
-                           lower.includes('callback plan postponed') ||
-                           lower.includes('callback-plan postponed');
-                };
-                return isPos(s1) || isPos(s2);
-            }).length;
-
-            const leadsWithSentiment = leads.filter((l: any) => {
-                const s1 = String(l.voice_sentiment || "").trim();
-                const s2 = String(l.voice2_sentiment || "").trim();
-                return s1 !== "" || s2 !== "";
-            });
-            const totalSentiment = leadsWithSentiment.length;
-
-            const effectiveTotal = Math.max(archiveCount, leads.length);
 
             return {
-                totalCalls: effectiveTotal,
-                pickUpRate: archiveCount > 0 ? (pickUpCount / archiveCount) * 100 : 0,
-                completionRate: archiveCount > 0 ? (completionCount / archiveCount) * 100 : 0,
-                positiveRate: totalSentiment > 0 ? (positiveCount / totalSentiment) * 100 : 0
+                totalCalls: total,
+                pickUpRate: total > 0 ? (pickedUp / total) * 100 : 0,
+                completionRate: total > 0 ? (completed / total) * 100 : 0,
             };
+        }
+
+        // ── 5. Cold leads positive response rate ─────────────────────────────
+        // Match ENRICHED_LEADS.company_phone_number against cold call phones
+        const coldMatchedLeads = enrichedLeads.filter(l => {
+            const lPhone = cleanPhone(l.company_phone_number);
+            if (!lPhone) return false;
+            // Check if any cold call matches this lead's phone
+            return Array.from(coldPhones).some(cp => phonesMatch(cp, lPhone));
+        });
+
+        const coldLeadsWithSentiment = coldMatchedLeads.filter(l =>
+            (l.voice_sentiment && String(l.voice_sentiment).trim() !== '') ||
+            (l.voice2_sentiment && String(l.voice2_sentiment).trim() !== '')
+        );
+        const coldPositive = coldLeadsWithSentiment.filter(l =>
+            isPositiveSentiment(l.voice_sentiment) || isPositiveSentiment(l.voice2_sentiment)
+        ).length;
+
+        // ── 6. Hubspot leads positive response rate ───────────────────────────
+        // Match hubspot_lead.company_phone_number against hubspot call phones
+        const hubspotMatchedLeads = hubspotLeads.filter(l => {
+            const lPhone = cleanPhone(l.company_phone_number);
+            if (!lPhone) return false;
+            return Array.from(hubspotPhones).some(cp => phonesMatch(cp, lPhone));
+        });
+
+        const hubspotLeadsWithSentiment = hubspotMatchedLeads.filter(l =>
+            (l.v1_sentiment && String(l.v1_sentiment).trim() !== '') ||
+            (l.v2_sentiment && String(l.v2_sentiment).trim() !== '') ||
+            (l.v3_sentiment && String(l.v3_sentiment).trim() !== '')
+        );
+        const hubspotPositive = hubspotLeadsWithSentiment.filter(l =>
+            isPositiveSentiment(l.v1_sentiment) ||
+            isPositiveSentiment(l.v2_sentiment) ||
+            isPositiveSentiment(l.v3_sentiment)
+        ).length;
+
+        // ── 7. Assemble stats ─────────────────────────────────────────────────
+        const allCallStats = calcCallStats(allCalls);
+        const coldCallStats = calcCallStats(coldCalls);
+        const hubspotCallStats = calcCallStats(hubspotCalls);
+
+        const coldStats = {
+            ...coldCallStats,
+            positiveRate: coldLeadsWithSentiment.length > 0 ? (coldPositive / coldLeadsWithSentiment.length) * 100 : 0,
         };
 
-        const icpStats = calculateStats(icpLeads, allCalls);
-        const enrichedStats = calculateStats(enrichedLeads, allCalls);
+        const hubspotStats = {
+            ...hubspotCallStats,
+            positiveRate: hubspotLeadsWithSentiment.length > 0 ? (hubspotPositive / hubspotLeadsWithSentiment.length) * 100 : 0,
+        };
+
+        // Legacy: combined stats (used by older parts)
+        const icpStats = coldStats;
+        const enrichedStats = hubspotStats;
 
         return NextResponse.json({
-            icpStats,
-            enrichedStats
+            icpStats,        // backward compat: cold leads stats
+            enrichedStats,   // backward compat: hubspot leads stats
+            coldStats,
+            hubspotStats,
+            allStats: allCallStats,
         });
 
     } catch (error: any) {

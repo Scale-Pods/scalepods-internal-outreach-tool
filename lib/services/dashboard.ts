@@ -146,7 +146,7 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
 
     // Fetch all rows from all three lead tables (no DB-level date filter —
     // we filter in-memory because the "contacted" date may differ from created_at)
-    const [icpRows, metaRows, enrichedRows, emailReplies, voiceCalls, hubspotRows] = await Promise.all([
+    const [icpRows, metaRows, enrichedRows, emailReplies, voiceCalls, hubspotRows, coldVoiceCallsRes, hubspotVoiceCallsRes] = await Promise.all([
       fetchTable("icp_tracker", ICP_DASHBOARD_COLUMNS),
       fetchTable("meta_lead_tracker", META_DASHBOARD_COLUMNS),
       fetchTable("ENRICHED_LEADS", ENRICHED_DASHBOARD_COLUMNS),
@@ -157,10 +157,24 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
         .lte('reply_timestamp', toFull.toISOString()),
       supabaseAdmin
         .from('vapi_call_logs')
-        .select('started_at, duration_seconds, status')
-        .gte('started_at', fromFull.toISOString())
-        .lte('started_at', toFull.toISOString()),
-      fetchTable("hubspot_lead", ICP_DASHBOARD_COLUMNS)
+        .select('started_at, duration_seconds, status, vapi_account')
+        .gte('created_at', fromFull.toISOString())
+        .lte('created_at', toFull.toISOString()),
+      fetchTable("hubspot_lead", ICP_DASHBOARD_COLUMNS),
+      // Cold leads voice calls count
+      supabaseAdmin
+        .from('vapi_call_logs')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', fromFull.toISOString())
+        .lte('created_at', toFull.toISOString())
+        .ilike('vapi_account', 'Scalepods Internal outreach - cold leads'),
+      // HubSpot leads voice calls count
+      supabaseAdmin
+        .from('vapi_call_logs')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', fromFull.toISOString())
+        .lte('created_at', toFull.toISOString())
+        .ilike('vapi_account', 'hubspot leads'),
     ]);
 
     const allLeads = [
@@ -171,13 +185,17 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
 
     const emailReplyCount = emailReplies.count || 0;
 
-    // Voice stats from vapi_call_logs
+    // Voice stats from vapi_call_logs (using created_at filter)
     const voiceData = voiceCalls.data || [];
     const totalVoiceSeconds = voiceData.reduce(
       (acc: number, c: any) => acc + (typeof c.duration_seconds === 'number' ? c.duration_seconds : 0),
       0
     );
     const totalVoiceCalls = voiceData.length;
+
+    // Bifurcated voice call counts by vapi_account
+    const coldVoiceCallsCount = coldVoiceCallsRes.count || 0;
+    const hubspotVoiceCallsCount = hubspotVoiceCallsRes.count || 0;
 
     // Build acquisition chart skeleton (one slot per day in range)
     const acquisitionMap: Record<string, number> = {};
@@ -262,12 +280,16 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
         totalVoiceSeconds,
         voiceMinutesString: formatDuration(totalVoiceSeconds),
         totalVoiceCalls,
+        // Bifurcated voice call counts from vapi_account
+        coldVoiceCallsCount,
+        hubspotVoiceCallsCount,
         totalHubspotLeads: hubspotLeads,
         hubspot: {
             leads: hubspotLeads,
             emails: hubspotEmailSent,
             whatsapp: hubspotWhatsappSent,
-            voice: hubspotVoiceContacted,
+            // Use actual vapi_call_logs count for hubspot voice
+            voice: hubspotVoiceCallsCount,
             replies: hubspotWhatsappReply
         }
       },
