@@ -32,6 +32,7 @@ const POSITIVE_SENTIMENTS = [
     "callback- plan postponed",
     "callback plan postponed",
     "callback-plan postponed",
+    "positive",
 ];
 
 function isPositiveSentiment(val: any): boolean {
@@ -122,11 +123,18 @@ export async function GET(req: Request) {
 
         // ── 5. Cold leads positive response rate ─────────────────────────────
         // Match ENRICHED_LEADS.company_phone_number against cold call phones
+        // User requested to match company_phone_number + '+' with customer_phone + '+'
+        function toStrictPlusPhone(num: any) {
+            if (!num) return "";
+            let s = String(num).replace(/\D/g, '');
+            return s ? '+' + s : "";
+        }
+
+        const strictColdPhones = new Set(coldCalls.map(c => toStrictPlusPhone(c.customer_phone)));
+        
         const coldMatchedLeads = enrichedLeads.filter(l => {
-            const lPhone = cleanPhone(l.company_phone_number);
-            if (!lPhone) return false;
-            // Check if any cold call matches this lead's phone
-            return Array.from(coldPhones).some(cp => phonesMatch(cp, lPhone));
+            const lPhone = toStrictPlusPhone(l.company_phone_number);
+            return lPhone && strictColdPhones.has(lPhone);
         });
 
         const coldLeadsWithSentiment = coldMatchedLeads.filter(l =>
@@ -139,10 +147,11 @@ export async function GET(req: Request) {
 
         // ── 6. Hubspot leads positive response rate ───────────────────────────
         // Match hubspot_lead.company_phone_number against hubspot call phones
+        const strictHubspotPhones = new Set(hubspotCalls.map(c => toStrictPlusPhone(c.customer_phone)));
+        
         const hubspotMatchedLeads = hubspotLeads.filter(l => {
-            const lPhone = cleanPhone(l.company_phone_number);
-            if (!lPhone) return false;
-            return Array.from(hubspotPhones).some(cp => phonesMatch(cp, lPhone));
+            const lPhone = toStrictPlusPhone(l.company_phone_number);
+            return lPhone && strictHubspotPhones.has(lPhone);
         });
 
         const hubspotLeadsWithSentiment = hubspotMatchedLeads.filter(l =>
@@ -151,8 +160,8 @@ export async function GET(req: Request) {
             (l.v3_sentiment && String(l.v3_sentiment).trim() !== '')
         );
         const hubspotPositive = hubspotLeadsWithSentiment.filter(l =>
-            isPositiveSentiment(l.v1_sentiment) ||
-            isPositiveSentiment(l.v2_sentiment) ||
+            isPositiveSentiment(l.v1_sentiment) || 
+            isPositiveSentiment(l.v2_sentiment) || 
             isPositiveSentiment(l.v3_sentiment)
         ).length;
 
