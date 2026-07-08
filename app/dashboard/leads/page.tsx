@@ -16,8 +16,9 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SPLoader } from "@/components/sp-loader";
-import { Database, ChevronLeft, ChevronRight, ArrowLeft, Send, Search } from "lucide-react";
+import { Database, ChevronLeft, ChevronRight, ArrowLeft, Send, Search, Loader2, CheckCircle2, AlertCircle, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 const TABLES = [
@@ -81,6 +82,17 @@ export default function LeadsPage() {
     const [page, setPage] = useState(1);
     const [searchQuery, setSearchQuery] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [sendingIds, setSendingIds] = useState(false);
+    const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({ show: false, message: '', type: 'success' });
+
+    // Auto-dismiss toast
+    useEffect(() => {
+        if (toast.show) {
+            const t = setTimeout(() => setToast(prev => ({ ...prev, show: false })), 4000);
+            return () => clearTimeout(t);
+        }
+    }, [toast.show]);
 
     // Debounce search query
     useEffect(() => {
@@ -123,6 +135,7 @@ export default function LeadsPage() {
 
     useEffect(() => {
         if (activeTable) {
+            setSelectedIds(new Set());
             fetchTableData(activeTable, page, debouncedSearch);
         }
     }, [activeTable, page, debouncedSearch, fetchTableData]);
@@ -131,24 +144,50 @@ export default function LeadsPage() {
         setPage(1);
         setSearchQuery("");
         setDebouncedSearch("");
+        setSelectedIds(new Set());
         setActiveTable(tableName);
     };
 
-    const handleSendToAutomation = async (row: any) => {
+    const handleSendSelected = async () => {
+        if (selectedIds.size === 0) return;
+        setSendingIds(true);
         try {
-            await fetch('https://n8n.srv1010832.hstgr.cloud/webhook/send-to-automation', {
+            const res = await fetch('https://n8n.srv1010832.hstgr.cloud/webhook/leads/enrich', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    company_phone_number: row.company_phone_number,
-                    full_name: row.full_name,
-                    "Personal Email": row["Personal Email"]
-                })
+                body: JSON.stringify({ lead_uuids: Array.from(selectedIds) })
             });
-            alert('Successfully triggered automation!');
+            if (res.ok) {
+                setToast({ show: true, message: `Successfully sent ${selectedIds.size} lead(s) for enrichment!`, type: 'success' });
+                setSelectedIds(new Set());
+            } else {
+                const text = await res.text();
+                setToast({ show: true, message: `Failed to send leads: ${res.status} ${text || res.statusText}`, type: 'error' });
+            }
         } catch (error) {
             console.error(error);
-            alert('Failed to trigger automation.');
+            setToast({ show: true, message: 'Failed to send leads.', type: 'error' });
+        } finally {
+            setSendingIds(false);
+        }
+    };
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const getRowId = (row: any) => String(row.lead_uuid || row.company_phone_number);
+
+    const toggleSelectAll = () => {
+        if (selectedIds.size === tableData.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(tableData.map(r => getRowId(r))));
         }
     };
 
@@ -162,6 +201,9 @@ export default function LeadsPage() {
         let columns = tableData.length > 0 ? Object.keys(tableData[0]).filter(k => k !== 'id' && !k.startsWith('_')).slice(0, 10) : [];
         if (activeTable === 'hubspot_lead') {
             columns = ['full_name', 'company_phone_number', 'Personal Email', 'status', 'lifecyclestage', 'created_at'];
+        }
+        if (activeTable === 'master_leads_unique' && tableData.length > 0 && 'lead_uuid' in tableData[0]) {
+            columns = ['lead_uuid', ...columns.filter(c => c !== 'lead_uuid')];
         }
 
         return (
@@ -189,6 +231,17 @@ export default function LeadsPage() {
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
+                    {activeTable === 'master_leads_unique' && selectedIds.size > 0 && (
+                        <Button 
+                            size="sm"
+                            disabled={sendingIds}
+                            onClick={handleSendSelected}
+                            className="bg-cyan-600 hover:bg-cyan-700 text-white gap-2 h-9 px-4 font-semibold"
+                        >
+                            {sendingIds ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                            Send Selected ({selectedIds.size})
+                        </Button>
+                    )}
                 </div>
 
                 <Card className="bg-white shadow-sm overflow-hidden">
@@ -198,8 +251,11 @@ export default function LeadsPage() {
                                 <TableHeader>
                                     <TableRow className="bg-slate-50 border-b border-slate-100">
                                         {activeTable === 'master_leads_unique' && (
-                                            <TableHead className="text-xs font-semibold text-slate-500 uppercase whitespace-nowrap">
-                                                Actions
+                                            <TableHead className="w-10">
+                                                <Checkbox 
+                                                    checked={tableData.length > 0 && selectedIds.size === tableData.length}
+                                                    onCheckedChange={toggleSelectAll}
+                                                />
                                             </TableHead>
                                         )}
                                         {columns.map((col) => (
@@ -212,7 +268,7 @@ export default function LeadsPage() {
                                 <TableBody>
                                     {tableData.length === 0 && !tableLoading ? (
                                         <TableRow>
-                                            <TableCell colSpan={columns.length || 1} className="text-center py-12 text-slate-400">
+                                            <TableCell colSpan={(columns.length || 1) + (activeTable === 'master_leads_unique' ? 1 : 0)} className="text-center py-12 text-slate-400">
                                                 No records found in this table.
                                             </TableCell>
                                         </TableRow>
@@ -220,10 +276,11 @@ export default function LeadsPage() {
                                         tableData.map((row, idx) => (
                                             <TableRow key={idx} className="border-b border-slate-50 hover:bg-slate-50/50">
                                                 {activeTable === 'master_leads_unique' && (
-                                                    <TableCell className="text-sm text-slate-600 whitespace-nowrap">
-                                                        <Button size="sm" className="bg-cyan-600 hover:bg-cyan-700 text-white gap-1 h-8" onClick={() => handleSendToAutomation(row)}>
-                                                            <Send className="h-3 w-3" /> Send
-                                                        </Button>
+                                                    <TableCell className="w-10">
+                                                        <Checkbox 
+                                                            checked={selectedIds.has(getRowId(row))}
+                                                            onCheckedChange={() => toggleSelect(getRowId(row))}
+                                                        />
                                                     </TableCell>
                                                 )}
                                                 {columns.map((col) => (
@@ -247,6 +304,19 @@ export default function LeadsPage() {
                         </div>
                     </CardContent>
                 </Card>
+                {toast.show && (
+                    <div className={`fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300 px-5 py-3 rounded-xl shadow-2xl border text-sm font-bold flex items-center gap-3 ${
+                        toast.type === 'success'
+                            ? 'bg-emerald-900 border-emerald-700 text-emerald-100'
+                            : 'bg-red-900 border-red-700 text-red-100'
+                    }`}>
+                        {toast.type === 'success' ? <CheckCircle2 className="h-5 w-5 shrink-0" /> : <AlertCircle className="h-5 w-5 shrink-0" />}
+                        {toast.message}
+                        <button onClick={() => setToast({ ...toast, show: false })} className="ml-2 hover:opacity-70">
+                            <X className="h-4 w-4" />
+                        </button>
+                    </div>
+                )}
             </div>
         );
     }
