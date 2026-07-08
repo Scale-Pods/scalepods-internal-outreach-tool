@@ -7,10 +7,10 @@ import React from "react";
 
 const scraperOptions = [
     {
-        title: "LinkedIn Scrapper",
-        description: "Extract professional leads, company data, and job details directly from LinkedIn profiles and searches.",
+        title: "Apollo URL Generation",
+        description: "Generate targeted LinkedIn search URLs and extract professional leads using the Apollo engine.",
         icon: Linkedin,
-        href: "/dashboard/lead-scrapper/linkedin",
+        href: "/dashboard/lead-scrapper/apollo",
         color: "text-blue-600",
         bgColor: "bg-blue-50",
         borderColor: "border-blue-100",
