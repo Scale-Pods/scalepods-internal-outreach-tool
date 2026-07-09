@@ -559,8 +559,8 @@ export default function WhatsappChatPage() {
                                     : 'text-slate-500 hover:text-slate-700'
                             }`}
                         >
-                            <Database className="h-3.5 w-3.5" />
-                            ICP Tracker
+<Database className="h-3.5 w-3.5" />
+ICP Tracker
                         </button>
                         <button
                             onClick={() => { setSourceTable('meta_lead_tracker'); setCurrentPage(1); }}
@@ -571,7 +571,7 @@ export default function WhatsappChatPage() {
                             }`}
                         >
                             <Database className="h-3.5 w-3.5" />
-                            Meta Lead
+Cold Leads
                         </button>
                         <button
                             onClick={() => { setSourceTable('ENRICHED_LEADS'); setCurrentPage(1); }}
@@ -582,7 +582,7 @@ export default function WhatsappChatPage() {
                             }`}
                         >
                             <Database className="h-3.5 w-3.5" />
-                            Enriched Leads
+Enriched Cold Leads
                         </button>
                         <button
                             onClick={() => { setSourceTable('hubspot_lead'); setCurrentPage(1); }}
@@ -593,7 +593,7 @@ export default function WhatsappChatPage() {
                             }`}
                         >
                             <Database className="h-3.5 w-3.5" />
-                            HubSpot Lead
+Hot Leads
                         </button>
                     </div>
                     <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
@@ -868,10 +868,10 @@ function CustomerRow({ lead: leadRaw, onClick, loopMap = {}, lifecycleMap = {} }
 
     const displayPhone = lead.phone || lead.Phone || lead.company_phone_number || '';
     const displayName = lead.name || lead.Name || lead.full_name || displayPhone || 'Unknown';
-    const displayLoop = lead._table === 'icp_tracker' ? 'ICP Tracker'
-        : lead._table === 'ENRICHED_LEADS' ? 'Enriched Leads'
-        : lead._table === 'hubspot_lead' ? 'HubSpot Lead'
-        : 'Meta Lead';
+    const displayLoop = lead._table === 'icp_tracker' ? 'Hot Leads'
+        : lead._table === 'ENRICHED_LEADS' ? 'Enriched Cold Leads'
+        : lead._table === 'hubspot_lead' ? 'Hot Leads'
+        : 'Cold Leads';
     // Resolve lifecycle stage: row-level field first (HubSpot carries it), then lookup map
     const normalizedPhone = displayPhone.replace(/\D/g, '');
     const displayLifecycle = lead.lifecyclestage || (normalizedPhone ? lifecycleMap[normalizedPhone] : null);

@@ -59,13 +59,14 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
             return (data || []).map((l: any) => ({ ...l, _table: table, _source: source }));
         };
 
-        const [icpData, metaData, enrichedData] = await Promise.all([
+        const [icpData, metaData, enrichedData, hubspotData] = await Promise.all([
             fetchLeads("icp_tracker", "icp"),
             fetchLeads("meta_lead_tracker", "meta"),
-            fetchLeads("ENRICHED_LEADS", "enriched")
+            fetchLeads("ENRICHED_LEADS", "enriched"),
+            fetchLeads("hubspot_lead", "hubspot")
         ]);
 
-        const allLeads = [...icpData, ...metaData, ...enrichedData];
+        const allLeads = [...icpData, ...metaData, ...enrichedData, ...hubspotData];
 
         const hasLeadReplied = (lead: any) => {
             for (let i = 1; i <= 25; i++) {
@@ -106,8 +107,9 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
         const icpWhatsapp = icpData.filter(isWhatsappLead);
         const metaWhatsapp = metaData.filter(isWhatsappLead);
         const enrichedWhatsapp = enrichedData.filter(isWhatsappLead);
+        const hubspotWhatsapp = hubspotData.filter(isWhatsappLead);
 
-        const allWhatsappLeads = [...icpWhatsapp, ...metaWhatsapp, ...enrichedWhatsapp];
+        const allWhatsappLeads = [...icpWhatsapp, ...metaWhatsapp, ...enrichedWhatsapp, ...hubspotWhatsapp];
 
         // Date filtering
         const fromD = new Date(fromDate);
@@ -128,10 +130,10 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
         const stageCounts = [0, 0, 0, 0, 0];
         const statuses: Record<string, number> = { read: 0, delivered: 0, sent: 0, failed: 0 };
 
-        let messagesSent = 0, icpMessagesSent = 0, metaMessagesSent = 0, enrichedMessagesSent = 0;
+        let messagesSent = 0, icpMessagesSent = 0, metaMessagesSent = 0, enrichedMessagesSent = 0, hubspotMessagesSent = 0;
         let botMessages = 0;
-        let leadsContacted = 0, icpLeadsContacted = 0, metaLeadsContacted = 0, enrichedLeadsContacted = 0;
-        let totalReplies = 0, icpRepliedCount = 0, metaRepliedCount = 0, enrichedRepliedCount = 0;
+        let leadsContacted = 0, icpLeadsContacted = 0, metaLeadsContacted = 0, enrichedLeadsContacted = 0, hubspotLeadsContacted = 0;
+        let totalReplies = 0, icpRepliedCount = 0, metaRepliedCount = 0, enrichedRepliedCount = 0, hubspotRepliedCount = 0;
         let readCount = 0, deliveredCount = 0, waitingCount = 0, failedCount = 0;
 
         filteredLeads.forEach((lead: any) => {
@@ -173,11 +175,13 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
                 if (lead._source === 'icp') icpLeadsContacted++;
                 else if (lead._source === 'meta') metaLeadsContacted++;
                 else if (lead._source === 'enriched') enrichedLeadsContacted++;
+                else if (lead._source === 'hubspot') hubspotLeadsContacted++;
             }
             messagesSent += leadSentCount;
             if (lead._source === 'icp') icpMessagesSent += leadSentCount;
             else if (lead._source === 'meta') metaMessagesSent += leadSentCount;
             else if (lead._source === 'enriched') enrichedMessagesSent += leadSentCount;
+            else if (lead._source === 'hubspot') hubspotMessagesSent += leadSentCount;
             botMessages += leadBotCount;
 
             const isReplied = hasLeadReplied(lead);
@@ -186,6 +190,7 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
                 if (lead._source === 'icp') icpRepliedCount++;
                 else if (lead._source === 'meta') metaRepliedCount++;
                 else if (lead._source === 'enriched') enrichedRepliedCount++;
+                else if (lead._source === 'hubspot') hubspotRepliedCount++;
             } else if (leadSentCount > 0) {
                 waitingCount++;
             }
@@ -210,9 +215,16 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
             icpLeadCount: icpWhatsapp.length,
             metaLeadCount: metaWhatsapp.length,
             enrichedLeadCount: enrichedWhatsapp.length,
-            leadsContacted, icpLeadsContacted, metaLeadsContacted, enrichedLeadsContacted,
-            messagesSent, icpMessagesSent, metaMessagesSent, enrichedMessagesSent,
-            botMessages, totalReplies, icpRepliedCount, metaRepliedCount, enrichedRepliedCount,
+            hubspotLeadCount: hubspotWhatsapp.length,
+            leadsContacted, icpLeadsContacted, metaLeadsContacted, enrichedLeadsContacted, hubspotLeadsContacted,
+            hotLeadsContacted: icpLeadsContacted + hubspotLeadsContacted,
+            coldLeadsContacted: metaLeadsContacted,
+            messagesSent, icpMessagesSent, metaMessagesSent, enrichedMessagesSent, hubspotMessagesSent,
+            hotMessagesSent: icpMessagesSent + hubspotMessagesSent,
+            coldMessagesSent: metaMessagesSent,
+            botMessages, totalReplies, icpRepliedCount, metaRepliedCount, enrichedRepliedCount, hubspotRepliedCount,
+            hotRepliedCount: icpRepliedCount + hubspotRepliedCount,
+            coldRepliedCount: metaRepliedCount,
             replyRate: leadsContacted > 0 ? (totalReplies / leadsContacted) * 100 : 0,
             readRate: totalStatusMessages > 0 ? (statuses.read / totalStatusMessages) * 100 : 0,
             deliveredCount, readCount, waitingCount, failedCount,

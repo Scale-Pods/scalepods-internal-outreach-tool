@@ -81,10 +81,11 @@ export async function GET(req: Request) {
         const leads = await getOrSetCache(cacheKey, 5 * 60 * 1000, async () => {
             const icpDateCol = typeParam === 'whatsapp' ? 'Whatsapp Last Contacted' : 'Email Last Contacted';
             
-            const [icpLeads, metaLeads, enrichedLeads, masterLeads] = await Promise.all([
+            const [icpLeads, metaLeads, enrichedLeads, hubspotLeads, masterLeads] = await Promise.all([
                 fetchTableTurbo("icp_tracker", icpDateCol),
                 fetchTableTurbo("meta_lead_tracker", "created_at"),
                 fetchTableTurbo("ENRICHED_LEADS", icpDateCol),
+                fetchTableTurbo("hubspot_lead", "created_at"),
                 fetchTableTurbo("master_leads_unique")
             ]);
 
@@ -143,6 +144,14 @@ export async function GET(req: Request) {
                         ...l, _table: 'ENRICHED_LEADS', phone, 
                         lifecyclestage: getLifecycle(phone),
                         name: `${l["First Name"] || ''} ${l["Last Name"] || ''}`.trim() || 'Guest' 
+                    };
+                }),
+                ...(hubspotLeads || []).map((l: any) => {
+                    const phone = l.company_phone_number;
+                    return { 
+                        ...l, _table: 'hubspot_lead', phone, 
+                        lifecyclestage: getLifecycle(phone),
+                        name: l.full_name || `${l.first_name || ''} ${l.last_name || ''}`.trim() || 'Guest' 
                     };
                 })
             ];

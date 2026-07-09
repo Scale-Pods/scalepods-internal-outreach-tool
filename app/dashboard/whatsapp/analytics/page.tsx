@@ -85,7 +85,7 @@ export default function WhatsappAnalyticsPage() {
 
     const stats = useMemo(() => {
         let totalSent = 0, repliedCount = 0, leadsContacted = 0;
-        const campaigns: Record<string, { value: number }> = { "ICP Tracker": { value: 0 }, "Meta Lead": { value: 0 }, "Enriched Leads": { value: 0 } };
+        const campaigns: Record<string, { value: number }> = { "Hot Leads": { value: 0 }, "Cold Leads": { value: 0 }, "Enriched Cold Leads": { value: 0 } };
 
         filteredLeads.forEach(lead => {
             const sentCount = countSentMessages(lead);
@@ -93,9 +93,9 @@ export default function WhatsappAnalyticsPage() {
             if (sentCount > 0) leadsContacted++;
             if (hasLeadReplied(lead)) {
                 repliedCount++;
-                if (lead._source === 'icp') campaigns["ICP Tracker"].value++;
-                else if (lead._source === 'meta') campaigns["Meta Lead"].value++;
-                else if (lead._source === 'enriched') campaigns["Enriched Leads"].value++;
+                if (lead._source === 'icp') campaigns["Hot Leads"].value++;
+                else if (lead._source === 'meta') campaigns["Cold Leads"].value++;
+                else if (lead._source === 'enriched') campaigns["Enriched Cold Leads"].value++;
             }
         });
 
