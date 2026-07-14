@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 
 const TABLES = [
     { id: 'master_leads_unique', name: 'Master Leads Unique', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+    { id: 'master_cold_leads', name: 'Master Cold Leads', color: 'bg-slate-50 text-slate-700 border-slate-200' },
     { id: 'ENRICHED_LEADS', name: 'Enriched Leads', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
     { id: 'LinkedIn_leads', name: 'LinkedIn Leads', color: 'bg-blue-50 text-blue-700 border-blue-200' },
     { id: 'gmap_leadsv2', name: 'Google Maps Leads', color: 'bg-rose-50 text-rose-700 border-rose-200' },
@@ -151,8 +152,11 @@ export default function LeadsPage() {
     const handleSendSelected = async () => {
         if (selectedIds.size === 0) return;
         setSendingIds(true);
+        const url = activeTable === 'master_cold_leads'
+            ? 'https://n8n.srv1010832.hstgr.cloud/webhook/master-cold-to-enriched'
+            : 'https://n8n.srv1010832.hstgr.cloud/webhook/leads/enrich';
         try {
-            const res = await fetch('https://n8n.srv1010832.hstgr.cloud/webhook/leads/enrich', {
+            const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ lead_uuids: Array.from(selectedIds) })
@@ -205,6 +209,9 @@ export default function LeadsPage() {
         if (activeTable === 'master_leads_unique' && tableData.length > 0 && 'lead_uuid' in tableData[0]) {
             columns = ['lead_uuid', ...columns.filter(c => c !== 'lead_uuid')];
         }
+        if (activeTable === 'master_cold_leads') {
+            columns = ['lead_uuid', 'full_name', 'company_name', 'email', 'mobile_number', 'company_phone_number', 'title', 'industry', 'city', 'state', 'country', 'lifecyclestage', 'enrichment_status', 'created_at'];
+        }
 
         return (
             <div className="space-y-6 pb-10 relative">
@@ -231,7 +238,7 @@ export default function LeadsPage() {
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
-                    {activeTable === 'master_leads_unique' && selectedIds.size > 0 && (
+                    {(activeTable === 'master_leads_unique' || activeTable === 'master_cold_leads') && selectedIds.size > 0 && (
                         <Button 
                             size="sm"
                             disabled={sendingIds}
@@ -250,7 +257,7 @@ export default function LeadsPage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-slate-50 border-b border-slate-100">
-                                        {activeTable === 'master_leads_unique' && (
+                                        {(activeTable === 'master_leads_unique' || activeTable === 'master_cold_leads') && (
                                             <TableHead className="w-10">
                                                 <Checkbox 
                                                     checked={tableData.length > 0 && selectedIds.size === tableData.length}
@@ -268,14 +275,14 @@ export default function LeadsPage() {
                                 <TableBody>
                                     {tableData.length === 0 && !tableLoading ? (
                                         <TableRow>
-                                            <TableCell colSpan={(columns.length || 1) + (activeTable === 'master_leads_unique' ? 1 : 0)} className="text-center py-12 text-slate-400">
+                                            <TableCell colSpan={(columns.length || 1) + ((activeTable === 'master_leads_unique' || activeTable === 'master_cold_leads') ? 1 : 0)} className="text-center py-12 text-slate-400">
                                                 No records found in this table.
                                             </TableCell>
                                         </TableRow>
                                     ) : (
                                         tableData.map((row, idx) => (
                                             <TableRow key={idx} className="border-b border-slate-50 hover:bg-slate-50/50">
-                                                {activeTable === 'master_leads_unique' && (
+                                                {(activeTable === 'master_leads_unique' || activeTable === 'master_cold_leads') && (
                                                     <TableCell className="w-10">
                                                         <Checkbox 
                                                             checked={selectedIds.has(getRowId(row))}

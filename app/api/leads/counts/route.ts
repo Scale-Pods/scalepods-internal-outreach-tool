@@ -8,7 +8,8 @@ const TABLES = [
     'hubspot_lead',
     'icp_tracker',
     'meta_lead_tracker',
-    'master_leads_unique'
+    'master_leads_unique',
+    'master_cold_leads'
 ];
 
 export async function GET() {
