@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
-const COLD_LEADS_ACCOUNT = "Scalepods Internal outreach - cold leads";
-const HUBSPOT_LEADS_ACCOUNT = "hubspot leads";
+const COLD_LEADS_ACCOUNT = "cold leads";
+const HUBSPOT_LEADS_ACCOUNT = "hubspot";
 
 // Normalize phone: strip all non-digits
 function cleanPhone(num: any): string {

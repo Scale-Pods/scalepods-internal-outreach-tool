@@ -16,8 +16,8 @@ import { format, subDays } from "date-fns";
 import { formatDuration, cn } from "@/lib/utils";
 import { useData } from "@/context/DataContext";
 
-const COLD_LEADS_ACCOUNT = "scalepods internal outreach - cold leads";
-const HUBSPOT_LEADS_ACCOUNT = "hubspot leads";
+const COLD_LEADS_ACCOUNT = "cold leads";
+const HUBSPOT_LEADS_ACCOUNT = "hubspot";
 
 function getAccountType(vapiAccount: string | null | undefined): 'cold' | 'hubspot' | 'other' {
     const val = (vapiAccount || '').toLowerCase().trim();

@@ -202,8 +202,8 @@ async function fetchArchive(from: Date, to: Date) {
                 // Classify account type based on vapi_account column
                 const vapiAcc = (db.vapi_account || '').toLowerCase().trim();
                 let accountType: 'cold' | 'hubspot' | 'other' = 'other';
-                if (vapiAcc === 'scalepods internal outreach - cold leads') accountType = 'cold';
-                else if (vapiAcc === 'hubspot leads') accountType = 'hubspot';
+                if (vapiAcc === 'cold leads') accountType = 'cold';
+                else if (vapiAcc === 'hubspot') accountType = 'hubspot';
 
                 return {
                     id: db.id,

@@ -2,8 +2,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { format, getHours } from "date-fns";
 
 // vapi_account values
-export const COLD_LEADS_ACCOUNT = "Scalepods Internal outreach - cold leads";
-export const HUBSPOT_LEADS_ACCOUNT = "hubspot leads";
+export const COLD_LEADS_ACCOUNT = "cold leads";
+export const HUBSPOT_LEADS_ACCOUNT = "hubspot";
 
 function classifyAccount(vapiAccount: string | null | undefined): 'cold' | 'hubspot' | 'other' {
     const val = (vapiAccount || '').toLowerCase().trim();

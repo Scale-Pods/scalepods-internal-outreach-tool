@@ -167,14 +167,14 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
         .select('id', { count: 'exact', head: true })
         .gte('created_at', fromFull.toISOString())
         .lte('created_at', toFull.toISOString())
-        .ilike('vapi_account', 'Scalepods Internal outreach - cold leads'),
+        .ilike('vapi_account', 'cold leads'),
       // HubSpot leads voice calls count
       supabaseAdmin
         .from('vapi_call_logs')
         .select('id', { count: 'exact', head: true })
         .gte('created_at', fromFull.toISOString())
         .lte('created_at', toFull.toISOString())
-        .ilike('vapi_account', 'hubspot leads'),
+        .ilike('vapi_account', 'hubspot'),
     ]);
 
     const allLeads = [
