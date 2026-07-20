@@ -22,14 +22,11 @@ import { Database, ChevronLeft, ChevronRight, ArrowLeft, Send, Search, Loader2, 
 import { Input } from "@/components/ui/input";
 
 const TABLES = [
-    { id: 'master_leads_unique', name: 'Master Leads Unique', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
     { id: 'master_cold_leads', name: 'Master Cold Leads', color: 'bg-slate-50 text-slate-700 border-slate-200' },
     { id: 'ENRICHED_LEADS', name: 'Enriched Leads', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
     { id: 'LinkedIn_leads', name: 'LinkedIn Leads', color: 'bg-blue-50 text-blue-700 border-blue-200' },
     { id: 'gmap_leadsv2', name: 'Google Maps Leads', color: 'bg-rose-50 text-rose-700 border-rose-200' },
-    { id: 'hubspot_lead', name: 'HubSpot Leads', color: 'bg-orange-50 text-orange-700 border-orange-200' },
-    { id: 'icp_tracker', name: 'ICP Tracker', color: 'bg-purple-50 text-purple-700 border-purple-200' },
-    { id: 'meta_lead_tracker', name: 'Meta Ads Leads', color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+    { id: 'hubspot_lead', name: 'Hot Leads', color: 'bg-orange-50 text-orange-700 border-orange-200' },
 ];
 
 function PaginationFooter({ totalItems, currentPage, itemsPerPage, onPageChange }: {
@@ -152,9 +149,7 @@ export default function LeadsPage() {
     const handleSendSelected = async () => {
         if (selectedIds.size === 0) return;
         setSendingIds(true);
-        const url = activeTable === 'master_cold_leads'
-            ? 'https://n8n.srv1010832.hstgr.cloud/webhook/master-cold-to-enriched'
-            : 'https://n8n.srv1010832.hstgr.cloud/webhook/leads/enrich';
+        const url = 'https://n8n.srv1010832.hstgr.cloud/webhook/leads/enrich';
         try {
             const res = await fetch(url, {
                 method: 'POST',
