@@ -204,6 +204,9 @@ export default function LeadsPage() {
         if (activeTable === 'master_leads_unique' && tableData.length > 0 && 'lead_uuid' in tableData[0]) {
             columns = ['lead_uuid', ...columns.filter(c => c !== 'lead_uuid')];
         }
+        if (activeTable === 'ENRICHED_LEADS' && tableData.length > 0 && 'lead_type' in tableData[0]) {
+            columns = ['lead_type', ...columns.filter(c => c !== 'lead_type')].slice(0, 10);
+        }
         if (activeTable === 'master_cold_leads') {
             columns = ['lead_uuid', 'full_name', 'company_name', 'email', 'mobile_number', 'company_phone_number', 'title', 'industry', 'city', 'state', 'country', 'lifecyclestage', 'enrichment_status', 'created_at'];
         }
