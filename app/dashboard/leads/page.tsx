@@ -18,8 +18,151 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SPLoader } from "@/components/sp-loader";
-import { Database, ChevronLeft, ChevronRight, ArrowLeft, Send, Search, Loader2, CheckCircle2, AlertCircle, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Database, ChevronLeft, ChevronRight, ArrowLeft, Send, Search, Loader2, CheckCircle2, AlertCircle, X, Phone, MessageCircle, Copy, Check, ExternalLink } from "lucide-react";
 import { Input } from "@/components/ui/input";
+
+// Columns whose values should render as clickable links (with copy) rather than plain text
+const LINK_COLUMNS = new Set([
+    'Url', 'url', 'linkedin', 'company_linkedin', 'company_linkedin_uid', 'company_website', 'company_domain',
+    'Github', 'github', 'Twitter', 'twitter',
+    'Work Email', 'Personal Email', 'Other Personal Emails', 'Other Work Emails', 'email',
+    'SENDERS  EMAIL',
+]);
+
+// Columns whose values should render with a Call / WhatsApp popover
+const PHONE_COLUMNS = new Set([
+    'company_phone_number', 'personal_phone', 'mobile_number', 'Other Phone Numbers',
+]);
+
+function isEmailValue(val: string) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
+}
+
+function isUrlValue(val: string) {
+    return /^https?:\/\//i.test(val.trim()) || /^(www\.)?[a-z0-9-]+\.[a-z]{2,}(\/\S*)?$/i.test(val.trim());
+}
+
+function normalizeUrl(val: string) {
+    const trimmed = val.trim();
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `https://${trimmed}`;
+}
+
+function CopyButton({ text }: { text: string }) {
+    const [copied, setCopied] = useState(false);
+    return (
+        <button
+            type="button"
+            onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(text);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+            }}
+            className="text-slate-400 hover:text-slate-700 shrink-0"
+            title="Copy"
+        >
+            {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+        </button>
+    );
+}
+
+function LinkCell({ value }: { value: string }) {
+    const trimmed = value.trim();
+    if (isEmailValue(trimmed)) {
+        return (
+            <div className="flex items-center gap-1.5">
+                <a
+                    href={`mailto:${trimmed}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-blue-600 hover:underline truncate max-w-[160px]"
+                    title={trimmed}
+                >
+                    {trimmed}
+                </a>
+                <CopyButton text={trimmed} />
+            </div>
+        );
+    }
+    if (isUrlValue(trimmed)) {
+        const href = normalizeUrl(trimmed);
+        return (
+            <div className="flex items-center gap-1.5">
+                <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-blue-600 hover:underline truncate max-w-[160px] flex items-center gap-1"
+                    title={trimmed}
+                >
+                    {trimmed}
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                </a>
+                <CopyButton text={trimmed} />
+            </div>
+        );
+    }
+    return <span className="truncate max-w-[200px] block" title={trimmed}>{trimmed}</span>;
+}
+
+function PhoneCell({ value }: { value: string }) {
+    const trimmed = value.trim();
+    const digits = trimmed.replace(/\D/g, '');
+    if (!digits) return <span>—</span>;
+
+    return (
+        <Popover>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-slate-700 hover:text-blue-600 hover:underline flex items-center gap-1.5"
+                >
+                    <Phone className="h-3 w-3 text-slate-400" />
+                    {trimmed}
+                </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-44 p-2" onClick={(e) => e.stopPropagation()}>
+                <div className="flex flex-col gap-1">
+                    <a
+                        href={`tel:${digits}`}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-100 text-sm text-slate-700"
+                    >
+                        <Phone className="h-3.5 w-3.5 text-blue-600" /> Call
+                    </a>
+                    <a
+                        href={`https://wa.me/${digits}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-100 text-sm text-slate-700"
+                    >
+                        <MessageCircle className="h-3.5 w-3.5 text-emerald-600" /> WhatsApp
+                    </a>
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+function LeadCell({ col, value }: { col: string; value: any }) {
+    if (value === null || value === undefined || value === '') return <span className="text-slate-300">—</span>;
+
+    // JSON/array/object columns (e.g. enriched_emails, enriched_socials) — render as compact JSON text
+    if (typeof value === 'object') {
+        const jsonStr = JSON.stringify(value);
+        if (jsonStr === '{}' || jsonStr === '[]') return <span className="text-slate-300">—</span>;
+        return <span className="font-mono text-xs truncate max-w-[200px] block" title={jsonStr}>{jsonStr}</span>;
+    }
+
+    const strVal = String(value);
+    if (!strVal) return <span className="text-slate-300">—</span>;
+
+    if (PHONE_COLUMNS.has(col)) return <PhoneCell value={strVal} />;
+    if (LINK_COLUMNS.has(col) && (isEmailValue(strVal) || isUrlValue(strVal))) return <LinkCell value={strVal} />;
+    return <span className="truncate max-w-[200px] block" title={strVal}>{strVal}</span>;
+}
 
 const TABLES = [
     { id: 'master_cold_leads', name: 'Master Cold Leads', color: 'bg-slate-50 text-slate-700 border-slate-200' },
@@ -199,16 +342,48 @@ export default function LeadsPage() {
         
         let columns = tableData.length > 0 ? Object.keys(tableData[0]).filter(k => k !== 'id' && !k.startsWith('_')).slice(0, 10) : [];
         if (activeTable === 'hubspot_lead') {
-            columns = ['full_name', 'company_phone_number', 'Personal Email', 'status', 'lifecyclestage', 'created_at'];
+            columns = [
+                'full_name', 'company_phone_number', 'personal_phone', 'status', 'lifecyclestage',
+                'Work Email', 'Personal Email', 'Other Personal Emails', 'Url', 'Twitter',
+                'Company', 'countryCode', 'lead_ststus_id', 'email_unsubscribed',
+                'Lead_Classification', 'Lead_Classification_Reason', 'last_conversation', 'date', 'created_at', 'updated_at',
+            ];
         }
         if (activeTable === 'master_leads_unique' && tableData.length > 0 && 'lead_uuid' in tableData[0]) {
             columns = ['lead_uuid', ...columns.filter(c => c !== 'lead_uuid')];
         }
-        if (activeTable === 'ENRICHED_LEADS' && tableData.length > 0 && 'lead_type' in tableData[0]) {
-            columns = ['lead_type', ...columns.filter(c => c !== 'lead_type')].slice(0, 10);
+        if (activeTable === 'ENRICHED_LEADS') {
+            columns = [
+                // Enrichment data first, as requested
+                'lead_type', 'enrichment_status', 'enrichment_provider', 'enriched_emails', 'enriched_phones',
+                'enriched_whatsapps', 'enriched_socials', 'enrichment_pages_visited', 'enrichment_crawled_url', 'last_enriched_at',
+                // Core identity/contact fields
+                'full_name', 'First Name', 'Last Name', 'Job Title', 'Headline', 'Company', 'Industry',
+                'company_phone_number', 'personal_phone', 'Other Phone Numbers',
+                'Work Email', 'Personal Email', 'Other Personal Emails', 'Other Work Emails',
+                'Work Email Status', 'Email_Classification', 'Email_Classification_Reason',
+                'Url', 'Github', 'Twitter',
+                'Lead_Classification', 'Lead_Classification_Reason',
+                'seniority', 'department', 'company_domain', 'company_website',
+                'Location', 'city', 'state', 'country', 'country_code',
+                'created_at', 'updated_at',
+            ];
         }
         if (activeTable === 'master_cold_leads') {
-            columns = ['lead_uuid', 'full_name', 'company_name', 'email', 'mobile_number', 'company_phone_number', 'title', 'industry', 'city', 'state', 'country', 'lifecyclestage', 'enrichment_status', 'created_at'];
+            columns = [
+                'enrichment_status', 'enrichment_provider', 'enriched_emails', 'enriched_phones',
+                'enriched_whatsapps', 'enriched_socials', 'enrichment_pages_visited', 'enrichment_crawled_url', 'last_enriched_at',
+                'lead_uuid', 'full_name', 'first_name', 'last_name', 'company_name', 'title', 'headline', 'seniority', 'department',
+                'email', 'Personal Email', 'mobile_number', 'company_phone_number', 'linkedin', 'company_linkedin', 'company_linkedin_uid',
+                'company_domain', 'company_website', 'industry', 'employees_count',
+                'city', 'state', 'country', 'company_city', 'company_state', 'company_country', 'company_postal_code',
+                'lifecyclestage', 'Loop', 't_name', 'source', 'created_at', 'updated_at',
+            ];
+        }
+        // Only keep columns that are actually present in the returned rows
+        if (tableData.length > 0) {
+            const availableKeys = new Set(Object.keys(tableData[0]));
+            columns = columns.filter(c => availableKeys.has(c));
         }
 
         return (
@@ -289,8 +464,8 @@ export default function LeadsPage() {
                                                     </TableCell>
                                                 )}
                                                 {columns.map((col) => (
-                                                    <TableCell key={col} className="text-sm text-slate-600 whitespace-nowrap max-w-[200px] truncate" title={String(row[col] || '')}>
-                                                        {String(row[col] || '—')}
+                                                    <TableCell key={col} className="text-sm text-slate-600 whitespace-nowrap max-w-[200px]">
+                                                        <LeadCell col={col} value={row[col]} />
                                                     </TableCell>
                                                 ))}
                                             </TableRow>
