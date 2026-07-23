@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SPLoader } from "@/components/sp-loader";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Database, ChevronLeft, ChevronRight, ArrowLeft, Send, Search, Loader2, CheckCircle2, AlertCircle, X, Phone, MessageCircle, Copy, Check, ExternalLink } from "lucide-react";
+import { Database, ChevronLeft, ChevronRight, ArrowLeft, Send, Search, Loader2, CheckCircle2, AlertCircle, X, Phone, MessageCircle, Copy, Check, ExternalLink, Braces } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 // Columns whose values should render as clickable links (with copy) rather than plain text
@@ -146,15 +146,129 @@ function PhoneCell({ value }: { value: string }) {
     );
 }
 
+// Try to parse a value into a JS object/array — handles both native jsonb objects
+// and jsonb columns that come back as JSON-encoded strings.
+function tryParseJson(value: any): any | null {
+    if (value && typeof value === 'object') return value;
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+            try {
+                return JSON.parse(trimmed);
+            } catch {
+                return null;
+            }
+        }
+    }
+    return null;
+}
+
+function isEmpty(parsed: any): boolean {
+    if (Array.isArray(parsed)) return parsed.length === 0;
+    if (parsed && typeof parsed === 'object') return Object.keys(parsed).length === 0;
+    return true;
+}
+
+// Renders a single value inside the JSON popover — links/emails/phones stay clickable
+function JsonLeafValue({ value }: { value: any }) {
+    if (value === null || value === undefined || value === '') return <span className="text-slate-400 italic">empty</span>;
+    if (typeof value === 'object') return <JsonReadable data={value} depth={1} />;
+
+    const strVal = String(value);
+    if (isEmailValue(strVal)) {
+        return <a href={`mailto:${strVal}`} onClick={(e) => e.stopPropagation()} className="text-blue-600 hover:underline">{strVal}</a>;
+    }
+    if (isUrlValue(strVal)) {
+        return <a href={normalizeUrl(strVal)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-blue-600 hover:underline">{strVal}</a>;
+    }
+    const digits = strVal.replace(/\D/g, '');
+    if (digits.length >= 7 && /^[+\d\s()-]+$/.test(strVal)) {
+        return (
+            <span className="inline-flex items-center gap-2">
+                {strVal}
+                <a href={`tel:${digits}`} className="text-blue-600 hover:underline text-xs">Call</a>
+                <a href={`https://wa.me/${digits}`} target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline text-xs">WhatsApp</a>
+            </span>
+        );
+    }
+    return <span>{strVal}</span>;
+}
+
+// Recursively renders parsed JSON as a readable key: value list (or bulleted list for arrays)
+function JsonReadable({ data, depth = 0 }: { data: any; depth?: number }) {
+    if (Array.isArray(data)) {
+        if (data.length === 0) return <span className="text-slate-400 italic">empty</span>;
+        return (
+            <ul className={depth > 0 ? "pl-3 space-y-1 list-disc list-inside" : "space-y-1.5"}>
+                {data.map((item, i) => (
+                    <li key={i} className="text-sm text-slate-700">
+                        <JsonLeafValue value={item} />
+                    </li>
+                ))}
+            </ul>
+        );
+    }
+    if (data && typeof data === 'object') {
+        const entries = Object.entries(data);
+        if (entries.length === 0) return <span className="text-slate-400 italic">empty</span>;
+        return (
+            <dl className={depth > 0 ? "pl-3 space-y-1" : "space-y-1.5"}>
+                {entries.map(([k, v]) => (
+                    <div key={k} className="flex gap-1.5 text-sm">
+                        <dt className="font-semibold text-slate-500 shrink-0">{k.replace(/_/g, ' ')}:</dt>
+                        <dd className="text-slate-700 min-w-0"><JsonLeafValue value={v} /></dd>
+                    </div>
+                ))}
+            </dl>
+        );
+    }
+    return <JsonLeafValue value={data} />;
+}
+
+// Compact one-line preview of parsed JSON for the collapsed table cell
+function jsonPreview(parsed: any): string {
+    if (Array.isArray(parsed)) {
+        if (parsed.length === 0) return '—';
+        const first = parsed.map(v => (typeof v === 'object' ? Object.values(v)[0] : v)).filter(Boolean)[0];
+        return parsed.length > 1 ? `${first} +${parsed.length - 1} more` : String(first ?? '—');
+    }
+    const values = Object.values(parsed).filter(v => v !== null && v !== undefined && v !== '');
+    if (values.length === 0) return '—';
+    return String(values[0]);
+}
+
+function JsonCell({ value }: { value: any }) {
+    const parsed = tryParseJson(value);
+    if (parsed === null) return <span className="truncate max-w-[200px] block" title={String(value)}>{String(value)}</span>;
+    if (isEmpty(parsed)) return <span className="text-slate-300">—</span>;
+
+    const count = Array.isArray(parsed) ? parsed.length : Object.keys(parsed).length;
+
+    return (
+        <Popover>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1.5 text-slate-700 hover:text-blue-600 max-w-[200px]"
+                >
+                    <Braces className="h-3 w-3 text-slate-400 shrink-0" />
+                    <span className="truncate">{jsonPreview(parsed)}</span>
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded-full px-1.5 shrink-0">{count}</span>
+                </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 max-h-80 overflow-auto p-3" onClick={(e) => e.stopPropagation()}>
+                <JsonReadable data={parsed} />
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 function LeadCell({ col, value }: { col: string; value: any }) {
     if (value === null || value === undefined || value === '') return <span className="text-slate-300">—</span>;
 
-    // JSON/array/object columns (e.g. enriched_emails, enriched_socials) — render as compact JSON text
-    if (typeof value === 'object') {
-        const jsonStr = JSON.stringify(value);
-        if (jsonStr === '{}' || jsonStr === '[]') return <span className="text-slate-300">—</span>;
-        return <span className="font-mono text-xs truncate max-w-[200px] block" title={jsonStr}>{jsonStr}</span>;
-    }
+    const parsedJson = tryParseJson(value);
+    if (parsedJson !== null) return <JsonCell value={value} />;
 
     const strVal = String(value);
     if (!strVal) return <span className="text-slate-300">—</span>;
@@ -274,9 +388,16 @@ export default function LeadsPage() {
         }
     }, []);
 
+    // Clear selection only when switching tables or search changes — not on page change,
+    // so selections persist across pagination.
     useEffect(() => {
         if (activeTable) {
             setSelectedIds(new Set());
+        }
+    }, [activeTable, debouncedSearch]);
+
+    useEffect(() => {
+        if (activeTable) {
             fetchTableData(activeTable, page, debouncedSearch);
         }
     }, [activeTable, page, debouncedSearch, fetchTableData]);
@@ -326,11 +447,17 @@ export default function LeadsPage() {
     const getRowId = (row: any) => String(row.lead_uuid || row.company_phone_number);
 
     const toggleSelectAll = () => {
-        if (selectedIds.size === tableData.length) {
-            setSelectedIds(new Set());
-        } else {
-            setSelectedIds(new Set(tableData.map(r => getRowId(r))));
-        }
+        const pageIds = tableData.map(r => getRowId(r));
+        const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (allPageSelected) {
+                pageIds.forEach(id => next.delete(id));
+            } else {
+                pageIds.forEach(id => next.add(id));
+            }
+            return next;
+        });
     };
 
     if (loadingCounts && !activeTable) {
@@ -432,8 +559,8 @@ export default function LeadsPage() {
                                     <TableRow className="bg-slate-50 border-b border-slate-100">
                                         {(activeTable === 'master_leads_unique' || activeTable === 'master_cold_leads') && (
                                             <TableHead className="w-10">
-                                                <Checkbox 
-                                                    checked={tableData.length > 0 && selectedIds.size === tableData.length}
+                                                <Checkbox
+                                                    checked={tableData.length > 0 && tableData.every(r => selectedIds.has(getRowId(r)))}
                                                     onCheckedChange={toggleSelectAll}
                                                 />
                                             </TableHead>
