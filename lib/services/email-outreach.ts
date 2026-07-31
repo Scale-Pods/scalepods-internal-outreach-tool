@@ -25,6 +25,9 @@ export interface ReplyEntry {
     index: number;
     userReplied: string | null;
     botReplied: string | null;
+    /** True when a reply happened but only _Status JSON metadata is available (no message text) */
+    userStatusOnly?: boolean;
+    botStatusOnly?: boolean;
 }
 
 export interface NormalizedLeadRow {
@@ -68,8 +71,8 @@ const REPLY_COLS = Array.from({ length: MAX_REPLY_STAGES }, (_, i) => i + 1)
     .flatMap(i => [`"User_Replied_${i}"`, `"Bot_Replied_${i}"`])
     .join(', ');
 
-// master_cold_leads has no User_Replied_N / Bot_Replied_N content columns —
-// only the _Status variants exist on that table.
+// master_cold_leads has both the content columns (User_Replied_N / Bot_Replied_N)
+// and separate _Status columns (JSON metadata: status/timestamp/message_id) — fetch both.
 const REPLY_STATUS_COLS = Array.from({ length: MAX_REPLY_STAGES }, (_, i) => i + 1)
     .flatMap(i => [`"User_Replied_Status_${i}"`, `"Bot_Replied_Status_${i}"`])
     .join(', ');
@@ -86,7 +89,7 @@ const MASTER_COLD_LEADS_COLUMNS = `
     mobile_number, company_phone_number, "SENDERS  EMAIL",
     "Email Last Contacted", "Replied",
     email_bounced, email_unsubscribed, email_status, email_last_sent_at, created_at,
-    ${EMAIL_STAGE_COLS}, ${REPLY_STATUS_COLS}
+    ${EMAIL_STAGE_COLS}, ${REPLY_COLS}, ${REPLY_STATUS_COLS}
 `;
 
 const HUBSPOT_LEAD_COLUMNS = `
@@ -123,12 +126,25 @@ function normalizeRow(row: any, table: string, leadType: LeadType): NormalizedLe
 
     const replies: ReplyEntry[] = [];
     for (let i = 1; i <= MAX_REPLY_STAGES; i++) {
-        // Prefer full reply content columns (ENRICHED_LEADS, hubspot_lead);
-        // fall back to the _Status columns that master_cold_leads actually has.
-        const userReplied = row[`User_Replied_${i}`] ?? row[`User_Replied_Status_${i}`] ?? null;
-        const botReplied = row[`Bot_Replied_${i}`] ?? row[`Bot_Replied_Status_${i}`] ?? null;
-        if (truthyText(userReplied) || truthyText(botReplied)) {
-            replies.push({ index: i, userReplied, botReplied });
+        // Use the actual message content columns (User_Replied_N / Bot_Replied_N) as display text.
+        // The _Status columns (master_cold_leads) hold JSON metadata (status/timestamp/message_id),
+        // not display text — only used to detect that a reply happened when content is missing.
+        const userContent = row[`User_Replied_${i}`] ?? null;
+        const botContent = row[`Bot_Replied_${i}`] ?? null;
+        const userStatus = row[`User_Replied_Status_${i}`] ?? null;
+        const botStatus = row[`Bot_Replied_Status_${i}`] ?? null;
+
+        const hasUser = truthyText(userContent) || truthyText(userStatus);
+        const hasBot = truthyText(botContent) || truthyText(botStatus);
+
+        if (hasUser || hasBot) {
+            replies.push({
+                index: i,
+                userReplied: truthyText(userContent) ? userContent : null,
+                botReplied: truthyText(botContent) ? botContent : null,
+                userStatusOnly: hasUser && !truthyText(userContent),
+                botStatusOnly: hasBot && !truthyText(botContent),
+            });
         }
     }
 

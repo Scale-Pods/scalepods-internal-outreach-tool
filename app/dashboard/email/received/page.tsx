@@ -341,6 +341,16 @@ function ReceivedEntryCard({ entry }: { entry: ReceivedEntry }) {
                         <div className="pl-[56px] space-y-3 border-t border-border pt-4">
                             {entry.replies.map((reply) => (
                                 <div key={reply.index} className="space-y-2">
+                                    {!reply.userReplied && reply.userStatusOnly && (
+                                        <div className="flex items-center gap-2 pl-8 text-[11px] text-slate-400 italic">
+                                            User replied (stage {reply.index}) — no message text available
+                                        </div>
+                                    )}
+                                    {!reply.botReplied && reply.botStatusOnly && (
+                                        <div className="flex items-center gap-2 pl-8 text-[11px] text-slate-400 italic">
+                                            Bot replied (stage {reply.index}) — no message text available
+                                        </div>
+                                    )}
                                     {reply.userReplied && (
                                         <div
                                             onClick={() => setModalReply(reply)}
