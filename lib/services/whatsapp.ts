@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { parseWaConversation, getWhatsappLastContacted } from '@/lib/leads-utils';
 import { format, subDays } from "date-fns";
 
 const WA_COLUMNS = `
@@ -54,8 +55,16 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
           "Bot_Replied_Status_16", "Bot_Replied_Status_17", "Bot_Replied_Status_18", "Bot_Replied_Status_19", "Bot_Replied_Status_20",
           "Bot_Replied_Status_21", "Bot_Replied_Status_22", "Bot_Replied_Status_23", "Bot_Replied_Status_24", "Bot_Replied_Status_25"
         `;
+        // ENRICHED_LEADS and hubspot_lead carry Whatsapp_6 + wa_conversation;
+        // icp_tracker / meta_lead_tracker do not, so use a table-aware column list.
+        const extendedColumns = `
+          ${selectColumns}
+          "Whatsapp_6", "Whatsapp_6_status", "wa_conversation"
+        `;
+
         const fetchLeads = async (table: string, source: string) => {
-            const { data } = await supabaseAdmin.from(table).select(selectColumns).limit(50000);
+            const cols = (table === 'ENRICHED_LEADS' || table === 'hubspot_lead') ? extendedColumns : selectColumns;
+            const { data } = await supabaseAdmin.from(table).select(cols).limit(50000);
             return (data || []).map((l: any) => ({ ...l, _table: table, _source: source }));
         };
 
@@ -73,6 +82,9 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
                 const r = lead[`User_Replied_${i}`];
                 if (r && String(r).trim() && String(r).toLowerCase() !== 'no' && String(r).toLowerCase() !== 'none') return true;
             }
+            // wa_conversation user messages
+            const conv = parseWaConversation(lead.wa_conversation || lead["wa_conversation"]);
+            if (conv.some((m: any) => m.role === 'user' || m.direction === 'inbound')) return true;
             if (lead.whatsapp_replied && lead.whatsapp_replied !== "No" && lead.whatsapp_replied !== "none") return true;
             const wtsTrack = lead["WTS_Reply_Track"];
             if (wtsTrack && String(wtsTrack).trim() !== "" && String(wtsTrack).toLowerCase() !== "no" && String(wtsTrack).toLowerCase() !== "none" && String(wtsTrack).toLowerCase() !== "false") return true;
@@ -84,10 +96,12 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
         };
 
         const isWhatsappLead = (l: any) => {
-            // Primary signals: actual Whatsapp_1-5 columns (both icp and enriched use these)
-            for (let i = 1; i <= 5; i++) {
+            // Primary signals: actual Whatsapp_1-6 columns (icp, enriched and hubspot use these)
+            for (let i = 1; i <= 6; i++) {
                 if (l[`Whatsapp_${i}`] && String(l[`Whatsapp_${i}`]).trim()) return true;
             }
+            // wa_conversation present
+            if (parseWaConversation(l.wa_conversation || l["wa_conversation"]).length > 0) return true;
             // W.P_1 - W.P_12 columns (meta_lead_tracker)
             for (let i = 1; i <= 12; i++) {
                 if (l[`W.P_${i}`] && String(l[`W.P_${i}`]).trim()) return true;
@@ -118,8 +132,9 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
         toD.setHours(23, 59, 59, 999);
 
         const filteredLeads = allWhatsappLeads.filter((lead: any) => {
-            // Use best available date: prefer "Whatsapp Last Contacted", fall back to created_at
-            const wlc = lead["Whatsapp Last Contacted"] || lead["whatsapp_last_contacted"] || lead.created_at;
+            // Use best available date: prefer "Whatsapp Last Contacted", fall back to
+            // wa_conversation / status timestamps / created_at
+            const wlc = getWhatsappLastContacted(lead) || lead.created_at;
             if (!wlc) return false;
             const contactDate = new Date(wlc);
             if (isNaN(contactDate.getTime())) return false;
@@ -127,7 +142,7 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
         });
 
         const dailyGroups: Record<string, { date: string; sent: number; replied: number; bot: number }> = {};
-        const stageCounts = [0, 0, 0, 0, 0];
+        const stageCounts = [0, 0, 0, 0, 0, 0];
         const statuses: Record<string, number> = { read: 0, delivered: 0, sent: 0, failed: 0 };
 
         let messagesSent = 0, icpMessagesSent = 0, metaMessagesSent = 0, enrichedMessagesSent = 0, hubspotMessagesSent = 0;
@@ -140,18 +155,33 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
             let leadSentCount = 0;
             let leadBotCount = 0;
 
-            for (let i = 1; i <= 5; i++) {
+            for (let i = 1; i <= 6; i++) {
                 if (lead[`Whatsapp_${i}`] && String(lead[`Whatsapp_${i}`]).trim()) {
                     leadSentCount++;
                     stageCounts[i - 1]++;
                 }
-                // Status columns: Whatsapp_1_status ... Whatsapp_5_status
-                const status = String(lead[`Whatsapp_${i}_status`] || "").toLowerCase();
+                // Status columns: Whatsapp_1_status ... Whatsapp_6_status
+                const status = String(lead[`Whatsapp_${i}_status`] || lead[`whatsapp_${i}_status`] || "").toLowerCase();
                 if (status.includes("failed")) { statuses.failed++; failedCount++; }
                 else if (status.includes("read")) { statuses.read++; readCount++; }
                 else if (status.includes("delivered")) { statuses.delivered++; deliveredCount++; }
                 else if (status.includes("sent")) { statuses.sent++; }
             }
+
+            // wa_conversation bot messages + statuses
+            const conv = parseWaConversation(lead.wa_conversation || lead["wa_conversation"]);
+            conv.forEach((m: any) => {
+                const isBot = m.role === 'bot' || m.direction === 'outbound';
+                if (isBot) {
+                    leadSentCount++;
+                    leadBotCount++;
+                    const cStatus = String(m.status || m.status_updated_at || "").toLowerCase();
+                    if (cStatus.includes("failed")) { statuses.failed++; failedCount++; }
+                    else if (cStatus.includes("read")) { statuses.read++; readCount++; }
+                    else if (cStatus.includes("delivered")) { statuses.delivered++; deliveredCount++; }
+                    else if (cStatus.includes("sent")) { statuses.sent++; }
+                }
+            });
 
             for (let i = 1; i <= 25; i++) {
                 if (lead[`Bot_Replied_${i}`] && String(lead[`Bot_Replied_${i}`]).trim()) { 
@@ -195,7 +225,7 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
                 waitingCount++;
             }
 
-            const wlc = lead["Whatsapp Last Contacted"] || lead["whatsapp_last_contacted"];
+            const wlc = getWhatsappLastContacted(lead);
             if (wlc) {
                 const d = new Date(wlc);
                 if (!isNaN(d.getTime())) {
@@ -241,6 +271,7 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
             { stage: 'Drip 3', count: stageCounts[2], fill: '#8b5cf6' },
             { stage: 'Drip 4', count: stageCounts[3], fill: '#a855f7' },
             { stage: 'Drip 5', count: stageCounts[4], fill: '#c084fc' },
+            { stage: 'Drip 6', count: stageCounts[5], fill: '#e879f9' },
         ];
 
         const statusDistribution = [
@@ -254,8 +285,8 @@ export async function getWhatsappStats(fromDate: Date, toDate: Date) {
         // which iterates over allLeads.
         // We only return the specific fields needed to reduce payload
         const simplifiedLeads = filteredLeads.map(l => {
-            const mapped: any = { _source: l._source, whatsapp_replied: l.whatsapp_replied, WTS_Reply_Track: l.WTS_Reply_Track };
-            for(let i=1; i<=5; i++) {
+            const mapped: any = { _source: l._source, whatsapp_replied: l.whatsapp_replied, WTS_Reply_Track: l.WTS_Reply_Track, wa_conversation: l.wa_conversation };
+            for(let i=1; i<=6; i++) {
                 mapped[`Whatsapp_${i}`] = l[`Whatsapp_${i}`];
                 mapped[`Whatsapp_${i}_status`] = l[`Whatsapp_${i}_status`];
             }

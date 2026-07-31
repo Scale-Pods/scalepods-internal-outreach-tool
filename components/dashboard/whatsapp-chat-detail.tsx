@@ -1,241 +1,47 @@
 "use client";
 
-import React, { useState, useEffect, useContext } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
     RefreshCw,
-    Download,
     MessageSquare,
     User,
     Bot,
     Link as LinkIcon,
-    Check
+    Check,
+    Snowflake,
+    Flame,
 } from "lucide-react";
-import { ConsolidatedLead } from "@/lib/leads-utils";
-import { useData, DataContext } from "@/context/DataContext";
+import {
+    buildConversationTimeline,
+    countSentMessages,
+    type NormalizedWaLead,
+} from "@/lib/services/whatsapp-outreach";
 
 interface WhatsAppChatDetailProps {
-    customerId: string;
+    lead: NormalizedWaLead | null;
     onClose?: () => void;
-    sourceTable?: 'icp_tracker' | 'meta_lead_tracker' | 'ENRICHED_LEADS' | 'hubspot_lead';
-    metaLeads?: any[];
-    hubspotLeads?: any[];
-    isPublic?: boolean;
+    loading?: boolean;
 }
 
-const DEFAULT_META_LEADS: any[] = [];
-const EMPTY_ARRAY: any[] = [];
-
-const DEFAULT_HUBSPOT_LEADS: any[] = [];
-
-export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tracker', metaLeads = DEFAULT_META_LEADS, hubspotLeads = DEFAULT_HUBSPOT_LEADS, isPublic = false }: WhatsAppChatDetailProps) {
-    const dataContext = useContext(DataContext);
-    const allLeads = dataContext?.leads || EMPTY_ARRAY;
-    const loadingLeads = dataContext?.loadingLeads || false;
-    const [lead, setLead] = useState<any | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [messages, setMessages] = useState<any[]>([]);
+export function WhatsAppChatDetail({ lead, onClose, loading = false }: WhatsAppChatDetailProps) {
     const [copied, setCopied] = useState(false);
+
+    const messages = useMemo(() => (lead ? buildConversationTimeline(lead) : []), [lead]);
 
     const handleCopyLink = () => {
         if (!lead) return;
         const baseUrl = window.location.origin;
-        // Use ID for more uniqueness/security if available, otherwise fallback to phone
-        const identifier = lead.id || lead.phone || lead.Phone || lead.company_phone_number || '';
+        const identifier = lead.id || lead.phone;
         const phone = encodeURIComponent(identifier);
-        const source = encodeURIComponent(sourceTable || 'icp_tracker');
+        const source = encodeURIComponent(lead.table);
         const shareUrl = `${baseUrl}/share/chat/${phone}?source=${source}`;
         navigator.clipboard.writeText(shareUrl);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
-
-    useEffect(() => {
-        const fetchLead = async () => {
-            setLoading(true);
-            try {
-                // If not public and we have leads in context, find it there
-                if (!isPublic && allLeads && allLeads.length > 0) {
-                    const searchVal = String(customerId).toLowerCase().trim();
-                    let dataSource: any[];
-                    if (sourceTable === 'meta_lead_tracker' && metaLeads.length > 0) {
-                        dataSource = metaLeads;
-                    } else if (sourceTable === 'hubspot_lead' && hubspotLeads.length > 0) {
-                        dataSource = hubspotLeads;
-                    } else {
-                        dataSource = allLeads;
-                    }
-
-                    const found = dataSource.find((l: any) => {
-                        if (l.id && String(l.id).toLowerCase() === searchVal) return true;
-                        const phone = String(l.phone || l.Phone || l.company_phone_number || '');
-                        if (phone) {
-                            const lPhoneReplaced = phone.replace(/\D/g, '');
-                            const searchReplaced = searchVal.replace(/\D/g, '');
-                            if (searchReplaced && lPhoneReplaced === searchReplaced) return true;
-                        }
-                        return false;
-                    });
-
-                    if (found) {
-                        processLead(found);
-                        setLoading(false);
-                        return;
-                    }
-                }
-
-                // Fallback to public API or if isPublic is true
-                const res = await fetch(`/api/public/chat/${encodeURIComponent(customerId)}?source=${sourceTable}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.lead) {
-                        processLead(data.lead);
-                    }
-                }
-            } catch (err) {
-                console.error("Error fetching lead:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        const processLead = (found: any) => {
-            setLead(found);
-            const timeline: any[] = [];
-
-            const parseMsg = (raw: any, label: string, type: 'bot' | 'user', sequence: number) => {
-                if (!raw || !String(raw).trim()) return null;
-                const content = String(raw).trim();
-
-                const isoRegex = /\n{1,2}(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.+)$/;
-                const isoMatch = content.match(isoRegex);
-                if (isoMatch) {
-                    return {
-                        type,
-                        content: content.replace(isoRegex, '').trim(),
-                        label,
-                        date: isoMatch[1],
-                        sequence
-                    };
-                }
-
-                const lines = content.split('\n');
-                const lastLine = lines[lines.length - 1].trim();
-                const spaceDateRegex = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/;
-                if (lines.length > 1 && spaceDateRegex.test(lastLine)) {
-                    const d = new Date(lastLine.replace(' ', 'T'));
-                    if (!isNaN(d.getTime())) {
-                        return {
-                            type,
-                            content: lines.slice(0, -1).join('\n').trim() || 'Message Received',
-                            label,
-                            date: d.toISOString(),
-                            sequence
-                        };
-                    }
-                }
-
-                return { type, content, label, date: null, sequence };
-            };
-
-            const parseTsDate = (tsRaw: string | null): string | null => {
-                if (!tsRaw) return null;
-                const parts = tsRaw.split(' - ');
-                if (parts.length < 2) return null;
-                const datePart = parts[1].trim();
-                const d = new Date(datePart.replace(/(^\d{1,2})\/(\d{1,2})\/(\d{4})/, '$3-$2-$1').replace(' ', 'T'));
-                return isNaN(d.getTime()) ? null : d.toISOString();
-            };
-
-            const f = found as any;
-            let seq = 1;
-
-            const table = found._table || sourceTable;
-
-            if (table === 'icp_tracker' || table === 'ENRICHED_LEADS') {
-                // --- ICP Tracker Flow ---
-                for (let i = 1; i <= 5; i++) {
-                    const raw = f[`Whatsapp_${i}`] || f.stage_data?.[`Whatsapp_${i}`];
-                    if (!raw) continue;
-                    const tsRaw: string | null = f[`Whatsapp_${i}_status`] || f.stage_data?.[`Whatsapp_${i}_status`] || null;
-                    const msg = parseMsg(raw, `Whatsapp ${i}`, 'bot', seq++);
-                    if (msg) {
-                        (msg as any).tsStatus = tsRaw;
-                        if (!msg.date) msg.date = parseTsDate(tsRaw);
-                        timeline.push(msg);
-                    }
-                }
-
-                for (let j = 1; j <= 25; j++) {
-                    const userReply = f[`User_Replied_${j}`];
-                    if (userReply && String(userReply).trim() && String(userReply).toLowerCase() !== 'no' && String(userReply).toLowerCase() !== 'none') {
-                        const uMsg = parseMsg(userReply, `User Reply ${j}`, 'user', seq++);
-                        if (uMsg) timeline.push(uMsg);
-                    }
-
-                    const botReply = f[`Bot_Replied_${j}`];
-                    if (botReply && String(botReply).trim()) {
-                        const bMsg = parseMsg(botReply, `Bot Reply ${j}`, 'bot', seq++);
-                        if (bMsg) timeline.push(bMsg);
-                    }
-                }
-
-                if (!timeline.some(m => m.type === 'user')) {
-                    const repliedVal = f.whatsapp_replied || f.whatsapp_replied_1 || f.Replied;
-                    if (repliedVal && String(repliedVal).toLowerCase() !== "no" && String(repliedVal).toLowerCase() !== "none") {
-                        const rMsg = parseMsg(repliedVal, "User Reply", 'user', seq++);
-                        if (rMsg) timeline.push(rMsg);
-                    }
-                }
-            } else {
-                // --- Meta Lead Tracker / HubSpot Lead Flow (same Whatsapp schema) ---
-                for (let i = 1; i <= 5; i++) {
-                    const raw = f[`Whatsapp_${i}`];
-                    if (!raw) continue;
-                    const tsRaw: string | null = f[`Whatsapp_${i}_status`] || null;
-                    const msg = parseMsg(raw, `Whatsapp ${i}`, 'bot', seq++);
-                    if (msg) {
-                        (msg as any).tsStatus = tsRaw;
-                        if (!msg.date) msg.date = parseTsDate(tsRaw);
-                        timeline.push(msg);
-                    }
-                }
-
-                for (let j = 1; j <= 25; j++) {
-                    const userReply = f[`User_Replied_${j}`];
-                    if (userReply && String(userReply).trim() && String(userReply).toLowerCase() !== 'no' && String(userReply).toLowerCase() !== 'none') {
-                        const uMsg = parseMsg(userReply, `User Reply ${j}`, 'user', seq++);
-                        if (uMsg) timeline.push(uMsg);
-                    }
-
-                    const botReply = f[`Bot_Replied_${j}`];
-                    if (botReply && String(botReply).trim()) {
-                        const bMsg = parseMsg(botReply, `Bot Reply ${j}`, 'bot', seq++);
-                        if (bMsg) {
-                            const botStatus = f[`Bot_Replied_Status_${j}`] || null;
-                            (bMsg as any).tsStatus = botStatus;
-                            timeline.push(bMsg);
-                        }
-                    }
-                }
-
-                // Fallback: top-level Replied / WTS_Reply_Track
-                if (!timeline.some(m => m.type === 'user')) {
-                    const repliedVal = f.Replied || f.WTS_Reply_Track;
-                    if (repliedVal && String(repliedVal).toLowerCase() !== "no" && String(repliedVal).toLowerCase() !== "none") {
-                        const rMsg = parseMsg(repliedVal, "User Reply", 'user', seq++);
-                        if (rMsg) timeline.push(rMsg);
-                    }
-                }
-            }
-
-            setMessages(timeline);
-        };
-
-        fetchLead();
-    }, [customerId, allLeads, loadingLeads, sourceTable, metaLeads, isPublic]);
 
     if (loading) {
         return (
@@ -256,43 +62,36 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
         );
     }
 
-    const leadPhone = String(lead.phone || lead.Phone || lead.phone_number || lead["Phone Number"] || lead.whatsapp_number || lead.company_phone_number || '');
-    const rawName = lead.name || lead.Name || lead["Full Name"] || lead.full_name || lead["Person Name"] || lead.Person_Name;
-    const combinedName = `${lead["First Name"] || lead.first_name || lead.First_Name || ""} ${lead["Last Name"] || lead.last_name || lead.Last_Name || ""}`.trim();
-    const leadName = rawName || combinedName || (leadPhone && leadPhone !== "" ? leadPhone : 'Unknown Lead');
-    const leadEmail = lead.email || lead.Email || lead["Email Address"] || '';
-    const leadLoop = lead.source_loop || lead.Source_Loop || lead.Loop || lead.loop || '';
+    const isHot = lead.leadType === 'hot';
 
     return (
         <div className="space-y-6 flex flex-col h-full overflow-hidden max-h-[85vh]">
             {/* Header */}
             <div className="flex items-center justify-between shrink-0 pr-12">
                 <div>
-                    <h2 className="text-xl font-bold text-slate-900">{leadName}</h2>
+                    <h2 className="text-xl font-bold text-slate-900">{lead.fullName}</h2>
                     <div className="flex items-center gap-2 text-xs text-slate-500">
-                        <span>{leadPhone}</span>
-                        {leadLoop && <><span>•</span><span>{leadLoop}</span></>}
+                        <span>{lead.phone}</span>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-none text-[10px] font-bold uppercase">
-                        {sourceTable === 'icp_tracker' ? 'ICP Tracker' : sourceTable === 'ENRICHED_LEADS' ? 'Enriched Leads' : sourceTable === 'hubspot_lead' ? 'HubSpot Lead' : 'Meta Lead'}
+                    <Badge className={`hover:bg-inherit border-none text-[10px] font-bold uppercase gap-1 ${isHot ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
+                        {isHot ? <Flame className="h-3 w-3" /> : <Snowflake className="h-3 w-3" />}
+                        {isHot ? 'Hot Lead' : 'Cold Lead'}
                     </Badge>
-                    {!isPublic && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className={`gap-1.5 text-[10px] font-black uppercase transition-all border shadow-sm ${
-                                copied 
-                                    ? 'text-emerald-600 border-emerald-200 bg-emerald-50' 
-                                    : 'text-red-600 border-red-300 bg-red-50 hover:bg-red-100 hover:text-red-700 hover:border-red-400 ring-1 ring-red-100/50'
-                            }`}
-                            onClick={handleCopyLink}
-                        >
-                            {copied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
-                            {copied ? 'Link Copied!' : 'Share Link'}
-                        </Button>
-                    )}
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`gap-1.5 text-[10px] font-black uppercase transition-all border shadow-sm ${
+                            copied
+                                ? 'text-emerald-600 border-emerald-200 bg-emerald-50'
+                                : 'text-red-600 border-red-300 bg-red-50 hover:bg-red-100 hover:text-red-700 hover:border-red-400 ring-1 ring-red-100/50'
+                        }`}
+                        onClick={handleCopyLink}
+                    >
+                        {copied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
+                        {copied ? 'Link Copied!' : 'Share Link'}
+                    </Button>
                 </div>
             </div>
 
@@ -309,25 +108,11 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                         {messages.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-slate-300 space-y-2">
                                 <MessageSquare className="h-10 w-10 opacity-20" />
-                                <p className="text-sm">No WhatsApp messages found in database.</p>
+                                <p className="text-sm">No WhatsApp messages found for this lead.</p>
                             </div>
                         ) : (
                             messages.map((msg, idx) => {
-                                let tsPill: React.ReactNode = null;
-                                if (msg.type === 'bot' && (msg as any).tsStatus) {
-                                    const raw = String((msg as any).tsStatus);
-                                    const label = raw.split(' - ')[0].trim();
-                                    const formatted = label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
-                                    let cls = 'bg-emerald-500/30 text-emerald-100';
-                                    if (formatted.includes('Failed')) cls = 'bg-red-400/40 text-red-100';
-                                    else if (formatted.includes('Read')) cls = 'bg-blue-400/40 text-blue-100';
-                                    else if (formatted.includes('Sent')) cls = 'bg-white/20 text-emerald-50';
-                                    tsPill = (
-                                        <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${cls}`}>
-                                            {formatted}
-                                        </span>
-                                    );
-                                }
+                                const tsPill = msg.type === 'bot' && msg.status ? renderStatusPill(String(msg.status)) : null;
 
                                 return (
                                     <div key={idx} className={`flex flex-col ${msg.type === 'user' ? 'items-start' : 'items-end'}`}>
@@ -339,7 +124,7 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                                                 <span className={`text-[10px] font-bold uppercase tracking-wide ${msg.type === 'user' ? 'text-slate-400' : 'text-emerald-100'}`}>
                                                     {msg.label}
                                                 </span>
-                                                {msg.label !== "Whatsapp 1" && tsPill}
+                                                {tsPill}
                                             </div>
                                             <p className="text-sm leading-relaxed whitespace-pre-wrap font-sans">
                                                 {msg.content}
@@ -367,28 +152,17 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                             <div className="space-y-3 text-sm">
                                 <div>
                                     <span className="text-[10px] font-bold text-slate-400 uppercase">Contact info</span>
-                                    <p className="font-medium text-slate-900 mt-1">{leadPhone}</p>
-                                    <p className="text-slate-500 text-xs">{leadEmail}</p>
+                                    <p className="font-medium text-slate-900 mt-1">{lead.phone}</p>
                                 </div>
-                                {leadLoop && (
-                                    <div>
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Campaign</span>
-                                        <Badge className="mt-1 bg-purple-100 text-purple-700 hover:bg-purple-100 border-none text-[10px] font-bold uppercase block w-fit">
-                                            {leadLoop}
-                                        </Badge>
-                                    </div>
-                                )}
                                 <div>
                                     <span className="text-[10px] font-bold text-slate-400 uppercase">Source Table</span>
-                                    <p className="font-bold text-blue-600 mt-1 text-xs">
-                                        {sourceTable === 'icp_tracker' ? 'icp_tracker' : sourceTable === 'ENRICHED_LEADS' ? 'ENRICHED_LEADS' : sourceTable === 'hubspot_lead' ? 'hubspot_lead' : 'meta_lead_tracker'}
-                                    </p>
+                                    <p className="font-bold text-blue-600 mt-1 text-xs">{lead.table}</p>
                                 </div>
-                                {lead.lifecyclestage && (
+                                {lead.lifecycleStage && (
                                     <div>
                                         <span className="text-[10px] font-bold text-slate-400 uppercase">Lifecycle Stage</span>
                                         <Badge className="mt-1 bg-purple-100 text-purple-700 hover:bg-purple-100 border-none text-[10px] font-bold uppercase block w-fit">
-                                            {lead.lifecyclestage}
+                                            {lead.lifecycleStage}
                                         </Badge>
                                     </div>
                                 )}
@@ -403,12 +177,38 @@ export function WhatsAppChatDetail({ customerId, onClose, sourceTable = 'icp_tra
                                 <StatBox label="Total Messages" value={messages.length} icon={MessageSquare} />
                                 <StatBox label="Incoming" value={messages.filter(m => m.type === 'user').length} icon={User} />
                                 <StatBox label="Outgoing" value={messages.filter(m => m.type === 'bot').length} icon={Bot} />
+                                <StatBox label="Drip Sequence Sent" value={countSentMessages(lead)} icon={Bot} />
                             </div>
                         </CardContent>
                     </Card>
                 </div>
             </div>
         </div>
+    );
+}
+
+function renderStatusPill(status: string) {
+    const raw = String(status);
+    const main = raw.split(' - ')[0].trim();
+
+    let label = 'SENT';
+    const s = raw.toLowerCase();
+    if (s.includes('failed')) label = 'FAILED';
+    else if (s.includes('read')) label = 'READ';
+    else if (s.includes('delivered')) label = 'DELIVERED';
+    else if (s.includes('sent')) label = 'SENT';
+    else if (main) label = main.toUpperCase();
+
+    let cls = 'bg-emerald-500/30 text-emerald-100';
+    if (label === 'FAILED') cls = 'bg-red-400/40 text-red-100';
+    else if (label === 'READ') cls = 'bg-blue-400/40 text-blue-100';
+    else if (label === 'DELIVERED') cls = 'bg-emerald-500/30 text-emerald-100';
+    else if (label === 'SENT') cls = 'bg-white/20 text-emerald-50';
+
+    return (
+        <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${cls}`}>
+            {label}
+        </span>
     );
 }
 

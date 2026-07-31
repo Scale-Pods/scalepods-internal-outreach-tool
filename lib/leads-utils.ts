@@ -38,6 +38,84 @@ function getVal(obj: any, keys: string[]) {
     return undefined;
 }
 
+/** Parse a wa_conversation JSONB value into an array of conversation messages */
+export function parseWaConversation(raw: any): any[] {
+    if (!raw) return [];
+    let arr = raw;
+    if (typeof raw === 'string') {
+        try { arr = JSON.parse(raw); } catch { return []; }
+    }
+    if (!Array.isArray(arr)) return [];
+    return arr;
+}
+
+/** Parse status strings like "Delivered - 2026-03-12 10:00:00" or "read" into a Date (or null) */
+export function parseStatusDate(tsRaw: string | null): Date | null {
+    if (!tsRaw) return null;
+    const content = String(tsRaw).trim();
+    if (!content) return null;
+
+    // Try the whole string as an ISO/timestamp first
+    const whole = new Date(content.replace(' ', 'T'));
+    if (!isNaN(whole.getTime())) return whole;
+
+    // Split "Delivered - 2026-03-12 10:00:00"
+    const parts = content.split(' - ');
+    if (parts.length >= 2) {
+        const datePart = parts[parts.length - 1].trim();
+        const d = new Date(datePart.replace(/(^\d{1,2})\/(\d{1,2})\/(\d{4})/, '$3-$2-$1').replace(' ', 'T'));
+        if (!isNaN(d.getTime())) return d;
+    }
+
+    // Trailing ISO timestamp embedded in content
+    const isoMatch = content.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z?)/);
+    if (isoMatch) {
+        const d = new Date(isoMatch[1]);
+        if (!isNaN(d.getTime())) return d;
+    }
+
+    return null;
+}
+
+/** Resolve the best available "Whatsapp Last Contacted" date for a lead */
+export function getWhatsappLastContacted(lead: any): string | null {
+    if (!lead) return null;
+
+    const direct = lead["Whatsapp Last Contacted"] || lead["whatsapp_last_contacted"];
+    const directDate = parseStatusDate(direct || null);
+    if (directDate) return directDate.toISOString();
+
+    // wa_conversation timestamps
+    const conversation = parseWaConversation(lead.wa_conversation || lead["wa_conversation"]);
+    let lastTs: string | null = null;
+    for (const m of conversation) {
+        const ts = m?.timestamp || m?.status_updated_at;
+        if (ts && (!lastTs || new Date(ts).getTime() > new Date(lastTs).getTime())) lastTs = ts;
+    }
+    if (lastTs) {
+        const d = new Date(lastTs);
+        if (!isNaN(d.getTime())) return d.toISOString();
+    }
+
+    // Latest status timestamp from Whatsapp_1..6 status columns
+    for (let i = 6; i >= 1; i--) {
+        const status = lead[`Whatsapp_${i}_status`] || lead[`whatsapp_${i}_status`] || lead[`Whatsapp_${i}_Status`];
+        const d = parseStatusDate(status || null);
+        if (d) return d.toISOString();
+    }
+
+    // Latest message content ISO timestamp
+    for (let i = 6; i >= 1; i--) {
+        const raw = lead[`Whatsapp_${i}`];
+        if (raw) {
+            const d = parseStatusDate(String(raw) || null);
+            if (d) return d.toISOString();
+        }
+    }
+
+    return lead.created_at || null;
+}
+
 export function consolidateLeads(data: any): ConsolidatedLead[] {
     const rawLeads = Array.isArray(data) ? data : (data?.leads || []);
 

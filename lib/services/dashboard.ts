@@ -1,4 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { parseWaConversation } from '@/lib/leads-utils';
+import { fetchOutreachLeads, computeMetrics } from '@/lib/services/email-outreach';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -23,9 +25,11 @@ function extractDate(lead: any): string | null {
 
 /** Has the lead received at least one WhatsApp message from us? */
 function hasWhatsappSent(lead: any): boolean {
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 1; i <= 6; i++) {
     if (lead[`Whatsapp_${i}`] && String(lead[`Whatsapp_${i}`]).trim()) return true;
   }
+  // wa_conversation indicates outbound activity
+  if (parseWaConversation(lead.wa_conversation || lead["wa_conversation"]).length > 0) return true;
   // fallback: W.P_1 … W.P_12 columns (meta_lead_tracker has these)
   for (let i = 1; i <= 12; i++) {
     if (lead[`W.P_${i}`] && String(lead[`W.P_${i}`]).trim()) return true;
@@ -39,19 +43,12 @@ function hasWhatsappReplied(lead: any): boolean {
     const r = lead[`User_Replied_${i}`];
     if (r && String(r).trim() && !['no', 'none', 'false'].includes(String(r).trim().toLowerCase())) return true;
   }
+  if (parseWaConversation(lead.wa_conversation || lead["wa_conversation"]).some((m: any) => m.role === 'user' || m.direction === 'inbound')) return true;
   const wts = lead["WTS_Reply_Track"];
   if (wts && String(wts).trim() && !['no', 'none', 'false', ''].includes(String(wts).trim().toLowerCase())) return true;
   for (let i = 1; i <= 10; i++) {
     const r = lead[`W.P_Replied_${i}`];
     if (r && !['no', 'none'].includes(String(r).trim().toLowerCase())) return true;
-  }
-  return false;
-}
-
-/** Has the lead received at least one email? */
-function hasEmailSent(lead: any): boolean {
-  for (let i = 1; i <= 6; i++) {
-    if (lead[`Email_${i}`] && String(lead[`Email_${i}`]).trim()) return true;
   }
   return false;
 }
@@ -146,7 +143,7 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
 
     // Fetch all rows from all three lead tables (no DB-level date filter —
     // we filter in-memory because the "contacted" date may differ from created_at)
-    const [icpRows, metaRows, enrichedRows, emailReplies, voiceCalls, hubspotRows, coldVoiceCallsRes, hubspotVoiceCallsRes] = await Promise.all([
+    const [icpRows, metaRows, enrichedRows, emailReplies, voiceCalls, hubspotRows, coldVoiceCallsRes, hubspotVoiceCallsRes, outreachLeads] = await Promise.all([
       fetchTable("icp_tracker", ICP_DASHBOARD_COLUMNS),
       fetchTable("meta_lead_tracker", META_DASHBOARD_COLUMNS),
       fetchTable("ENRICHED_LEADS", ENRICHED_DASHBOARD_COLUMNS),
@@ -175,7 +172,15 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
         .gte('created_at', fromFull.toISOString())
         .lte('created_at', toFull.toISOString())
         .ilike('vapi_account', 'hubspot'),
+      // Emails Sent counts — sourced from ENRICHED_LEADS + master_cold_leads (cold)
+      // and hubspot_lead (hot), counting Email_1..Email_6 columns
+      fetchOutreachLeads(),
     ]);
+
+    const coldOutreachLeads = outreachLeads.filter(l => l.leadType === 'cold');
+    const hotOutreachLeads = outreachLeads.filter(l => l.leadType === 'hot');
+    const coldEmailMetrics = computeMetrics(coldOutreachLeads, fromFull, toFull);
+    const hotEmailMetrics = computeMetrics(hotOutreachLeads, fromFull, toFull);
 
     const allLeads = [
       ...icpRows.map((l: any) => ({ ...l, _table: 'icp_tracker' })),
@@ -207,7 +212,7 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
     }
 
     let totalLeads = 0, icpCount = 0, metaCount = 0, enrichedCount = 0;
-    let emailSentCount = 0, whatsappSentCount = 0, voiceContactedCount = 0;
+    let whatsappSentCount = 0, voiceContactedCount = 0;
     let whatsappReplyCount = 0, icpRepliedCount = 0, metaRepliedCount = 0, enrichedRepliedCount = 0;
 
     allLeads.forEach((lead: any) => {
@@ -226,7 +231,6 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
       const dayKey = leadDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       if (acquisitionMap[dayKey] !== undefined) acquisitionMap[dayKey]++;
 
-      if (hasEmailSent(lead)) emailSentCount++;
       if (hasWhatsappSent(lead)) whatsappSentCount++;
       if (hasVoiceSent(lead)) voiceContactedCount++;
 
@@ -238,7 +242,7 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
       }
     });
 
-    let hubspotLeads = 0, hubspotEmailSent = 0, hubspotWhatsappSent = 0, hubspotVoiceContacted = 0, hubspotWhatsappReply = 0;
+    let hubspotLeads = 0, hubspotWhatsappSent = 0, hubspotVoiceContacted = 0, hubspotWhatsappReply = 0;
     
     hubspotRows.forEach((lead: any) => {
       const dateStr = extractDate(lead);
@@ -248,7 +252,6 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
       if (leadDate < fromFull || leadDate > toFull) return;
 
       hubspotLeads++;
-      if (hasEmailSent(lead)) hubspotEmailSent++;
       if (hasWhatsappSent(lead)) hubspotWhatsappSent++;
       if (hasVoiceSent(lead)) hubspotVoiceContacted++;
       if (hasWhatsappReplied(lead)) hubspotWhatsappReply++;
@@ -268,7 +271,7 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
         totalICP: icpCount,
         totalMeta: metaCount,
         totalEnriched: enrichedCount,
-        totalEmails: emailSentCount,
+        totalEmails: coldEmailMetrics.emailsSent,
         totalWhatsApp: whatsappSentCount,
         totalVoice: voiceContactedCount,
         totalEmailReplies: emailReplyCount,
@@ -286,7 +289,7 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
         totalHubspotLeads: hubspotLeads,
         hubspot: {
             leads: hubspotLeads,
-            emails: hubspotEmailSent,
+            emails: hotEmailMetrics.emailsSent,
             whatsapp: hubspotWhatsappSent,
             // Use actual vapi_call_logs count for hubspot voice
             voice: hubspotVoiceCallsCount,

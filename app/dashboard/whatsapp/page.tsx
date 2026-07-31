@@ -1,4 +1,4 @@
-import { getWhatsappStats } from "@/lib/services/whatsapp";
+import { getWaDashboardData } from "@/lib/services/whatsapp-outreach";
 import WhatsappDashboardClient from "./whatsapp-client";
 
 export default async function WhatsappDashboardPage({
@@ -21,11 +21,7 @@ export default async function WhatsappDashboardPage({
         to = new Date(params.to);
     }
 
-    const { stats, trendData, stageData, statusDistribution, simplifiedLeads } = await getWhatsappStats(from, to);
+    const { cold, hot } = await getWaDashboardData(from, to);
 
-    return <WhatsappDashboardClient 
-        stats={stats} 
-        trendData={trendData} 
-        simplifiedLeads={simplifiedLeads} 
-    />;
+    return <WhatsappDashboardClient cold={cold} hot={hot} />;
 }
