@@ -1,4 +1,4 @@
-import { getEmailStats } from "@/lib/services/email";
+import { getOutreachDashboardData } from "@/lib/services/email-outreach";
 import EmailDashboardClient from "./email-client";
 
 export default async function EmailDashboardPage({
@@ -21,13 +21,7 @@ export default async function EmailDashboardPage({
         to = new Date(params.to);
     }
 
-    const { campaigns, metrics, recentReplies, dbReplyCount, localData } = await getEmailStats(from, to);
+    const { cold, hot } = await getOutreachDashboardData(from, to);
 
-    return <EmailDashboardClient 
-        campaigns={campaigns} 
-        metrics={metrics} 
-        recentReplies={recentReplies} 
-        dbReplyCount={dbReplyCount} 
-        localData={localData} 
-    />;
+    return <EmailDashboardClient cold={cold} hot={hot} />;
 }

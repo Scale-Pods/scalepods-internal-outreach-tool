@@ -33,7 +33,7 @@ import {
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
 import { subDays } from "date-fns";
-import { useData } from "@/context/DataContext";
+import type { OutreachMetrics } from "@/lib/services/email-outreach";
 
 interface HistoryData {
     date: string;
@@ -42,12 +42,32 @@ interface HistoryData {
     spam: number;
 }
 
+const EMPTY_METRICS: OutreachMetrics = {
+    totalLeads: 0, contactedLeads: 0, emailsSent: 0, stageSentCounts: [0, 0, 0, 0, 0, 0],
+    repliedLeads: 0, totalReplies: 0, bouncedLeads: 0, unsubscribedLeads: 0, replyRate: 0,
+};
+
+function sumMetrics(a: OutreachMetrics, b: OutreachMetrics): OutreachMetrics {
+    const totalLeads = a.totalLeads + b.totalLeads;
+    const contactedLeads = a.contactedLeads + b.contactedLeads;
+    const repliedLeads = a.repliedLeads + b.repliedLeads;
+    return {
+        totalLeads,
+        contactedLeads,
+        emailsSent: a.emailsSent + b.emailsSent,
+        stageSentCounts: a.stageSentCounts.map((v, i) => v + b.stageSentCounts[i]),
+        repliedLeads,
+        totalReplies: a.totalReplies + b.totalReplies,
+        bouncedLeads: a.bouncedLeads + b.bouncedLeads,
+        unsubscribedLeads: a.unsubscribedLeads + b.unsubscribedLeads,
+        replyRate: contactedLeads > 0 ? (repliedLeads / contactedLeads) * 100 : 0,
+    };
+}
+
 export default function EmailAnalyticsPage() {
-    const { leads: allLeads, loadingLeads, refreshLeads } = useData();
-    const [generalData, setGeneralData] = useState<any>(null);
     const [loadingLocal, setLoadingLocal] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [unsubscribedCount, setUnsubscribedCount] = useState(0);
+    const [outreachMetrics, setOutreachMetrics] = useState<OutreachMetrics>(EMPTY_METRICS);
     const [dateRange, setDateRange] = useState<DateRange | undefined>({
         from: subDays(new Date(), 7),
         to: new Date(),
@@ -55,7 +75,7 @@ export default function EmailAnalyticsPage() {
 
     const [dbCampaigns, setDbCampaigns] = useState<any[]>([]);
 
-    const loading = loadingLocal || loadingLeads;
+    const loading = loadingLocal;
 
     const fetchData = async (start?: Date, end?: Date) => {
         setLoadingLocal(true);
@@ -64,22 +84,7 @@ export default function EmailAnalyticsPage() {
             const startDate = start ? start.toISOString().split('T')[0] : '';
             const endDate = end ? end.toISOString().split('T')[0] : '';
 
-            // Fetch General Analytics Data
-            const queryParams = new URLSearchParams();
-            if (startDate) queryParams.append('start_date', startDate);
-            if (endDate) queryParams.append('end_date', endDate);
-
-            const generalRes = await fetch(`/api/email/analytics?${queryParams.toString()}`);
-            let generalJson = null;
-            if (generalRes.ok) {
-                generalJson = await generalRes.json();
-            } else {
-                console.error("General analytics fetch failed");
-            }
-
-            setGeneralData(generalJson);
-
-            // Fetch DB Analytics with date range
+            // Fetch DB Analytics with date range — sourced from instantly_campaign_analytics
             const dbParams = new URLSearchParams();
             if (startDate) dbParams.append('from', start ? start.toISOString() : '');
             if (endDate) dbParams.append('to', end ? end.toISOString() : '');
@@ -89,22 +94,18 @@ export default function EmailAnalyticsPage() {
                 setDbCampaigns(dbJson.campaignAnalytics || []);
             }
 
-            // Calculate Unsubscribed from Global Leads
-            if (!loadingLeads) {
-                const unsub = allLeads.filter((lead: any) => {
-                    const isUnsub = lead.unsubscribed && String(lead.unsubscribed).toLowerCase().includes("yes");
-                    if (!isUnsub) return false;
-
-                    if (!start) return true;
-                    if (!lead.created_at) return false;
-                    const leadDate = new Date(lead.created_at);
-                    const from = new Date(start);
-                    from.setHours(0, 0, 0, 0);
-                    const to = end ? new Date(end) : from;
-                    to.setHours(23, 59, 59, 999);
-                    return leadDate >= from && leadDate <= to;
-                }).length;
-                setUnsubscribedCount(unsub);
+            // Campaign Performance row — sourced from ENRICHED_LEADS + master_cold_leads + hubspot_lead
+            const outreachParams = new URLSearchParams();
+            if (start) outreachParams.append('from', start.toISOString());
+            if (end) outreachParams.append('to', end.toISOString());
+            const outreachRes = await fetch(`/api/email/outreach?${outreachParams.toString()}`);
+            if (outreachRes.ok) {
+                const outreachJson = await outreachRes.json();
+                const cold: OutreachMetrics = outreachJson.cold?.metrics || EMPTY_METRICS;
+                const hot: OutreachMetrics = outreachJson.hot?.metrics || EMPTY_METRICS;
+                setOutreachMetrics(sumMetrics(cold, hot));
+            } else {
+                console.error("Outreach metrics fetch failed");
             }
 
         } catch (e: any) {
@@ -122,106 +123,20 @@ export default function EmailAnalyticsPage() {
             start.setHours(0, 0, 0, 0);
             const end = new Date(range.to || range.from);
             end.setHours(23, 59, 59, 999);
-            
-            refreshLeads(start, end);
+
             fetchData(start, end);
         }
-    }, [refreshLeads]);
+    }, []);
 
     useEffect(() => {
         handleDateUpdate({ range: dateRange });
     }, []);
 
-
-
-
-    const leadStats = useMemo(() => {
-        if (loadingLeads) return { totalSent: 0, totalReplies: 0, totalUnsubscribed: 0, totalLeads: 0 };
-
-        const start = dateRange?.from;
-        const end = dateRange?.to;
-
-        const filtered = allLeads.filter(lead => {
-            // Count as an email lead if it has any Email_N set
-            let hasEmail = false;
-            for (let i = 1; i <= 6; i++) {
-                if (lead[`Email_${i}`] || lead.stage_data?.[`Email_${i}`]) {
-                    hasEmail = true;
-                    break;
-                }
-            }
-            if (!hasEmail && !lead.email_replied) return false;
-
-            const dateRef = lead.last_contacted || lead.updated_at || lead.created_at;
-            if (!dateRef) return false;
-
-            const leadDate = new Date(dateRef);
-            if (start && leadDate < start) return false;
-            if (end) {
-                const toDate = new Date(end);
-                toDate.setHours(23, 59, 59, 999);
-                if (leadDate > toDate) return false;
-            }
-            return true;
-        });
-
-        let sent = 0;
-        let replies = 0;
-        let unsubscribed = 0;
-
-        filtered.forEach(lead => {
-            // Count sent emails
-            for (let i = 1; i <= 6; i++) {
-                const val = lead[`Email_${i}`] || lead.stage_data?.[`Email_${i}`];
-                if (val && String(val).trim() !== "" && String(val).toLowerCase() !== "no") {
-                    sent++;
-                }
-            }
-
-            // Count replies
-            const isReplied = lead.email_replied &&
-                String(lead.email_replied).toLowerCase() !== "no" &&
-                String(lead.email_replied).toLowerCase() !== "none";
-            if (isReplied) replies++;
-
-            // Count unsubscribed
-            const isUnsub = lead.unsubscribed && String(lead.unsubscribed).toLowerCase().includes("yes");
-            if (isUnsub) unsubscribed++;
-        });
-
-        return {
-            totalSent: sent,
-            totalReplies: replies,
-            totalUnsubscribed: unsubscribed,
-            totalLeads: filtered.length
-        };
-    }, [allLeads, loadingLeads, dateRange]);
-
-    // Metrics from Instantly API (Opens/Clicks/Delivered)
-    let totalDelivered = 0;
-    let totalOpens = 0;
-    let totalClicks = 0;
-
-    if (generalData) {
-        const dataArray = Array.isArray(generalData) ? generalData : (generalData.data || []);
-        if (dataArray.length > 0) {
-            dataArray.forEach((day: any) => {
-                totalDelivered += (Number(day.total_delivered) || Number(day.delivered) || 0);
-                totalOpens += (Number(day.total_opens) || Number(day.opens) || 0);
-                totalClicks += (Number(day.total_clicks) || Number(day.clicks) || 0);
-            });
-        } else if (typeof generalData === 'object') {
-            totalDelivered = Number(generalData.total_delivered) || Number(generalData.delivered) || 0;
-            totalOpens = Number(generalData.total_opens) || Number(generalData.opens) || 0;
-            totalClicks = Number(generalData.total_clicks) || Number(generalData.clicks) || 0;
-        }
-    }
-
-    const { totalSent, totalReplies, totalUnsubscribed, totalLeads } = leadStats;
-
-    const ctr = totalSent > 0 ? ((totalClicks / totalSent) * 100).toFixed(2) : "0.00";
-    const openRate = totalSent > 0 ? ((totalOpens / totalSent) * 100).toFixed(2) : "0.00";
-    const replyRate = totalLeads > 0 ? ((totalReplies / totalLeads) * 100).toFixed(2) : "0.00";
+    const totalSent = outreachMetrics.emailsSent;
+    const totalReplies = outreachMetrics.repliedLeads;
+    const totalUnsubscribed = outreachMetrics.unsubscribedLeads;
+    const totalLeads = outreachMetrics.totalLeads;
+    const replyRate = outreachMetrics.replyRate.toFixed(2);
 
     // Calculate total leads from Campaign DB
     const totalCampaignLeads = dbCampaigns.slice(1).reduce((acc: number, campaign: any) => {

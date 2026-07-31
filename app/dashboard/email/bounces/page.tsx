@@ -1,71 +1,38 @@
 "use client";
 
 import { SPLoader } from "@/components/sp-loader";
-
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
     RefreshCw,
     Mail,
-    AlertCircle,
-    Info,
-    ChevronUp,
-    ChevronDown,
-    ArrowUp,
     Search,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    Snowflake,
+    Flame,
 } from "lucide-react";
-import React, { useState, useEffect } from "react";
-import { useData } from "@/context/DataContext";
+import { useState, useEffect } from "react";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { format, subDays } from "date-fns";
-
-
+import { subDays, format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
+import type { NormalizedLeadRow, LeadType } from "@/lib/services/email-outreach";
 
-interface BounceEmail {
+interface BounceEntry {
     email: string;
-    type: string;
-    from: string;
+    name: string | null;
+    leadType: LeadType;
     date: string;
-    name?: string | null;
-}
-
-
-interface BounceSummary {
-    total_bounces: number;
-    hard_bounces: number;
-    soft_bounces: number;
-    technical_bounces: number;
 }
 
 export default function BouncedEmailsPage() {
-    const { leads: allLeads, loadingLeads, refreshLeads } = useData();
-    const [bounces, setBounces] = useState<any[]>([]);
-    const [summary, setSummary] = useState<BounceSummary>({
-        total_bounces: 0,
-        hard_bounces: 0,
-        soft_bounces: 0,
-        technical_bounces: 0
-    });
+    const [coldLeads, setColdLeads] = useState<NormalizedLeadRow[]>([]);
+    const [hotLeads, setHotLeads] = useState<NormalizedLeadRow[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
+    const [filterType, setFilterType] = useState<"all" | LeadType>("all");
     const [dateRange, setDateRange] = useState<any>({
         from: subDays(new Date(), 7),
         to: new Date(),
@@ -73,63 +40,45 @@ export default function BouncedEmailsPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
-    const fetchBounces = async () => {
+    const fetchData = async () => {
         setLoading(true);
         try {
-            const from = new Date(dateRange.from);
-            from.setHours(0, 0, 0, 0);
-            const to = new Date(dateRange.to || dateRange.from);
-            to.setHours(23, 59, 59, 999);
-            await refreshLeads(from, to);
-        } catch (e: any) {
+            const res = await fetch(`/api/email/outreach`);
+            if (!res.ok) throw new Error("Failed to fetch");
+            const json = await res.json();
+            setColdLeads(json.cold?.leads || []);
+            setHotLeads(json.hot?.leads || []);
+        } catch (e) {
             console.error("Bounces fetch error", e);
-            setError(e.message);
         } finally {
             setLoading(false);
         }
     };
 
-
     useEffect(() => {
-        if (loadingLeads) return;
+        fetchData();
+    }, []);
 
-        const bouncedLeads = allLeads.filter((lead: any) => 
-            lead._table === 'icp_tracker' && 
-            lead.email_bounced && 
-            String(lead.email_bounced).toLowerCase() === 'yes'
-        );
-
-        const mappedBounces = bouncedLeads.map((l: any) => ({
-            email: l.email || "No Email",
-            type: "Bounced",
-            from: l.sender_email || "Campaign",
-            date: l["Email Last Contacted"] || l.updated_at || l.created_at || "N/A",
-            name: (l.name && l.name !== "Unknown Lead") ? l.name : null
+    const bounces: BounceEntry[] = [...coldLeads, ...hotLeads]
+        .filter(l => l.bounced)
+        .map(l => ({
+            email: l.email,
+            name: l.fullName !== "Unknown Lead" ? l.fullName : null,
+            leadType: l.leadType,
+            date: l.lastContacted || l.createdAt || "N/A",
         }));
 
-        setBounces(mappedBounces);
-        setSummary({
-            total_bounces: bouncedLeads.length,
-            hard_bounces: bouncedLeads.length,
-            soft_bounces: 0,
-            technical_bounces: 0
-        });
-        setLoading(false);
-    }, [allLeads, loadingLeads]);
-
-
-    // Filter
     const filteredBounces = bounces.filter(b => {
-        const matchesSearch = b.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            b.from.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (b.name && b.name.toLowerCase().includes(searchTerm.toLowerCase()));
+        if (filterType !== "all" && b.leadType !== filterType) return false;
 
+        const matchesSearch = b.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (b.name && b.name.toLowerCase().includes(searchTerm.toLowerCase()));
         if (!matchesSearch) return false;
 
-        // Local date filtering as secondary check
         if (dateRange?.from) {
             if (!b.date || b.date === "N/A") return false;
             const bounceDate = new Date(b.date);
+            if (isNaN(bounceDate.getTime())) return false;
             const from = new Date(dateRange.from);
             from.setHours(0, 0, 0, 0);
             const to = new Date(dateRange.to || dateRange.from);
@@ -145,217 +94,130 @@ export default function BouncedEmailsPage() {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, dateRange]);
+    }, [searchTerm, dateRange, filterType]);
 
-
+    const coldCount = bounces.filter(b => b.leadType === 'cold').length;
+    const hotCount = bounces.filter(b => b.leadType === 'hot').length;
 
     return (
-        <TooltipProvider>
-            <div className="space-y-6 pb-10 pt-6 relative min-h-[500px]">
-                {loading && <SPLoader />}
-                {/* Page Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Bounced Emails</h1>
-                        <p className="text-sm text-slate-500 mt-1">Real-time bounce tracking from ICP Tracker</p>
+        <div className="space-y-6 pb-10 pt-6 relative min-h-[500px]">
+            {loading && <SPLoader />}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Bounced Emails</h1>
+                    <p className="text-sm text-slate-500 mt-1">email_bounced across ENRICHED_LEADS, master_cold_leads & hubspot_lead</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                    <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
+                    <Button onClick={fetchData} variant="outline" className="gap-2 h-10 px-4 hover:bg-slate-50 transition-colors" disabled={loading}>
+                        <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                        {loading ? "Refreshing..." : "Refresh List"}
+                    </Button>
+                </div>
+            </div>
 
+            {/* Metrics */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <StatCard title="Total Bounces" value={bounces.length.toString()} />
+                <StatCard title="Cold Bounces" value={coldCount.toString()} color="text-blue-600" />
+                <StatCard title="Hot Bounces" value={hotCount.toString()} color="text-orange-600" />
+            </div>
+
+            {/* Search + type filter */}
+            <div className="bg-white p-4 rounded-xl border border-border shadow-sm flex flex-col md:flex-row gap-3 md:items-center">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                        className="pl-10"
+                        placeholder="Search by recipient email or name..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-1 shrink-0">
+                    <button onClick={() => setFilterType('all')} className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all", filterType === 'all' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-200/50')}>All</button>
+                    <button onClick={() => setFilterType('cold')} className={cn("flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all", filterType === 'cold' ? 'bg-blue-600 text-white' : 'text-blue-600 hover:bg-blue-100/50')}><Snowflake className="h-3 w-3" /> Cold</button>
+                    <button onClick={() => setFilterType('hot')} className={cn("flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all", filterType === 'hot' ? 'bg-orange-500 text-white' : 'text-orange-600 hover:bg-orange-100/50')}><Flame className="h-3 w-3" /> Hot</button>
+                </div>
+            </div>
+
+            {/* List */}
+            <div className="space-y-3">
+                {!loading && paginatedBounces.length === 0 ? (
+                    <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-border">
+                        <p className="text-slate-500">No bounces found.</p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <DateRangePicker onUpdate={(values) => {
-                            setDateRange(values.range);
-                            if (values.range?.from) {
-                                const from = new Date(values.range.from);
-                                from.setHours(0, 0, 0, 0);
-                                const to = new Date(values.range.to || values.range.from);
-                                to.setHours(23, 59, 59, 999);
-                                refreshLeads(from, to);
-                            }
-                        }} />
-                        <Button
-                            onClick={fetchBounces}
-                            variant="outline"
-                            className="gap-2 h-10 px-4 hover:bg-slate-50 transition-colors"
-                            disabled={loading}
-                        >
-                            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-                            {loading ? "Refreshing..." : "Refresh List"}
+                ) : (
+                    paginatedBounces.map((bounce, index) => <BounceCard key={index} bounce={bounce} />)
+                )}
+            </div>
+
+            {/* Pagination */}
+            {filteredBounces.length > itemsPerPage && (
+                <div className="flex items-center justify-between bg-white px-4 py-4 rounded-xl border border-border shadow-sm">
+                    <p className="text-sm text-slate-500">
+                        Showing <span className="font-bold text-slate-900">{(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredBounces.length)}</span> of {filteredBounces.length} bounces
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-sm font-medium px-3 py-1 bg-slate-50 rounded-md border border-border">Page {currentPage} of {totalPages}</span>
+                        <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                            <ChevronRight className="h-4 w-4" />
                         </Button>
                     </div>
-
                 </div>
-
-                {error && (
-                    <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Error</AlertTitle>
-                        <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                )}
-
-                {/* Metrics */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <StatCard title="Total Bounces" value={summary.total_bounces.toString()} />
-                    <StatCard
-                        title="Hard Bounces"
-                        value={summary.hard_bounces.toString()}
-                        color="text-rose-600"
-                        tooltip="Permanent failures. Remove these contacts."
-                    />
-                    <StatCard
-                        title="Soft Bounces"
-                        value={summary.soft_bounces.toString()}
-                        color="text-orange-600"
-                        tooltip="Temporary failures. Worth retrying later."
-                    />
-                    <StatCard
-                        title="Technical Bounces"
-                        value={summary.technical_bounces.toString()}
-                        color="text-yellow-600"
-                        tooltip="Failures due to connection or server issues."
-                    />
-                </div>
-
-                {/* Search */}
-                <div className="bg-white p-4 rounded-xl border border-border shadow-sm space-y-4">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <Input
-                            className="pl-10"
-                            placeholder="Search by recipient email or sender..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                </div>
-
-                {/* Bounced Email List */}
-                <div className="space-y-4">
-                    {!loading && paginatedBounces.length === 0 ? (
-                        <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-border">
-                            <p className="text-slate-500">No bounces found.</p>
-                        </div>
-                    ) : (
-                        paginatedBounces.map((bounce, index) => (
-                            <BounceCard key={index} bounce={bounce} />
-                        ))
-                    )}
-                </div>
-
-                {/* Pagination */}
-                {filteredBounces.length > itemsPerPage && (
-                    <div className="flex items-center justify-between bg-white px-4 py-4 rounded-xl border border-border shadow-sm">
-                        <p className="text-sm text-slate-500">
-                            Showing <span className="font-bold text-slate-900">{(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredBounces.length)}</span> of {filteredBounces.length} bounces
-                        </p>
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                disabled={currentPage === 1}
-                            >
-                                <ChevronLeft className="h-4 w-4" />
-                            </Button>
-                            <span className="text-sm font-medium px-3 py-1 bg-slate-50 rounded-md border border-border">
-                                Page {currentPage} of {totalPages}
-                            </span>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                disabled={currentPage === totalPages}
-                            >
-                                <ChevronRight className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    </div>
-                )}
-
-            </div>
-        </TooltipProvider>
+            )}
+        </div>
     );
 }
 
-function StatCard({ title, value, color, tooltip }: any) {
+function formatDate(raw: string): string {
+    if (!raw || raw === "N/A") return "N/A";
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return raw;
+    return format(d, "MMM dd, yyyy • p");
+}
+
+function StatCard({ title, value, color }: { title: string; value: string; color?: string }) {
     return (
         <Card className="border-border shadow-sm bg-white">
             <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                <div className="flex items-center gap-1 mb-1">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</span>
-                    {tooltip && (
-                        <Tooltip delayDuration={300}>
-                            <TooltipTrigger asChild>
-                                <span className="cursor-pointer">
-                                    <Info className="h-3 w-3 text-slate-400 hover:text-slate-600" />
-                                </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p className="max-w-[200px] text-xs">{tooltip}</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    )}
-                </div>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{title}</span>
                 <span className={`text-2xl font-bold ${color || 'text-slate-900'}`}>{value}</span>
             </CardContent>
         </Card>
     );
 }
 
-function BounceCard({ bounce }: { bounce: BounceEmail }) {
-    const [isOpen, setIsOpen] = useState(false);
-
-    let badgeColor = "bg-slate-100 text-slate-600 border-border";
-    if (bounce.type?.toLowerCase().includes("hard")) badgeColor = "bg-rose-50 text-rose-700 border-rose-200";
-    else if (bounce.type?.toLowerCase().includes("soft")) badgeColor = "bg-orange-50 text-orange-700 border-orange-200";
-    else if (bounce.type?.toLowerCase().includes("tech")) badgeColor = "bg-yellow-50 text-yellow-700 border-yellow-200";
-
+function BounceCard({ bounce }: { bounce: BounceEntry }) {
     return (
-        <Collapsible open={isOpen} onOpenChange={setIsOpen} className="bg-white border border-border rounded-xl shadow-sm transition-all hover:shadow-md">
-            <CollapsibleTrigger asChild>
-                <div className="p-4 flex items-center gap-4 cursor-pointer group">
-                    <div className="h-10 w-10 shrink-0 bg-red-50 text-red-600 rounded-lg flex items-center justify-center border border-red-100">
-                        <Mail className="h-5 w-5" />
-                    </div>
-
-                    <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                        <div className="md:col-span-4">
-                            <h4 className="font-bold text-slate-900 truncate">{bounce.name || bounce.email}</h4>
-                            <p className="text-xs text-slate-500 truncate">{bounce.name ? bounce.email : 'Bounced Recipient'}</p>
-                            {bounce.from && bounce.from !== "Campaign" && (
-                                <p className="text-[10px] text-slate-400 truncate">Sender: {bounce.from}</p>
-                            )}
-                        </div>
-
-
-                        <div className="md:col-span-3">
-                            <Badge variant="outline" className={`font-bold ${badgeColor} border`}>
-                                {bounce.type}
-                            </Badge>
-                        </div>
-                        <div className="md:col-span-5 text-right">
-                            <span className="text-xs text-slate-400 font-medium">{bounce.date}</span>
-                        </div>
-                    </div>
-
-                    <div className="shrink-0 p-1 rounded-full text-slate-400 group-hover:bg-slate-50 group-hover:text-slate-600 transition-colors">
-                        {isOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-                    </div>
+        <div className="bg-white border border-border rounded-xl shadow-sm hover:shadow-md transition-all p-4 flex items-center gap-4">
+            <div className="h-10 w-10 shrink-0 bg-red-50 text-red-600 rounded-lg flex items-center justify-center border border-red-100">
+                <Mail className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                <div className="md:col-span-5">
+                    <h4 className="font-bold text-slate-900 truncate">{bounce.name || bounce.email}</h4>
+                    <p className="text-xs text-slate-500 truncate">{bounce.name ? bounce.email : 'Bounced Recipient'}</p>
                 </div>
-            </CollapsibleTrigger>
-
-            {/* Expanded Content - Kept simple as refined spec didn't ask for detailed body */}
-            <CollapsibleContent>
-                <div className="px-4 pb-4 pt-0 border-t border-border bg-slate-50/30 rounded-b-xl">
-                    <div className="pt-4 flex justify-end">
-                        <Button variant="ghost" className="text-slate-500 hover:text-slate-900 flex items-center gap-1">
-                            View Campaign <ArrowUp className="h-3 w-3 rotate-45" />
-                        </Button>
-                    </div>
+                <div className="md:col-span-3">
+                    <Badge
+                        variant="outline"
+                        className={cn(
+                            "font-bold gap-1",
+                            bounce.leadType === 'cold' ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-orange-50 text-orange-700 border-orange-200"
+                        )}
+                    >
+                        {bounce.leadType === 'cold' ? <Snowflake className="h-3 w-3" /> : <Flame className="h-3 w-3" />}
+                        {bounce.leadType === 'cold' ? 'Cold' : 'Hot'}
+                    </Badge>
                 </div>
-            </CollapsibleContent>
-        </Collapsible>
+                <div className="md:col-span-4 text-right">
+                    <span className="text-xs text-slate-400 font-medium">{formatDate(bounce.date)}</span>
+                </div>
+            </div>
+        </div>
     );
 }
-

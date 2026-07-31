@@ -12,8 +12,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Mail, ChevronDown, ChevronUp, Reply, Search, RefreshCw, Sparkles, Clock, User, Send, Copy, Check, ExternalLink } from "lucide-react";
-import React, { useState, useEffect, useMemo } from "react";
+import { Mail, ChevronDown, ChevronUp, Reply, Search, RefreshCw, Clock, User, Bot, Snowflake, Flame, ExternalLink } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import {
     Collapsible,
@@ -27,142 +27,96 @@ import {
     DialogTitle,
     DialogDescription,
 } from "@/components/ui/dialog";
-import { format, formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow, subDays } from "date-fns";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import { useData } from "@/context/DataContext";
-import { subDays } from "date-fns";
-import { useCallback } from "react";
+import type { NormalizedLeadRow, LeadType, ReplyEntry } from "@/lib/services/email-outreach";
 
-
-interface InstantlyReply {
-    message_id: string;
-    thread_id: string | null;
-    campaign_id: string | null;
-    sender_email_id: string | null;
-    lead_email_id: string | null;
-    reply_subject: string | null;
-    emailbody_sent: string | null;
-    clean_reply_text: string | null;
-    reply_timestamp: string | null;
-    ai_interest_score: number | null;
-    created_at: string | null;
+interface ReceivedEntry {
+    id: string;
+    leadType: LeadType;
+    table: string;
+    fullName: string;
+    email: string;
+    lastContactedRaw: string | null;
+    timestamp: string;
+    relativeTime: string;
+    replies: ReplyEntry[];
 }
 
-interface NormalizedReply {
-    id: string;
-    leadEmail: string;
-    senderEmail: string;
-    subject: string;
-    replyContent: string;
-    originalEmailSent: string;
-    timestamp: string;
-    originalDate: string;
-    relativeTime: string;
-    aiInterestScore: number | null;
-    campaignId: string | null;
-    threadId: string | null;
-    source: "Instantly DB" | "Legacy";
+function buildEntries(leads: NormalizedLeadRow[]): ReceivedEntry[] {
+    const entries: ReceivedEntry[] = [];
+
+    leads.forEach((lead) => {
+        if (lead.replies.length === 0) return;
+
+        const lastContactedRaw = lead.lastContacted || lead.createdAt;
+        const d = lastContactedRaw ? new Date(lastContactedRaw) : new Date();
+        const validDate = !isNaN(d.getTime()) ? d : new Date();
+
+        entries.push({
+            id: lead.id,
+            leadType: lead.leadType,
+            table: lead.table,
+            fullName: lead.fullName,
+            email: lead.email,
+            lastContactedRaw,
+            timestamp: format(validDate, "MMM dd, yyyy • p"),
+            relativeTime: formatDistanceToNow(validDate, { addSuffix: true }),
+            replies: lead.replies,
+        });
+    });
+
+    entries.sort((a, b) => {
+        const da = a.lastContactedRaw ? new Date(a.lastContactedRaw).getTime() : 0;
+        const db = b.lastContactedRaw ? new Date(b.lastContactedRaw).getTime() : 0;
+        return db - da;
+    });
+
+    return entries;
 }
 
 export default function ReceivedEmailsPage() {
-    const { leads: allLeads, loadingLeads } = useData();
-    const [replies, setReplies] = useState<NormalizedReply[]>([]);
+    const [coldLeads, setColdLeads] = useState<NormalizedLeadRow[]>([]);
+    const [hotLeads, setHotLeads] = useState<NormalizedLeadRow[]>([]);
+    const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState("newest");
     const [searchQuery, setSearchQuery] = useState("");
+    const [filterType, setFilterType] = useState<"all" | LeadType>("all");
     const [dateRange, setDateRange] = useState<any>({
         from: subDays(new Date(), 7),
         to: new Date(),
     });
 
-    const [loadingDB, setLoadingDB] = useState(false);
-    
-    const loading = loadingLeads || loadingDB;
-
-    const fetchReplies = useCallback(async (range?: any) => {
+    const fetchData = async () => {
+        setLoading(true);
         try {
-            setLoadingDB(true);
-            const targetRange = range || dateRange;
-            const realReplies: NormalizedReply[] = [];
-
-            let url = '/api/email/db-data';
-            const params = new URLSearchParams();
-            if (targetRange?.from) params.append('from', targetRange.from.toISOString());
-            if (targetRange?.to) params.append('to', targetRange.to.toISOString());
-            
-            if (params.toString()) url += `?${params.toString()}`;
-
-            // Fetch from instantly_lead_replies table
-            const dbRes = await fetch(url);
-            if (dbRes.ok) {
-                const { leadReplies } = await dbRes.json();
-
-
-                if (Array.isArray(leadReplies)) {
-                    leadReplies.forEach((reply: InstantlyReply) => {
-                        const dateStr = reply.reply_timestamp || reply.created_at || new Date().toISOString();
-                        const dateObj = new Date(dateStr);
-                        const validDate = !isNaN(dateObj.getTime()) ? dateObj : new Date();
-
-                        realReplies.push({
-                            id: reply.message_id || `db-reply-${Math.random().toString(36).substr(2, 9)}`,
-                            leadEmail: reply.lead_email_id || "Unknown Lead",
-                            senderEmail: reply.sender_email_id || "",
-                            subject: reply.reply_subject || "Email Reply",
-                            replyContent: reply.clean_reply_text || "(No reply content)",
-                            originalEmailSent: reply.emailbody_sent || "",
-                            timestamp: format(validDate, "MMM dd, yyyy • p"),
-                            originalDate: validDate.toISOString(),
-                            relativeTime: formatDistanceToNow(validDate, { addSuffix: true }),
-                            aiInterestScore: reply.ai_interest_score,
-                            campaignId: reply.campaign_id,
-                            threadId: reply.thread_id,
-                            source: "Instantly DB",
-                        });
-                    });
-                }
-            }
-
-            // Sort newest first
-            const sorted = realReplies.sort((a, b) => {
-                const dateA = new Date(a.originalDate).getTime() || 0;
-                const dateB = new Date(b.originalDate).getTime() || 0;
-                return dateB - dateA;
-            });
-            
-            setReplies(sorted);
+            const res = await fetch(`/api/email/outreach`);
+            if (!res.ok) throw new Error("Failed to fetch");
+            const json = await res.json();
+            setColdLeads(json.cold?.leads || []);
+            setHotLeads(json.hot?.leads || []);
         } catch (e) {
             console.error("Received emails fetch error:", e);
         } finally {
-            setLoadingDB(false);
+            setLoading(false);
         }
-    }, [dateRange]);
-
-
-    useEffect(() => {
-        fetchReplies();
-    }, [fetchReplies]);
-
-
-    const handleRefresh = () => {
-        fetchReplies();
     };
 
-    const filteredReplies = useMemo(() => {
-        let result = replies.filter((reply) => {
-            // Search
-            const q = searchQuery.toLowerCase();
-            if (
-                q &&
-                !reply.leadEmail.toLowerCase().includes(q) &&
-                !reply.replyContent.toLowerCase().includes(q) &&
-                !reply.subject.toLowerCase().includes(q) &&
-                !(reply.senderEmail || "").toLowerCase().includes(q)
-            )
-                return false;
+    useEffect(() => {
+        fetchData();
+    }, []);
 
-            // Date range
+    const allEntries = useMemo(() => buildEntries([...coldLeads, ...hotLeads]), [coldLeads, hotLeads]);
+
+    const filteredEntries = useMemo(() => {
+        let result = allEntries.filter((entry) => {
+            if (filterType !== "all" && entry.leadType !== filterType) return false;
+
+            const q = searchQuery.toLowerCase();
+            if (q && !entry.fullName.toLowerCase().includes(q) && !entry.email.toLowerCase().includes(q)) return false;
+
             if (dateRange?.from) {
-                const rd = reply.originalDate ? new Date(reply.originalDate) : null;
+                const rd = entry.lastContactedRaw ? new Date(entry.lastContactedRaw) : null;
                 if (!rd || isNaN(rd.getTime())) return false;
                 const from = new Date(dateRange.from);
                 from.setHours(0, 0, 0, 0);
@@ -174,146 +128,155 @@ export default function ReceivedEmailsPage() {
             return true;
         });
 
-        // Sort
         return result.sort((a, b) => {
-            const da = a.originalDate ? new Date(a.originalDate).getTime() : 0;
-            const db = b.originalDate ? new Date(b.originalDate).getTime() : 0;
+            const da = a.lastContactedRaw ? new Date(a.lastContactedRaw).getTime() : 0;
+            const db = b.lastContactedRaw ? new Date(b.lastContactedRaw).getTime() : 0;
             return sortBy === "newest" ? db - da : da - db;
         });
-    }, [replies, searchQuery, dateRange, sortBy]);
+    }, [allEntries, searchQuery, dateRange, sortBy, filterType]);
 
-    // Compute stats based on filtered results
     const stats = useMemo(() => {
-        const total = filteredReplies.length;
-        const withScore = filteredReplies.filter(r => r.aiInterestScore !== null && r.aiInterestScore !== undefined);
-        const avgScore = withScore.length > 0 
-            ? Math.round(withScore.reduce((sum, r) => sum + (r.aiInterestScore || 0), 0) / withScore.length) 
-            : null;
-        const highInterest = filteredReplies.filter(r => (r.aiInterestScore || 0) >= 70).length;
-        return { total, avgScore, highInterest };
-    }, [filteredReplies]);
+        const total = filteredEntries.length;
+        const totalMessages = filteredEntries.reduce((sum, e) => sum + e.replies.length, 0);
+        const coldCount = filteredEntries.filter(e => e.leadType === 'cold').length;
+        const hotCount = filteredEntries.filter(e => e.leadType === 'hot').length;
+        return { total, totalMessages, coldCount, hotCount };
+    }, [filteredEntries]);
 
     return (
         <div className="space-y-4 pb-10 pt-6 relative min-h-[500px]">
             {loading && <SPLoader />}
 
-            {/* Header section */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-slate-100 pb-6 mb-2">
                 <div className="space-y-1">
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">Received Emails</h1>
                     <p className="text-xs text-slate-500">
-                        View and manage all lead responses in one place
+                        User_Replied / Bot_Replied conversations from ENRICHED_LEADS, master_cold_leads & hubspot_lead
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
                     <DateRangePicker
                         className="h-10 w-full sm:w-[260px] shadow-sm"
-                        onUpdate={(values) => {
-                            setDateRange(values.range);
-                            fetchReplies(values.range);
-                        }}
+                        onUpdate={(values) => setDateRange(values.range)}
                     />
-
-                    <Button 
-                        onClick={handleRefresh}
+                    <Button
+                        onClick={fetchData}
                         variant="outline"
                         size="sm"
                         className="gap-2 h-10 px-4 hover:bg-slate-50 transition-all text-xs font-semibold shadow-sm border-slate-200 bg-white"
                     >
-                        <RefreshCw className={cn("h-3.5 w-3.5", loadingDB && "animate-spin")} />
+                        <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
                         <span>Refresh Data</span>
                     </Button>
                 </div>
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card className="bg-white border-border shadow-sm hover:shadow-md transition-shadow">
                     <CardContent className="p-4 flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Replies</p>
-                            <h3 className="text-2xl font-bold text-slate-900">
-                                {loading ? "..." : stats.total}
-                            </h3>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Conversations</p>
+                            <h3 className="text-2xl font-bold text-slate-900">{loading ? "..." : stats.total}</h3>
                         </div>
-                        <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
-                            <Mail className="h-5 w-5" />
-                        </div>
+                        <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100"><Mail className="h-5 w-5" /></div>
                     </CardContent>
                 </Card>
                 <Card className="bg-white border-border shadow-sm hover:shadow-md transition-shadow">
                     <CardContent className="p-4 flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Avg Interest</p>
-                            <h3 className="text-2xl font-bold text-slate-900">
-                                {loading ? "..." : stats.avgScore !== null ? `${stats.avgScore}%` : "N/A"}
-                            </h3>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Messages</p>
+                            <h3 className="text-2xl font-bold text-slate-900">{loading ? "..." : stats.totalMessages}</h3>
                         </div>
-                        <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl border border-amber-100">
-                            <Sparkles className="h-5 w-5" />
-                        </div>
+                        <div className="p-2.5 bg-violet-50 text-violet-600 rounded-xl border border-violet-100"><Reply className="h-5 w-5" /></div>
                     </CardContent>
                 </Card>
                 <Card className="bg-white border-border shadow-sm hover:shadow-md transition-shadow">
                     <CardContent className="p-4 flex items-center justify-between">
                         <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">High Intent</p>
-                            <h3 className="text-2xl font-bold text-slate-900">
-                                {loading ? "..." : stats.highInterest}
-                            </h3>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Cold Replies</p>
+                            <h3 className="text-2xl font-bold text-slate-900">{loading ? "..." : stats.coldCount}</h3>
                         </div>
-                        <div className="p-2.5 bg-violet-50 text-violet-600 rounded-xl border border-violet-100">
-                            <Sparkles className="h-5 w-5" />
+                        <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100"><Snowflake className="h-5 w-5" /></div>
+                    </CardContent>
+                </Card>
+                <Card className="bg-white border-border shadow-sm hover:shadow-md transition-shadow">
+                    <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Hot Replies</p>
+                            <h3 className="text-2xl font-bold text-slate-900">{loading ? "..." : stats.hotCount}</h3>
                         </div>
+                        <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl border border-orange-100"><Flame className="h-5 w-5" /></div>
                     </CardContent>
                 </Card>
             </div>
 
             {/* Search & Filters */}
             <div className="bg-white p-4 rounded-xl border border-border shadow-sm flex flex-col md:flex-row gap-4 items-stretch md:items-center">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <Input
-                            placeholder="Search by lead email, subject, or content..."
-                            className="pl-10 h-10 bg-slate-50 border-slate-200 text-sm focus:bg-white transition-all shadow-sm"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
-                    
-                    <div className="flex items-center gap-3">
-                        <Select value={sortBy} onValueChange={setSortBy}>
-                            <SelectTrigger className="w-full md:w-[160px] h-10 text-sm shadow-sm bg-white border-slate-200">
-                                <SelectValue placeholder="Sort By" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="newest">Newest First</SelectItem>
-                                <SelectItem value="oldest">Oldest First</SelectItem>
-                            </SelectContent>
-                        </Select>
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                        placeholder="Search by lead name or email..."
+                        className="pl-10 h-10 bg-slate-50 border-slate-200 text-sm focus:bg-white transition-all shadow-sm"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                </div>
 
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-slate-500 h-10 px-4 text-xs bg-white hover:bg-slate-50 shadow-sm border-slate-200 font-semibold"
-                            onClick={() => {
-                                setSearchQuery("");
-                                setDateRange(undefined);
-                                setSortBy("newest");
-                            }}
-                        >
-                            Reset
-                        </Button>
-                    </div>
+                <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-1 shrink-0">
+                    <button
+                        onClick={() => setFilterType('all')}
+                        className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all", filterType === 'all' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-200/50')}
+                    >
+                        All
+                    </button>
+                    <button
+                        onClick={() => setFilterType('cold')}
+                        className={cn("flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all", filterType === 'cold' ? 'bg-blue-600 text-white' : 'text-blue-600 hover:bg-blue-100/50')}
+                    >
+                        <Snowflake className="h-3 w-3" /> Cold
+                    </button>
+                    <button
+                        onClick={() => setFilterType('hot')}
+                        className={cn("flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all", filterType === 'hot' ? 'bg-orange-500 text-white' : 'text-orange-600 hover:bg-orange-100/50')}
+                    >
+                        <Flame className="h-3 w-3" /> Hot
+                    </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <Select value={sortBy} onValueChange={setSortBy}>
+                        <SelectTrigger className="w-full md:w-[160px] h-10 text-sm shadow-sm bg-white border-slate-200">
+                            <SelectValue placeholder="Sort By" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="newest">Newest First</SelectItem>
+                            <SelectItem value="oldest">Oldest First</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-slate-500 h-10 px-4 text-xs bg-white hover:bg-slate-50 shadow-sm border-slate-200 font-semibold"
+                        onClick={() => {
+                            setSearchQuery("");
+                            setDateRange({ from: subDays(new Date(), 7), to: new Date() });
+                            setSortBy("newest");
+                            setFilterType("all");
+                        }}
+                    >
+                        Reset
+                    </Button>
+                </div>
             </div>
 
             {/* Reply List */}
             <div className="space-y-4">
-                {!loading &&
-                    filteredReplies.map((reply) => (
-                        <EmailReplyCard key={reply.id} reply={reply} />
-                    ))}
-                {!loading && filteredReplies.length === 0 && (
+                {!loading && filteredEntries.map((entry) => (
+                    <ReceivedEntryCard key={`${entry.table}-${entry.id}`} entry={entry} />
+                ))}
+                {!loading && filteredEntries.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-64 text-slate-400 border border-dashed border-border rounded-xl bg-slate-50/50">
                         <Mail className="h-8 w-8 mb-2 opacity-50" />
                         <p>No replies found.</p>
@@ -324,236 +287,122 @@ export default function ReceivedEmailsPage() {
     );
 }
 
-/** Returns a color config based on the AI interest score */
-function getScoreConfig(score: number | null) {
-    if (score === null || score === undefined) return null;
-    if (score >= 70) return { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", label: "High Interest" };
-    if (score >= 40) return { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", label: "Medium Interest" };
-    return { bg: "bg-red-50", text: "text-red-600", border: "border-red-200", label: "Low Interest" };
-}
-
-function CopyButton({ text }: { text: string }) {
-    const [copied, setCopied] = useState(false);
-    return (
-        <button
-            onClick={(e) => {
-                e.stopPropagation();
-                navigator.clipboard.writeText(text);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-            }}
-            className="p-1.5 bg-white border border-slate-200 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-700 transition-colors shadow-sm"
-            title="Copy to clipboard"
-        >
-            {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-        </button>
-    );
-}
-
-const stripHtml = (html: string) => {
-    if (!html) return '';
-    return html.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ');
-};
-
-function IdButton({ title, idStr }: { title: string, idStr: string }) {
-    const [visible, setVisible] = useState(false);
-    
-    if (visible) {
-        return (
-            <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-border rounded-lg shadow-sm">
-                <div className="flex flex-col min-w-0 max-w-[200px]">
-                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{title}</span>
-                    <span className="text-[10px] font-mono text-slate-600 truncate bg-slate-100 px-1 py-0.5 rounded select-all" title={idStr}>{idStr}</span>
-                </div>
-                <CopyButton text={idStr} />
-            </div>
-        );
-    }
-
-    return (
-        <button
-            onClick={(e) => {
-                e.stopPropagation();
-                setVisible(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-border text-[10px] font-bold text-slate-600 rounded-lg hover:bg-slate-100 hover:text-slate-800 transition-all shadow-sm shrink-0 uppercase tracking-wider"
-        >
-            <span>Reveal {title}</span>
-        </button>
-    );
-}
-
-function EmailReplyCard({ reply }: { reply: NormalizedReply }) {
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const scoreConfig = getScoreConfig(reply.aiInterestScore);
-
-    const processHtml = (html: string) => {
-        if (!html) return "";
-        return html.replace(/<a\b([^>]*?)>/gi, '<a $1 target="_blank" rel="noopener noreferrer">');
-    };
+function ReceivedEntryCard({ entry }: { entry: ReceivedEntry }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [modalReply, setModalReply] = useState<ReplyEntry | null>(null);
+    const lastReply = entry.replies[entry.replies.length - 1];
+    const previewText = (lastReply?.userReplied || lastReply?.botReplied || "").toString().slice(0, 100);
 
     return (
         <>
-            <div 
-                onClick={() => setIsModalOpen(true)}
-                className="bg-white border border-border rounded-xl shadow-sm transition-all hover:shadow-md p-3 flex items-center gap-4 cursor-pointer group"
-            >
-                {/* Avatar / Icon */}
-                <div className="h-10 w-10 shrink-0 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center border border-emerald-100">
-                    <Reply className="h-4 w-4" />
-                </div>
-
-                {/* Main Info */}
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-base font-bold text-slate-900 truncate max-w-[280px]">
-                                {reply.leadEmail}
-                            </h4>
-                            {/* Source badge */}
-                            <Badge
-                                variant="outline"
-                                className={cn(
-                                    "text-[10px] uppercase font-bold",
-                                    reply.source === "Legacy"
-                                        ? "text-purple-600 bg-purple-50 border-purple-100"
-                                        : "text-emerald-600 bg-emerald-50 border-emerald-100"
+            <Collapsible open={isOpen} onOpenChange={setIsOpen} className="bg-white border border-border rounded-xl shadow-sm transition-all hover:shadow-md">
+                <CollapsibleTrigger asChild>
+                    <div className="p-3 cursor-pointer group">
+                        <div className="flex items-center gap-4">
+                            <div className="h-10 w-10 shrink-0 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center border border-emerald-100">
+                                <Reply className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap mb-1">
+                                    <h4 className="text-base font-bold text-slate-900 truncate max-w-[260px]">{entry.fullName}</h4>
+                                    <Badge
+                                        variant="outline"
+                                        className={cn(
+                                            "text-[9px] font-bold uppercase gap-1",
+                                            entry.leadType === 'cold' ? "text-blue-600 bg-blue-50 border-blue-200" : "text-orange-600 bg-orange-50 border-orange-200"
+                                        )}
+                                    >
+                                        {entry.leadType === 'cold' ? <Snowflake className="h-2.5 w-2.5" /> : <Flame className="h-2.5 w-2.5" />}
+                                        {entry.leadType === 'cold' ? 'Cold' : 'Hot'}
+                                    </Badge>
+                                    <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 text-[10px] font-bold uppercase">
+                                        {entry.replies.length} message{entry.replies.length !== 1 ? 's' : ''}
+                                    </Badge>
+                                </div>
+                                <p className="text-[11px] text-slate-500 truncate">{entry.email}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <Clock className="h-3 w-3 text-slate-400" />
+                                    <span className="text-xs text-slate-500">{entry.timestamp}</span>
+                                    <span className="text-xs text-slate-400">({entry.relativeTime})</span>
+                                </div>
+                                {!isOpen && previewText && (
+                                    <p className="text-xs text-slate-400 mt-1 italic truncate max-w-lg">{previewText}...</p>
                                 )}
-                            >
-                                {reply.source}
-                            </Badge>
-                            {/* AI Interest Score badge */}
-                            {scoreConfig && (
-                                <Badge
-                                    variant="outline"
-                                    className={cn(
-                                        "text-[10px] font-bold gap-1",
-                                        scoreConfig.bg, scoreConfig.text, scoreConfig.border
+                            </div>
+                            <div className="shrink-0">
+                                {isOpen ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400 group-hover:text-slate-600" />}
+                            </div>
+                        </div>
+                    </div>
+                </CollapsibleTrigger>
+
+                <CollapsibleContent>
+                    <div className="px-5 pb-5 pt-0">
+                        <div className="pl-[56px] space-y-3 border-t border-border pt-4">
+                            {entry.replies.map((reply) => (
+                                <div key={reply.index} className="space-y-2">
+                                    {reply.userReplied && (
+                                        <div
+                                            onClick={() => setModalReply(reply)}
+                                            className="flex items-start gap-2 cursor-pointer group/msg"
+                                        >
+                                            <div className="h-6 w-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+                                                <User className="h-3 w-3" />
+                                            </div>
+                                            <div className="flex-1 min-w-0 p-2.5 bg-blue-50/50 rounded-lg border border-blue-100 text-[13px] text-slate-700">
+                                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">User Replied {reply.index}</p>
+                                                <p className="line-clamp-3 whitespace-pre-wrap">{String(reply.userReplied)}</p>
+                                            </div>
+                                            <ExternalLink className="h-3 w-3 text-slate-300 opacity-0 group-hover/msg:opacity-100 transition-opacity mt-1 shrink-0" />
+                                        </div>
                                     )}
-                                >
-                                    <Sparkles className="h-3 w-3" />
-                                    {reply.aiInterestScore}% – {scoreConfig.label}
-                                </Badge>
-                            )}
+                                    {reply.botReplied && (
+                                        <div
+                                            onClick={() => setModalReply(reply)}
+                                            className="flex items-start gap-2 cursor-pointer group/msg"
+                                        >
+                                            <div className="h-6 w-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
+                                                <Bot className="h-3 w-3" />
+                                            </div>
+                                            <div className="flex-1 min-w-0 p-2.5 bg-emerald-50/50 rounded-lg border border-emerald-100 text-[13px] text-slate-700">
+                                                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Bot Replied {reply.index}</p>
+                                                <p className="line-clamp-3 whitespace-pre-wrap">{String(reply.botReplied)}</p>
+                                            </div>
+                                            <ExternalLink className="h-3 w-3 text-slate-300 opacity-0 group-hover/msg:opacity-100 transition-opacity mt-1 shrink-0" />
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     </div>
+                </CollapsibleContent>
+            </Collapsible>
 
-                    {/* Subject line */}
-                    <p className="text-sm font-medium text-slate-700 truncate">{reply.subject}</p>
-
-                    {/* Timestamp row */}
-                    <div className="flex items-center gap-3 mt-1">
-                        <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3 text-slate-400" />
-                            <span className="text-xs text-slate-500">{reply.timestamp}</span>
-                        </div>
-                        <span className="text-xs text-slate-400">({reply.relativeTime})</span>
-                    </div>
-
-                    {/* Preview text */}
-                    <p className="text-sm text-slate-400 truncate max-w-lg mt-1.5 italic font-sans">
-                        {stripHtml(reply.replyContent).substring(0, 100)}...
-                    </p>
-                </div>
-
-                <div className="shrink-0 p-2 rounded-full text-slate-300 group-hover:bg-slate-50 group-hover:text-emerald-600 transition-colors">
-                    <ExternalLink className="h-5 w-5" />
-                </div>
-            </div>
-
-            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-white shadow-2xl border-none">
-                    <DialogHeader className="p-6 pb-4 border-b border-slate-100">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
-                                    <Reply className="h-6 w-6" />
-                                </div>
-                                <div className="space-y-0.5">
-                                    <DialogTitle className="text-xl font-bold text-slate-900">
-                                        Reply from {reply.leadEmail}
-                                    </DialogTitle>
-                                    <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                                        <Clock className="h-3 w-3" />
-                                        <span>{reply.timestamp}</span>
-                                        <span className="text-slate-300">•</span>
-                                        <span>{reply.relativeTime}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                {reply.campaignId && <IdButton title="Campaign" idStr={reply.campaignId} />}
-                                {reply.threadId && <IdButton title="Thread" idStr={reply.threadId} />}
-                            </div>
-                        </div>
-                        <DialogDescription className="sr-only">
-                            Full details of the email reply from {reply.leadEmail}.
-                        </DialogDescription>
+            <Dialog open={!!modalReply} onOpenChange={(open) => !open && setModalReply(null)}>
+                <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-6 overflow-hidden bg-white shadow-2xl">
+                    <DialogHeader className="border-b border-slate-100 pb-4 mb-4">
+                        <DialogTitle className="text-lg font-bold text-slate-900">
+                            Conversation — Stage {modalReply?.index}
+                        </DialogTitle>
+                        <DialogDescription className="sr-only">Full reply content.</DialogDescription>
                     </DialogHeader>
-                    
-                    <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-50/30">
-                        {/* Meta Info Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm flex items-center gap-3">
-                                <div className="p-2 bg-slate-50 rounded-lg text-slate-400">
-                                    <User className="h-4 w-4" />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Lead Contact</p>
-                                    <p className="text-sm font-semibold text-slate-700">{reply.leadEmail}</p>
-                                </div>
+                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
+                        {modalReply?.userReplied && (
+                            <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100">
+                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-2">User Replied</p>
+                                <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{String(modalReply.userReplied)}</p>
                             </div>
-                            <div className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm flex items-center gap-3">
-                                <div className="p-2 bg-slate-50 rounded-lg text-slate-400">
-                                    <Send className="h-4 w-4" />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sent From</p>
-                                    <p className="text-sm font-semibold text-slate-700">{reply.senderEmail || "N/A"}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Subject */}
-                        <div className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Subject Row</p>
-                            <p className="text-sm font-bold text-slate-800">{reply.subject}</p>
-                        </div>
-
-                        {/* Main Content */}
-                        <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden min-h-[300px]">
-                            <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email Content</p>
-                            </div>
-                            <div className="p-6 prose prose-sm max-w-none text-slate-700 leading-relaxed font-sans email-full-content">
-                                <div dangerouslySetInnerHTML={{ __html: processHtml(reply.replyContent) }} />
-                            </div>
-                        </div>
-
-                        {/* Original Conversation */}
-                        {reply.originalEmailSent && !reply.originalEmailSent.toLowerCase().includes("not found") && (
-                            <div className="mt-8">
-                                <div className="relative flex items-center justify-center mb-6">
-                                    <div className="absolute inset-0 flex items-center">
-                                        <div className="w-full border-t border-slate-200"></div>
-                                    </div>
-                                    <div className="relative px-4 bg-slate-50/30 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                        Original Conversation
-                                    </div>
-                                </div>
-                                <div className="bg-white/50 rounded-xl border border-dashed border-slate-200 p-6 opacity-70 hover:opacity-100 transition-opacity">
-                                    <div 
-                                        className="text-sm text-slate-600 prose prose-sm max-w-none italic"
-                                        dangerouslySetInnerHTML={{ __html: processHtml(reply.originalEmailSent) }} 
-                                    />
-                                </div>
+                        )}
+                        {modalReply?.botReplied && (
+                            <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-100">
+                                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-2">Bot Replied</p>
+                                <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{String(modalReply.botReplied)}</p>
                             </div>
                         )}
                     </div>
-
-                    <div className="p-4 bg-white border-t border-slate-100 flex justify-end">
-                        <Button variant="outline" onClick={() => setIsModalOpen(false)} className="h-10 px-8 font-semibold">
-                            Back to Inbox
+                    <div className="mt-6 flex justify-end pt-4 border-t border-slate-100">
+                        <Button variant="secondary" onClick={() => setModalReply(null)} className="h-10 px-6 font-semibold">
+                            Close
                         </Button>
                     </div>
                 </DialogContent>
