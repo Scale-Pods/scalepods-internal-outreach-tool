@@ -43,8 +43,7 @@ export function WhatsAppChatDetail({ lead, onClose, loading = false }: WhatsAppC
     const handleCopyLink = () => {
         if (!lead) return;
         const baseUrl = window.location.origin;
-        const identifier = lead.id || lead.phone;
-        const phone = encodeURIComponent(identifier);
+        const phone = encodeURIComponent(lead.phone);
         const source = encodeURIComponent(lead.table);
         const shareUrl = `${baseUrl}/share/chat/${phone}?source=${source}`;
         navigator.clipboard.writeText(shareUrl);

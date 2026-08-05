@@ -10,8 +10,11 @@ export async function GET(
     const { searchParams } = new URL(req.url);
     const sourceParam = searchParams.get('source');
 
-    const searchVal = decodeURIComponent(customerId).trim();
-    const phoneVal = searchVal.replace(/\D/g, '');
+    const phoneVal = decodeURIComponent(customerId).trim().replace(/\D/g, '');
+
+    if (!phoneVal) {
+        return NextResponse.json({ error: "Invalid phone number" }, { status: 400 });
+    }
 
     const tables: { table: string; leadType: LeadType }[] = sourceParam === HOT_TABLE
         ? [{ table: HOT_TABLE, leadType: 'hot' }]
@@ -24,23 +27,13 @@ export async function GET(
     try {
         for (const { table, leadType } of tables) {
             const stageCount = leadType === 'hubspot_wa' ? 1 : undefined;
-            const { data: byId } = await supabaseAdmin.from(table).select('*').or(
-                `lead_uuid.eq.${searchVal},id.eq.${searchVal},lead_id.eq.${searchVal}`
-            ).limit(1);
+            const { data } = await supabaseAdmin.from(table)
+                .select('*')
+                .ilike('company_phone_number', `%${phoneVal}%`)
+                .limit(1);
 
-            if (byId && byId.length > 0) {
-                return NextResponse.json({ lead: normalizeWaRow(byId[0], table, leadType, stageCount) });
-            }
-
-            if (phoneVal) {
-                const { data: byPhone } = await supabaseAdmin.from(table)
-                    .select('*')
-                    .ilike('company_phone_number', `%${phoneVal}%`)
-                    .limit(1);
-
-                if (byPhone && byPhone.length > 0) {
-                    return NextResponse.json({ lead: normalizeWaRow(byPhone[0], table, leadType, stageCount) });
-                }
+            if (data && data.length > 0) {
+                return NextResponse.json({ lead: normalizeWaRow(data[0], table, leadType, stageCount) });
             }
         }
 
