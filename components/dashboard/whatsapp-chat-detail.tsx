@@ -33,9 +33,11 @@ interface WhatsAppChatDetailProps {
     lead: NormalizedWaLead | null;
     onClose?: () => void;
     loading?: boolean;
+    /** Public/read-only mode: hides the share button and any interactive/navigation chrome */
+    isPublic?: boolean;
 }
 
-export function WhatsAppChatDetail({ lead, onClose, loading = false }: WhatsAppChatDetailProps) {
+export function WhatsAppChatDetail({ lead, onClose, loading = false, isPublic = false }: WhatsAppChatDetailProps) {
     const [copied, setCopied] = useState(false);
 
     const messages = useMemo(() => (lead ? buildConversationTimeline(lead) : []), [lead]);
@@ -88,19 +90,21 @@ export function WhatsAppChatDetail({ lead, onClose, loading = false }: WhatsAppC
                         <TypeIcon className="h-3 w-3" />
                         {typeMeta.label}
                     </Badge>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className={`gap-1.5 text-[10px] font-black uppercase transition-all border shadow-sm ${
-                            copied
-                                ? 'text-emerald-600 border-emerald-200 bg-emerald-50'
-                                : 'text-red-600 border-red-300 bg-red-50 hover:bg-red-100 hover:text-red-700 hover:border-red-400 ring-1 ring-red-100/50'
-                        }`}
-                        onClick={handleCopyLink}
-                    >
-                        {copied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
-                        {copied ? 'Link Copied!' : 'Share Link'}
-                    </Button>
+                    {!isPublic && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`gap-1.5 text-[10px] font-black uppercase transition-all border shadow-sm ${
+                                copied
+                                    ? 'text-emerald-600 border-emerald-200 bg-emerald-50'
+                                    : 'text-red-600 border-red-300 bg-red-50 hover:bg-red-100 hover:text-red-700 hover:border-red-400 ring-1 ring-red-100/50'
+                            }`}
+                            onClick={handleCopyLink}
+                        >
+                            {copied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
+                            {copied ? 'Link Copied!' : 'Share Link'}
+                        </Button>
+                    )}
                 </div>
             </div>
 
