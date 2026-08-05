@@ -17,7 +17,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
                 const res = await fetch('/api/whatsapp/outreach');
                 if (res.ok) {
                     const data = await res.json();
-                    const allLeads: NormalizedWaLead[] = [...(data.cold?.leads || []), ...(data.hot?.leads || [])];
+                    const allLeads: NormalizedWaLead[] = [...(data.cold?.leads || []), ...(data.hot?.leads || []), ...(data.hubspotWa?.leads || [])];
                     const searchVal = decodedCustomerId.toLowerCase().trim();
                     const found = allLeads.find(l => {
                         if (l.id.toLowerCase() === searchVal) return true;

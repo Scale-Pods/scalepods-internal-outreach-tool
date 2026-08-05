@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { normalizeWaRow, COLD_TABLE, HOT_TABLE, type LeadType } from '@/lib/services/whatsapp-outreach';
+import { normalizeWaRow, COLD_TABLE, HOT_TABLE, HUBSPOT_WA_TABLE, type LeadType } from '@/lib/services/whatsapp-outreach';
 
 export async function GET(
     req: Request,
@@ -17,16 +17,19 @@ export async function GET(
         ? [{ table: HOT_TABLE, leadType: 'hot' }]
         : sourceParam === COLD_TABLE
             ? [{ table: COLD_TABLE, leadType: 'cold' }]
-            : [{ table: COLD_TABLE, leadType: 'cold' }, { table: HOT_TABLE, leadType: 'hot' }];
+            : sourceParam === HUBSPOT_WA_TABLE
+                ? [{ table: HUBSPOT_WA_TABLE, leadType: 'hubspot_wa' }]
+                : [{ table: COLD_TABLE, leadType: 'cold' }, { table: HOT_TABLE, leadType: 'hot' }, { table: HUBSPOT_WA_TABLE, leadType: 'hubspot_wa' }];
 
     try {
         for (const { table, leadType } of tables) {
+            const stageCount = leadType === 'hubspot_wa' ? 1 : undefined;
             const { data: byId } = await supabaseAdmin.from(table).select('*').or(
                 `lead_uuid.eq.${searchVal},id.eq.${searchVal},lead_id.eq.${searchVal}`
             ).limit(1);
 
             if (byId && byId.length > 0) {
-                return NextResponse.json({ lead: normalizeWaRow(byId[0], table, leadType) });
+                return NextResponse.json({ lead: normalizeWaRow(byId[0], table, leadType, stageCount) });
             }
 
             if (phoneVal) {
@@ -36,7 +39,7 @@ export async function GET(
                     .limit(1);
 
                 if (byPhone && byPhone.length > 0) {
-                    return NextResponse.json({ lead: normalizeWaRow(byPhone[0], table, leadType) });
+                    return NextResponse.json({ lead: normalizeWaRow(byPhone[0], table, leadType, stageCount) });
                 }
             }
         }

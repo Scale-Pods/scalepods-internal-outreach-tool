@@ -3,7 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import {
     Users, MessageCircle, Send,
-    Reply, Percent, XCircle, Snowflake, Flame,
+    Reply, Percent, XCircle, Snowflake, Flame, Building2,
 } from "lucide-react";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useState } from "react";
@@ -15,9 +15,11 @@ import type { WaMetrics } from "@/lib/services/whatsapp-outreach";
 export default function WhatsappDashboardClient({
     cold,
     hot,
+    hubspotWa,
 }: {
     cold: WaMetrics;
     hot: WaMetrics;
+    hubspotWa: WaMetrics;
 }) {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -67,6 +69,14 @@ export default function WhatsappDashboardClient({
                 icon={<Flame className="h-5 w-5" />}
                 iconBg="bg-orange-50 text-orange-600"
                 metrics={hot}
+            />
+
+            <WaSection
+                title="HubSpot WA Outreach"
+                subtitle="Source: hubspot_wa_outreach"
+                icon={<Building2 className="h-5 w-5" />}
+                iconBg="bg-purple-50 text-purple-600"
+                metrics={hubspotWa}
             />
         </div>
     );

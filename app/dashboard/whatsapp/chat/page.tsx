@@ -28,6 +28,7 @@ import {
     RefreshCw,
     Snowflake,
     Flame,
+    Building2,
 } from "lucide-react";
 import { SPLoader } from "@/components/sp-loader";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -36,9 +37,16 @@ import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import type { NormalizedWaLead, LeadType } from "@/lib/services/whatsapp-outreach";
 import { getWaLastContacted, countSentMessages, hasReplied } from "@/lib/services/whatsapp-outreach";
 
+const LEAD_TYPE_META: Record<LeadType, { label: string; icon: typeof Flame; className: string }> = {
+    hot: { label: 'Hot Leads', icon: Flame, className: 'border-orange-100 text-orange-600 bg-orange-50' },
+    cold: { label: 'Cold Leads', icon: Snowflake, className: 'border-blue-100 text-blue-600 bg-blue-50' },
+    hubspot_wa: { label: 'HubSpot WA', icon: Building2, className: 'border-purple-100 text-purple-600 bg-purple-50' },
+};
+
 export default function WhatsappChatPage() {
     const [coldLeads, setColdLeads] = useState<NormalizedWaLead[]>([]);
     const [hotLeads, setHotLeads] = useState<NormalizedWaLead[]>([]);
+    const [hubspotWaLeads, setHubspotWaLeads] = useState<NormalizedWaLead[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
@@ -63,6 +71,7 @@ export default function WhatsappChatPage() {
             const json = await res.json();
             setColdLeads(json.cold?.leads || []);
             setHotLeads(json.hot?.leads || []);
+            setHubspotWaLeads(json.hubspotWa?.leads || []);
         } catch (err) {
             console.error("Failed to fetch WhatsApp chats:", err);
         } finally {
@@ -75,10 +84,10 @@ export default function WhatsappChatPage() {
     }, []);
 
     const combinedLeads = useMemo(() => {
-        const all = [...coldLeads, ...hotLeads];
+        const all = [...coldLeads, ...hotLeads, ...hubspotWaLeads];
         if (sourceFilter === "all") return all;
         return all.filter(l => l.leadType === sourceFilter);
-    }, [coldLeads, hotLeads, sourceFilter]);
+    }, [coldLeads, hotLeads, hubspotWaLeads, sourceFilter]);
 
     const filteredLeads = useMemo(() => {
         return combinedLeads.filter(lead => {
@@ -188,7 +197,7 @@ export default function WhatsappChatPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">WhatsApp Chats</h1>
-                    <p className="text-slate-500 text-sm mt-1">Real-time engagement across Cold & Hot leads</p>
+                    <p className="text-slate-500 text-sm mt-1">Real-time engagement across Cold, Hot & HubSpot WA leads</p>
                 </div>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                     <div className="flex items-center bg-slate-100 rounded-lg p-1 gap-0.5">
@@ -209,6 +218,12 @@ export default function WhatsappChatPage() {
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sourceFilter === 'hot' ? 'bg-white text-orange-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
                             <Flame className="h-3.5 w-3.5" /> Hot Leads
+                        </button>
+                        <button
+                            onClick={() => { setSourceFilter('hubspot_wa'); setCurrentPage(1); }}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sourceFilter === 'hubspot_wa' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            <Building2 className="h-3.5 w-3.5" /> HubSpot WA
                         </button>
                     </div>
                     <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
@@ -415,10 +430,16 @@ function CustomerRow({ lead, onClick }: { lead: NormalizedWaLead; onClick: () =>
                 </div>
             </td>
             <td className="px-4 py-3 text-center">
-                <Badge variant="outline" className={`text-[10px] uppercase font-bold gap-1 ${lead.leadType === 'hot' ? 'border-orange-100 text-orange-600 bg-orange-50' : 'border-blue-100 text-blue-600 bg-blue-50'}`}>
-                    {lead.leadType === 'hot' ? <Flame className="h-2.5 w-2.5" /> : <Snowflake className="h-2.5 w-2.5" />}
-                    {lead.leadType === 'hot' ? 'Hot Leads' : 'Cold Leads'}
-                </Badge>
+                {(() => {
+                    const meta = LEAD_TYPE_META[lead.leadType];
+                    const Icon = meta.icon;
+                    return (
+                        <Badge variant="outline" className={`text-[10px] uppercase font-bold gap-1 ${meta.className}`}>
+                            <Icon className="h-2.5 w-2.5" />
+                            {meta.label}
+                        </Badge>
+                    );
+                })()}
             </td>
             <td className="px-4 py-3 text-center">
                 {lead.lifecycleStage ? (

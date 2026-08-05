@@ -18,6 +18,7 @@ import { getWaLastContacted, countSentMessages, hasReplied } from "@/lib/service
 export default function WhatsappAnalyticsPage() {
     const [coldLeads, setColdLeads] = useState<NormalizedWaLead[]>([]);
     const [hotLeads, setHotLeads] = useState<NormalizedWaLead[]>([]);
+    const [hubspotWaLeads, setHubspotWaLeads] = useState<NormalizedWaLead[]>([]);
     const [loading, setLoading] = useState(true);
     const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
         from: subDays(new Date(), 7), to: new Date()
@@ -33,6 +34,7 @@ export default function WhatsappAnalyticsPage() {
             const json = await res.json();
             setColdLeads(json.cold?.leads || []);
             setHotLeads(json.hot?.leads || []);
+            setHubspotWaLeads(json.hubspotWa?.leads || []);
         } catch (e) {
             console.error("WhatsApp analytics fetch error", e);
         } finally {
@@ -44,7 +46,7 @@ export default function WhatsappAnalyticsPage() {
         fetchData();
     }, []);
 
-    const combinedLeads = useMemo(() => [...coldLeads, ...hotLeads], [coldLeads, hotLeads]);
+    const combinedLeads = useMemo(() => [...coldLeads, ...hotLeads, ...hubspotWaLeads], [coldLeads, hotLeads, hubspotWaLeads]);
 
     const filteredLeads = useMemo(() => {
         return combinedLeads.filter(lead => {
@@ -58,7 +60,7 @@ export default function WhatsappAnalyticsPage() {
 
     const stats = useMemo(() => {
         let totalSent = 0, repliedCount = 0, leadsContacted = 0;
-        const campaigns: Record<string, { value: number }> = { "Hot Leads": { value: 0 }, "Cold Leads": { value: 0 } };
+        const campaigns: Record<string, { value: number }> = { "Hot Leads": { value: 0 }, "Cold Leads": { value: 0 }, "HubSpot WA": { value: 0 } };
 
         filteredLeads.forEach(lead => {
             const sentCount = countSentMessages(lead);
@@ -67,6 +69,7 @@ export default function WhatsappAnalyticsPage() {
             if (hasReplied(lead)) {
                 repliedCount++;
                 if (lead.leadType === 'hot') campaigns["Hot Leads"].value++;
+                else if (lead.leadType === 'hubspot_wa') campaigns["HubSpot WA"].value++;
                 else campaigns["Cold Leads"].value++;
             }
         });
@@ -104,7 +107,7 @@ export default function WhatsappAnalyticsPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">WhatsApp Analytics</h1>
-                    <p className="text-slate-500 text-sm">Cold (ENRICHED_LEADS) & Hot (hubspot_lead) engagement performance</p>
+                    <p className="text-slate-500 text-sm">Cold (ENRICHED_LEADS), Hot (hubspot_lead) & HubSpot WA (hubspot_wa_outreach) engagement performance</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <DateRangePicker onUpdate={({ range }) => setDateRange({ from: range?.from, to: range?.to })} />
@@ -183,7 +186,7 @@ export default function WhatsappAnalyticsPage() {
                                     />
                                     <Bar dataKey="value" fill="#6366f1" radius={[6, 6, 0, 0]} barSize={40}>
                                         {stats.campaignData.map((_, index) => (
-                                            <Cell key={`cell-${index}`} fill={['#6366f1', '#f97316'][index % 2]} />
+                                            <Cell key={`cell-${index}`} fill={['#6366f1', '#f97316', '#a855f7'][index % 3]} />
                                         ))}
                                     </Bar>
                                 </BarChart>

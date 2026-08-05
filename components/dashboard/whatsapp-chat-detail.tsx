@@ -13,12 +13,21 @@ import {
     Check,
     Snowflake,
     Flame,
+    Building2,
+    Tag,
 } from "lucide-react";
 import {
     buildConversationTimeline,
     countSentMessages,
     type NormalizedWaLead,
+    type LeadType,
 } from "@/lib/services/whatsapp-outreach";
+
+const LEAD_TYPE_META: Record<LeadType, { label: string; icon: typeof Flame; className: string }> = {
+    hot: { label: 'Hot Lead', icon: Flame, className: 'bg-orange-50 text-orange-700' },
+    cold: { label: 'Cold Lead', icon: Snowflake, className: 'bg-blue-50 text-blue-700' },
+    hubspot_wa: { label: 'HubSpot WA', icon: Building2, className: 'bg-purple-50 text-purple-700' },
+};
 
 interface WhatsAppChatDetailProps {
     lead: NormalizedWaLead | null;
@@ -62,7 +71,8 @@ export function WhatsAppChatDetail({ lead, onClose, loading = false }: WhatsAppC
         );
     }
 
-    const isHot = lead.leadType === 'hot';
+    const typeMeta = LEAD_TYPE_META[lead.leadType];
+    const TypeIcon = typeMeta.icon;
 
     return (
         <div className="space-y-6 flex flex-col h-full overflow-hidden max-h-[85vh]">
@@ -75,9 +85,9 @@ export function WhatsAppChatDetail({ lead, onClose, loading = false }: WhatsAppC
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Badge className={`hover:bg-inherit border-none text-[10px] font-bold uppercase gap-1 ${isHot ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
-                        {isHot ? <Flame className="h-3 w-3" /> : <Snowflake className="h-3 w-3" />}
-                        {isHot ? 'Hot Lead' : 'Cold Lead'}
+                    <Badge className={`hover:bg-inherit border-none text-[10px] font-bold uppercase gap-1 ${typeMeta.className}`}>
+                        <TypeIcon className="h-3 w-3" />
+                        {typeMeta.label}
                     </Badge>
                     <Button
                         variant="ghost"
@@ -164,6 +174,19 @@ export function WhatsAppChatDetail({ lead, onClose, loading = false }: WhatsAppC
                                         <Badge className="mt-1 bg-purple-100 text-purple-700 hover:bg-purple-100 border-none text-[10px] font-bold uppercase block w-fit">
                                             {lead.lifecycleStage}
                                         </Badge>
+                                    </div>
+                                )}
+                                {lead.leadClassification && (
+                                    <div>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">
+                                            <Tag className="h-3 w-3" /> Lead Classification
+                                        </span>
+                                        <Badge className="mt-1 bg-amber-100 text-amber-700 hover:bg-amber-100 border-none text-[10px] font-bold uppercase block w-fit">
+                                            {lead.leadClassification}
+                                        </Badge>
+                                        {lead.leadClassificationReason && (
+                                            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">{lead.leadClassificationReason}</p>
+                                        )}
                                     </div>
                                 )}
                             </div>

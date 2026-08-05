@@ -21,7 +21,7 @@ export default async function WhatsappDashboardPage({
         to = new Date(params.to);
     }
 
-    const { cold, hot } = await getWaDashboardData(from, to);
+    const { cold, hot, hubspotWa } = await getWaDashboardData(from, to);
 
-    return <WhatsappDashboardClient cold={cold} hot={hot} />;
+    return <WhatsappDashboardClient cold={cold} hot={hot} hubspotWa={hubspotWa} />;
 }

@@ -4,10 +4,11 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export const WA_STAGE_COUNT = 6;
 
-export type LeadType = 'cold' | 'hot';
+export type LeadType = 'cold' | 'hot' | 'hubspot_wa';
 
 export const COLD_TABLE = 'ENRICHED_LEADS';
 export const HOT_TABLE = 'hubspot_lead';
+export const HUBSPOT_WA_TABLE = 'hubspot_wa_outreach';
 
 // ── row shape ─────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,8 @@ export interface NormalizedWaLead {
     lastContacted: string | null;
     createdAt: string | null;
     lifecycleStage: string | null;
+    leadClassification: string | null;
+    leadClassificationReason: string | null;
     stages: WaStageValue[];
     conversation: ConversationMessage[];
     raw: any;
@@ -128,6 +131,13 @@ const HUBSPOT_LEAD_COLUMNS = `
     ${WA_STAGE_COLS_1_5}, "Whatsapp_6", "Whatsapp_6_status"
 `;
 
+// hubspot_wa_outreach only carries a single WhatsApp drip stage.
+const HUBSPOT_WA_OUTREACH_COLUMNS = `
+    lead_id, full_name, company_phone_number, lifecyclestage,
+    "Whatsapp Last Contacted", "Whatsapp_1", "Whatsapp_1_status", wa_conversation,
+    "Lead_Classification", "Lead_Classification_Reason", created_at
+`;
+
 async function fetchAll(tableName: string, columns: string, limit = 20000) {
     try {
         const { data, error } = await supabaseAdmin.from(tableName).select(columns).limit(limit);
@@ -144,9 +154,9 @@ async function fetchAll(tableName: string, columns: string, limit = 20000) {
 
 // ── normalization ─────────────────────────────────────────────────────────────
 
-export function normalizeWaRow(row: any, table: string, leadType: LeadType): NormalizedWaLead {
+export function normalizeWaRow(row: any, table: string, leadType: LeadType, stageCount: number = WA_STAGE_COUNT): NormalizedWaLead {
     const stages: WaStageValue[] = [];
-    for (let i = 1; i <= WA_STAGE_COUNT; i++) {
+    for (let i = 1; i <= stageCount; i++) {
         // Stage 6 is lowercase (whatsapp_6/whatsapp_6_status) on ENRICHED_LEADS.
         stages.push({
             stage: i,
@@ -172,6 +182,8 @@ export function normalizeWaRow(row: any, table: string, leadType: LeadType): Nor
         lastContacted: row['Whatsapp Last Contacted'] || null,
         createdAt: row.created_at || null,
         lifecycleStage: row.lifecyclestage || null,
+        leadClassification: row['Lead_Classification'] || null,
+        leadClassificationReason: row['Lead_Classification_Reason'] || null,
         stages,
         conversation,
         raw: row,
@@ -179,14 +191,16 @@ export function normalizeWaRow(row: any, table: string, leadType: LeadType): Nor
 }
 
 export async function fetchWaLeads(): Promise<NormalizedWaLead[]> {
-    const [enrichedRows, hubspotRows] = await Promise.all([
+    const [enrichedRows, hubspotRows, hubspotWaRows] = await Promise.all([
         fetchAll(COLD_TABLE, ENRICHED_LEADS_COLUMNS),
         fetchAll(HOT_TABLE, HUBSPOT_LEAD_COLUMNS),
+        fetchAll(HUBSPOT_WA_TABLE, HUBSPOT_WA_OUTREACH_COLUMNS),
     ]);
 
     return [
         ...enrichedRows.map((r: any) => normalizeWaRow(r, COLD_TABLE, 'cold')),
         ...hubspotRows.map((r: any) => normalizeWaRow(r, HOT_TABLE, 'hot')),
+        ...hubspotWaRows.map((r: any) => normalizeWaRow(r, HUBSPOT_WA_TABLE, 'hubspot_wa', 1)),
     ];
 }
 
@@ -283,10 +297,12 @@ export async function getWaDashboardData(from: Date, to: Date) {
     const allLeads = await fetchWaLeads();
     const coldLeads = allLeads.filter(l => l.leadType === 'cold' && hasWaActivity(l));
     const hotLeads = allLeads.filter(l => l.leadType === 'hot' && hasWaActivity(l));
+    const hubspotWaLeads = allLeads.filter(l => l.leadType === 'hubspot_wa' && hasWaActivity(l));
 
     return {
         cold: computeWaMetrics(coldLeads, from, to),
         hot: computeWaMetrics(hotLeads, from, to),
+        hubspotWa: computeWaMetrics(hubspotWaLeads, from, to),
     };
 }
 
@@ -305,32 +321,40 @@ export function buildConversationTimeline(lead: NormalizedWaLead): TimelineEntry
     const timeline: TimelineEntry[] = [];
     let seq = 1;
 
-    // 1. Bot drip messages: Whatsapp_1..6
+    // 1. Bot drip messages: Whatsapp_1..6 (the initial outbound templates)
+    const stageContents = new Set<string>();
     lead.stages.forEach(s => {
         if (!truthyText(s.content)) return;
+        const trimmed = String(s.content).trim();
+        stageContents.add(trimmed);
         const d = parseStatusDate(s.status);
         timeline.push({
             type: 'bot',
             label: `Whatsapp ${s.stage}`,
-            content: String(s.content).trim(),
+            content: trimmed,
             date: d ? d.toISOString() : null,
             status: s.status,
             sequence: seq++,
         });
     });
 
-    // 2. Full wa_conversation exchange (chronological)
+    // 2. Full wa_conversation exchange (chronological) — this is where the
+    // real back-and-forth conversation lives once the lead starts replying.
+    // Skip any outbound message that just repeats a Whatsapp_N template
+    // (the drip send and its wa_conversation echo are the same message).
     const sorted = [...lead.conversation].sort(
         (a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
     );
     sorted.forEach(m => {
         const content = m.message || '';
         if (!content || !String(content).trim()) return;
+        const trimmed = String(content).trim();
         const isUser = m.role === 'user' || m.direction === 'inbound';
+        if (!isUser && stageContents.has(trimmed)) return;
         timeline.push({
             type: isUser ? 'user' : 'bot',
             label: isUser ? 'User Reply' : 'Bot Reply',
-            content: String(content).trim(),
+            content: trimmed,
             date: m.timestamp || m.status_updated_at || null,
             status: isUser ? null : (m.status || m.status_updated_at || null),
             sequence: seq++,

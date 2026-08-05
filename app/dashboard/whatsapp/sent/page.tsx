@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Send, CheckCheck, Clock, XCircle, Search, Snowflake, Flame } from "lucide-react";
+import { Send, CheckCheck, Clock, XCircle, Search, Snowflake, Flame, Building2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -9,6 +9,12 @@ import { useState, useEffect, useMemo } from "react";
 import { SPLoader } from "@/components/sp-loader";
 import { subDays } from "date-fns";
 import type { NormalizedWaLead, LeadType } from "@/lib/services/whatsapp-outreach";
+
+const LEAD_TYPE_META: Record<LeadType, { label: string; icon: typeof Flame; className: string }> = {
+    hot: { label: 'Hot', icon: Flame, className: 'bg-orange-50 text-orange-700 border-orange-200' },
+    cold: { label: 'Cold', icon: Snowflake, className: 'bg-blue-50 text-blue-700 border-blue-100' },
+    hubspot_wa: { label: 'HubSpot WA', icon: Building2, className: 'bg-purple-50 text-purple-700 border-purple-200' },
+};
 
 interface SentWaMessage {
     id: string;
@@ -65,6 +71,7 @@ function buildMessages(leads: NormalizedWaLead[]): { messages: SentWaMessage[]; 
 export default function WhatsappSentPage() {
     const [coldLeads, setColdLeads] = useState<NormalizedWaLead[]>([]);
     const [hotLeads, setHotLeads] = useState<NormalizedWaLead[]>([]);
+    const [hubspotWaLeads, setHubspotWaLeads] = useState<NormalizedWaLead[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [dateRange, setDateRange] = useState<any>({
@@ -80,6 +87,7 @@ export default function WhatsappSentPage() {
             const json = await res.json();
             setColdLeads(json.cold?.leads || []);
             setHotLeads(json.hot?.leads || []);
+            setHubspotWaLeads(json.hubspotWa?.leads || []);
         } catch (e) {
             console.error("WhatsApp sent fetch error", e);
         } finally {
@@ -92,7 +100,7 @@ export default function WhatsappSentPage() {
     }, []);
 
     const dateFilteredLeads = useMemo(() => {
-        const all = [...coldLeads, ...hotLeads];
+        const all = [...coldLeads, ...hotLeads, ...hubspotWaLeads];
         if (!dateRange?.from) return all;
         const from = new Date(dateRange.from);
         from.setHours(0, 0, 0, 0);
@@ -106,7 +114,7 @@ export default function WhatsappSentPage() {
             if (isNaN(d.getTime())) return false;
             return d >= from && d <= to;
         });
-    }, [coldLeads, hotLeads, dateRange]);
+    }, [coldLeads, hotLeads, hubspotWaLeads, dateRange]);
 
     const { messages, delivered, read, failed } = useMemo(() => buildMessages(dateFilteredLeads), [dateFilteredLeads]);
 
@@ -122,7 +130,7 @@ export default function WhatsappSentPage() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold">Total Sent Messages</h1>
-                    <p className="text-slate-500">Outbound WhatsApp messages from ENRICHED_LEADS & hubspot_lead</p>
+                    <p className="text-slate-500">Outbound WhatsApp messages from ENRICHED_LEADS, hubspot_lead & hubspot_wa_outreach</p>
                 </div>
                 <DateRangePicker onUpdate={(val) => setDateRange(val.range)} />
             </div>
@@ -150,10 +158,16 @@ export default function WhatsappSentPage() {
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-2">
                                             <p className="font-bold text-slate-950">{msg.recipient}</p>
-                                            <Badge variant="outline" className={`text-[9px] uppercase font-bold gap-1 ${msg.leadType === 'hot' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
-                                                {msg.leadType === 'hot' ? <Flame className="h-2.5 w-2.5" /> : <Snowflake className="h-2.5 w-2.5" />}
-                                                {msg.leadType === 'hot' ? 'Hot' : 'Cold'}
-                                            </Badge>
+                                            {(() => {
+                                                const meta = LEAD_TYPE_META[msg.leadType];
+                                                const Icon = meta.icon;
+                                                return (
+                                                    <Badge variant="outline" className={`text-[9px] uppercase font-bold gap-1 ${meta.className}`}>
+                                                        <Icon className="h-2.5 w-2.5" />
+                                                        {meta.label}
+                                                    </Badge>
+                                                );
+                                            })()}
                                         </div>
                                         <p className="text-sm text-slate-600 max-w-xl">{msg.message}</p>
                                         <div className="flex items-center gap-3 mt-2">

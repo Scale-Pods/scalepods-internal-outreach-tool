@@ -17,6 +17,7 @@ export async function GET(req: Request) {
         const allLeads = await fetchWaLeads();
         const coldLeads = allLeads.filter(l => l.leadType === 'cold' && hasWaActivity(l));
         const hotLeads = allLeads.filter(l => l.leadType === 'hot' && hasWaActivity(l));
+        const hubspotWaLeads = allLeads.filter(l => l.leadType === 'hubspot_wa' && hasWaActivity(l));
 
         return NextResponse.json({
             cold: {
@@ -26,6 +27,10 @@ export async function GET(req: Request) {
             hot: {
                 metrics: computeWaMetrics(hotLeads, from, to),
                 leads: hotLeads,
+            },
+            hubspotWa: {
+                metrics: computeWaMetrics(hubspotWaLeads, from, to),
+                leads: hubspotWaLeads,
             },
         });
     } catch (error: any) {

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
     Search, Filter, ChevronLeft, ChevronRight,
-    RefreshCw, Database, X, Snowflake, Flame,
+    RefreshCw, Database, X, Snowflake, Flame, Building2,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import {
@@ -20,9 +20,16 @@ import { startOfDay, endOfDay, subDays } from "date-fns";
 import type { NormalizedWaLead, LeadType } from "@/lib/services/whatsapp-outreach";
 import { getWaLastContacted, countSentMessages, hasReplied } from "@/lib/services/whatsapp-outreach";
 
+const LEAD_TYPE_META: Record<LeadType, { label: string; icon: typeof Flame; className: string }> = {
+    hot: { label: 'Hot', icon: Flame, className: 'bg-orange-50 text-orange-700 border-orange-200' },
+    cold: { label: 'Cold', icon: Snowflake, className: 'bg-blue-50 text-blue-700 border-blue-100' },
+    hubspot_wa: { label: 'HubSpot WA', icon: Building2, className: 'bg-purple-50 text-purple-700 border-purple-200' },
+};
+
 export default function WhatsappLeadsPage() {
     const [coldLeads, setColdLeads] = useState<NormalizedWaLead[]>([]);
     const [hotLeads, setHotLeads] = useState<NormalizedWaLead[]>([]);
+    const [hubspotWaLeads, setHubspotWaLeads] = useState<NormalizedWaLead[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedLead, setSelectedLead] = useState<NormalizedWaLead | null>(null);
@@ -48,6 +55,7 @@ export default function WhatsappLeadsPage() {
             const json = await res.json();
             setColdLeads(json.cold?.leads || []);
             setHotLeads(json.hot?.leads || []);
+            setHubspotWaLeads(json.hubspotWa?.leads || []);
         } catch (err) {
             console.error("Failed to fetch WhatsApp leads:", err);
         } finally {
@@ -59,7 +67,7 @@ export default function WhatsappLeadsPage() {
         fetchData();
     }, []);
 
-    const combinedLeads = useMemo(() => [...coldLeads, ...hotLeads], [coldLeads, hotLeads]);
+    const combinedLeads = useMemo(() => [...coldLeads, ...hotLeads, ...hubspotWaLeads], [coldLeads, hotLeads, hubspotWaLeads]);
 
     const filteredLeads = useMemo(() => {
         return combinedLeads.filter(lead => {
@@ -124,7 +132,7 @@ export default function WhatsappLeadsPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0">
                 <div>
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight">WhatsApp Leads</h1>
-                    <p className="text-slate-500 text-xs">Cold (ENRICHED_LEADS) & Hot (hubspot_lead) leads with WhatsApp activity</p>
+                    <p className="text-slate-500 text-xs">Cold (ENRICHED_LEADS), Hot (hubspot_lead) & HubSpot WA (hubspot_wa_outreach) leads with WhatsApp activity</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <DateRangePicker onUpdate={({ range }) => setDateRange({ from: range?.from, to: range?.to })} />
@@ -160,6 +168,7 @@ export default function WhatsappLeadsPage() {
                     <DropdownMenuContent align="end" className="w-44">
                         <DropdownMenuItem onClick={() => toggleSourceFilter('hot')}>Hot Leads {activeFilters.source.includes('hot') && "✓"}</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => toggleSourceFilter('cold')}>Cold Leads {activeFilters.source.includes('cold') && "✓"}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toggleSourceFilter('hubspot_wa')}>HubSpot WA {activeFilters.source.includes('hubspot_wa') && "✓"}</DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
 
@@ -203,10 +212,16 @@ export default function WhatsappLeadsPage() {
                                                 <td className="px-3 py-2 font-semibold text-slate-900 text-xs">{lead.fullName}</td>
                                                 <td className="px-3 py-2 text-slate-500 font-mono text-[11px]">{lead.phone}</td>
                                                 <td className="px-3 py-2">
-                                                    <Badge variant="outline" className={`text-[9px] uppercase font-bold px-1.5 py-0.5 gap-1 ${lead.leadType === 'hot' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
-                                                        {lead.leadType === 'hot' ? <Flame className="h-2.5 w-2.5" /> : <Snowflake className="h-2.5 w-2.5" />}
-                                                        {lead.leadType === 'hot' ? 'Hot' : 'Cold'}
-                                                    </Badge>
+                                                    {(() => {
+                                                        const meta = LEAD_TYPE_META[lead.leadType];
+                                                        const Icon = meta.icon;
+                                                        return (
+                                                            <Badge variant="outline" className={`text-[9px] uppercase font-bold px-1.5 py-0.5 gap-1 ${meta.className}`}>
+                                                                <Icon className="h-2.5 w-2.5" />
+                                                                {meta.label}
+                                                            </Badge>
+                                                        );
+                                                    })()}
                                                 </td>
                                                 <td className="px-3 py-2 text-center font-bold text-slate-700">{sentCount}</td>
                                                 <td className="px-3 py-2 text-center">
