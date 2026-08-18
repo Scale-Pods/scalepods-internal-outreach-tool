@@ -47,7 +47,12 @@ const DOT_COLOR: Record<Status, string> = {
     error: 'bg-red-500',
 };
 
-export function TwilioDialer() {
+type TwilioDialerProps = {
+    /** Render a custom trigger element; receives an onClick to open the dialer. */
+    renderTrigger?: (props: { onClick: () => void }) => React.ReactNode;
+};
+
+export function TwilioDialer({ renderTrigger }: TwilioDialerProps = {}) {
     const [isOpen, setIsOpen] = useState(false);
     const [phoneNumber, setPhoneNumber] = useState('');
     const [status, setStatus] = useState<Status>('idle');
@@ -188,14 +193,18 @@ export function TwilioDialer() {
 
     return (
         <>
-            {/* Floating trigger button */}
-            <button
-                onClick={() => setIsOpen(true)}
-                className="fixed bottom-8 right-8 z-40 h-14 w-14 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-white shadow-[0_0_30px_-5px_rgba(16,185,129,0.7)] transition-all duration-200 flex items-center justify-center group"
-                aria-label="Open dialer"
-            >
-                <Phone className="h-6 w-6 transition-transform duration-200 group-hover:rotate-12" />
-            </button>
+            {/* Trigger */}
+            {renderTrigger ? (
+                renderTrigger({ onClick: () => setIsOpen(true) })
+            ) : (
+                <button
+                    onClick={() => setIsOpen(true)}
+                    className="fixed bottom-8 right-8 z-40 h-14 w-14 rounded-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-white shadow-[0_0_30px_-5px_rgba(16,185,129,0.7)] transition-all duration-200 flex items-center justify-center group"
+                    aria-label="Open dialer"
+                >
+                    <Phone className="h-6 w-6 transition-transform duration-200 group-hover:rotate-12" />
+                </button>
+            )}
 
             {/* Modal overlay */}
             {isOpen && (

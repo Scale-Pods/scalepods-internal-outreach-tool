@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity, Building2 } from "lucide-react";
+import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity, Building2, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import {
@@ -18,6 +18,7 @@ import { MaqsamBalanceDetail } from "@/components/dashboard/maqsam-balance-detai
 import { calculateDuration } from "@/lib/utils";
 import { useMemo } from "react";
 import { logout } from "@/app/actions/auth";
+import { TwilioDialer } from "@/components/voice/twilio-dialer";
 
 const sidebarItems = [
     {
@@ -401,6 +402,18 @@ function DashboardContent({
                     </nav>
 
                     <div className="mt-auto p-4 mb-2 space-y-2">
+                        <TwilioDialer
+                            renderTrigger={({ onClick }) => (
+                                <Button
+                                    variant="ghost"
+                                    className="w-full justify-start gap-2 px-4 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 transition-all duration-300"
+                                    onClick={onClick}
+                                >
+                                    <Phone className="h-4 w-4 flex-shrink-0" />
+                                    <span className="whitespace-nowrap">Call</span>
+                                </Button>
+                            )}
+                        />
                         <Button
                             variant="ghost"
                             className="w-full justify-start gap-2 px-4 text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all duration-300"
