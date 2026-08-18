@@ -355,7 +355,7 @@ function DashboardContent({
 
                 {/* Sidebar */}
                 <aside
-                    className={`fixed inset-y-0 left-0 z-50 w-64 flex-col bg-white border-r border-slate-200/60 font-sans relative overflow-hidden transition-transform duration-300 ease-in-out flex
+                    className={`fixed inset-y-0 left-0 z-50 w-64 flex-col bg-white border-r border-slate-200/60 font-sans overflow-hidden transition-transform duration-300 ease-in-out flex flex-shrink-0
                         ${isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
                         md:static md:translate-x-0 md:flex`}
                 >

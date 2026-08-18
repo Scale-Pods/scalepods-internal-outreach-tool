@@ -45,7 +45,7 @@ export function DateRangePicker({
     }, [open, date])
 
     if (!isMounted) {
-        return <div className={cn("grid gap-2 h-10 w-[260px] bg-slate-100 rounded-xl animate-pulse", className)}></div>
+        return <div className={cn("grid gap-2 h-10 w-full sm:w-[260px] bg-slate-100 rounded-xl animate-pulse", className)}></div>
     }
 
     const presets = [
@@ -137,7 +137,7 @@ export function DateRangePicker({
                         id="date"
                         variant={"outline"}
                         className={cn(
-                            "w-[260px] justify-start text-left font-normal bg-white border-border text-slate-900 hover:bg-zinc-50 rounded-xl h-10 shadow-sm",
+                            "w-full sm:w-[260px] justify-start text-left font-normal bg-white border-border text-slate-900 hover:bg-zinc-50 rounded-xl h-10 shadow-sm",
                             !date && "text-muted-foreground"
                         )}
                     >
@@ -156,24 +156,24 @@ export function DateRangePicker({
                         )}
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
-                    <div className="flex">
-                        <div className="p-2 border-r border-border w-[160px]">
-                            <div className="space-y-1">
+                <PopoverContent className="w-[calc(100vw-2rem)] sm:w-auto p-0 max-h-[80vh] overflow-y-auto" align="end">
+                    <div className="flex flex-col sm:flex-row">
+                        <div className="p-2 border-b sm:border-b-0 sm:border-r border-border sm:w-[160px]">
+                            <div className="flex sm:block gap-1 sm:gap-0 sm:space-y-1 overflow-x-auto sm:overflow-visible">
                                 {presets.map((preset) => (
                                     <Button
                                         key={preset.label}
                                         variant="ghost"
-                                        className="w-full justify-start font-normal text-sm h-8"
+                                        className="w-auto sm:w-full justify-start font-normal text-sm h-8 whitespace-nowrap flex-shrink-0"
                                         onClick={() => handlePresetChange(preset.label)}
                                     >
                                         {preset.label}
                                     </Button>
                                 ))}
-                                <div className="pt-2 mt-2 border-t border-border">
+                                <div className="sm:pt-2 sm:mt-2 sm:border-t border-border flex-shrink-0">
                                     <Button
                                         variant="ghost"
-                                        className="w-full justify-start font-normal text-sm h-8 text-slate-500 hover:text-slate-900"
+                                        className="w-auto sm:w-full justify-start font-normal text-sm h-8 text-slate-500 hover:text-slate-900 whitespace-nowrap"
                                         onClick={() => setTempLabel("Custom Range")}
                                     >
                                         Custom Range
@@ -181,7 +181,19 @@ export function DateRangePicker({
                                 </div>
                             </div>
                         </div>
-                        <div className="p-0">
+                        <div className="p-0 overflow-x-auto">
+                            <Calendar
+                                initialFocus
+                                mode="range"
+                                defaultMonth={tempDate?.from}
+                                selected={tempDate}
+                                onSelect={(val) => {
+                                    setTempDate(val);
+                                    setTempLabel("Custom Range");
+                                }}
+                                numberOfMonths={1}
+                                className="sm:hidden"
+                            />
                             <Calendar
                                 initialFocus
                                 mode="range"
@@ -192,6 +204,7 @@ export function DateRangePicker({
                                     setTempLabel("Custom Range");
                                 }}
                                 numberOfMonths={2}
+                                className="hidden sm:block"
                             />
                         </div>
                     </div>

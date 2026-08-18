@@ -13,12 +13,12 @@ interface AuthModalProps {
 export function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-md p-0 overflow-hidden bg-zinc-950 border-white/10 shadow-2xl rounded-3xl">
+            <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-md p-0 overflow-hidden bg-zinc-950 border-white/10 shadow-2xl rounded-3xl">
                 <DialogHeader className="sr-only">
                     <DialogTitle>Authentication</DialogTitle>
                     <DialogDescription>Sign in or request a password reset.</DialogDescription>
                 </DialogHeader>
-                <div className="relative p-8 pt-12">
+                <div className="relative p-6 sm:p-8 pt-10 sm:pt-12">
                     {/* Background effects */}
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-emerald-500/20 blur-[80px] -z-10 rounded-full"></div>
 
