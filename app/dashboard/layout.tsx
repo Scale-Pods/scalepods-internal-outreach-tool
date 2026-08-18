@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity, Building2, Phone } from "lucide-react";
+import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity, Building2, Phone, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import {
@@ -323,17 +323,46 @@ function DashboardContent({
         type: 'vapi'
     });
 
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+    // Close the mobile sidebar whenever the route changes
+    useEffect(() => {
+        setIsMobileSidebarOpen(false);
+    }, [pathname]);
+
+    // Prevent body scroll while the mobile sidebar drawer is open
+    useEffect(() => {
+        if (isMobileSidebarOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => { document.body.style.overflow = ''; };
+    }, [isMobileSidebarOpen]);
+
 
     const content = (() => {
 
         return (
             <div className="flex h-screen overflow-hidden bg-background text-foreground">
+                {/* Mobile sidebar backdrop */}
+                {isMobileSidebarOpen && (
+                    <div
+                        className="fixed inset-0 z-40 bg-black/50 md:hidden"
+                        onClick={() => setIsMobileSidebarOpen(false)}
+                    />
+                )}
+
                 {/* Sidebar */}
-                <aside className="hidden w-64 flex-col bg-white border-r border-slate-200/60 md:flex font-sans relative overflow-hidden">
+                <aside
+                    className={`fixed inset-y-0 left-0 z-50 w-64 flex-col bg-white border-r border-slate-200/60 font-sans relative overflow-hidden transition-transform duration-300 ease-in-out flex
+                        ${isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
+                        md:static md:translate-x-0 md:flex`}
+                >
                     <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
                     <div className="absolute bottom-0 left-0 w-32 h-32 bg-cyan-600/5 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none" />
                     {/* Logo Section */}
-                    <div className="px-4 py-4 flex justify-center items-center">
+                    <div className="px-4 py-4 flex justify-center items-center relative">
                         <Link href="/" className="relative w-full h-20 block">
                             <Image
                                 src="/ScalePods - Logo- FINAL.png"
@@ -344,6 +373,13 @@ function DashboardContent({
                                 priority
                             />
                         </Link>
+                        <button
+                            className="absolute right-3 top-3 md:hidden text-slate-500 hover:text-slate-800 p-1"
+                            onClick={() => setIsMobileSidebarOpen(false)}
+                            aria-label="Close menu"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
                     </div>
 
                     <div className="px-4 pb-2">
@@ -430,9 +466,39 @@ function DashboardContent({
                 </aside>
 
                 {/* Main Content */}
-                <div className="flex flex-1 flex-col overflow-hidden">
+                <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+                    {/* Mobile top bar */}
+                    <div className="flex md:hidden items-center gap-3 h-14 px-4 border-b border-slate-200/60 bg-white flex-shrink-0">
+                        <button
+                            className="text-slate-600 hover:text-cyan-600 p-1.5 -ml-1.5 rounded-lg hover:bg-slate-100 transition-colors flex-shrink-0"
+                            onClick={() => setIsMobileSidebarOpen(true)}
+                            aria-label="Open menu"
+                        >
+                            <Menu className="h-6 w-6" />
+                        </button>
+                        <span className="font-semibold text-slate-700 truncate flex-1">{activeConfig.label}</span>
+                        {currentContext === "master" && (
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <button
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50/30 text-blue-700"
+                                    onClick={() => setWalletModal({ isOpen: true, type: 'vapi' })}
+                                    aria-label="Vapi balance"
+                                >
+                                    <Mic className="h-4 w-4" />
+                                </button>
+                                <button
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50/30 text-rose-700"
+                                    onClick={() => setWalletModal({ isOpen: true, type: 'twilio' })}
+                                    aria-label="Twilio balance"
+                                >
+                                    <Smartphone className="h-4 w-4" />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
                     {currentContext === "master" && (
-                        <header className="flex h-14 items-center gap-4 border-border border-border bg-card px-6 lg:h-[60px]">
+                        <header className="hidden md:flex h-14 items-center gap-4 border-border border-border bg-card px-6 lg:h-[60px]">
                             <div className="flex flex-1 items-center justify-between">
                                 <div />
 
