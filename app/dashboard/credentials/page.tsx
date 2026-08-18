@@ -13,20 +13,36 @@ import { useRouter } from "next/navigation";
 import { useData } from "@/context/DataContext";
 
 export default function CredentialsPage() {
-    const { calls, voiceBalance, maqsamBalance, twilioBalance, loadingBalances } = useData();
+    const { calls, voiceBalance, vapiHotBalance, vapiColdBalance, maqsamBalance, twilioBalance, loadingBalances } = useData();
 
     const vapiAgentUsed = React.useMemo(() => {
+        if (voiceBalance?.vapi?.used !== undefined && voiceBalance?.vapi?.used !== 0) {
+            return voiceBalance.vapi.used;
+        }
         if (!calls || !Array.isArray(calls)) return 0;
-        return calls.filter((c: any) => c.source === 'vapi').reduce((acc: number, call: any) => acc + (call.breakdown?.agent || 0), 0);
-    }, [calls]);
+        return calls.reduce((acc: number, call: any) => acc + (call.breakdown?.agent || 0), 0);
+    }, [calls, voiceBalance]);
+
+    const vapiHotUsed = React.useMemo(() => {
+        if (typeof vapiHotBalance?.used === 'number' && vapiHotBalance.used !== 0) return vapiHotBalance.used;
+        if (!calls || !Array.isArray(calls)) return 0;
+        return calls.filter((c: any) => c.accountType === 'hubspot')
+            .reduce((acc: number, call: any) => acc + (call.breakdown?.agent || 0), 0);
+    }, [calls, vapiHotBalance]);
+
+    const vapiColdUsed = React.useMemo(() => {
+        if (typeof vapiColdBalance?.used === 'number' && vapiColdBalance.used !== 0) return vapiColdBalance.used;
+        if (!calls || !Array.isArray(calls)) return 0;
+        return calls.filter((c: any) => c.accountType === 'cold')
+            .reduce((acc: number, call: any) => acc + (call.breakdown?.agent || 0), 0);
+    }, [calls, vapiColdBalance]);
 
     const maqsamUsedCost = React.useMemo(() => {
         if (!calls || !Array.isArray(calls)) return 0;
         return calls.filter((c: any) => {
-            const isMaqsam = c.source === 'maqsam';
             const phoneStr = String(c.phone || c.customer_number || "");
             const isUAE = phoneStr.startsWith('+971') || phoneStr.startsWith('971');
-            return isMaqsam || isUAE;
+            return isUAE;
         }).reduce((acc: number, call: any) => acc + (call.costValue || 0), 0);
     }, [calls]);
 
@@ -123,11 +139,18 @@ export default function CredentialsPage() {
                     iconColor="text-slate-600"
                     iconBg="bg-slate-50"
                 >
-                    <div className="grid gap-8 md:grid-cols-1">
-                        {/* UK Section */}
+                    <div className="grid gap-8 md:grid-cols-2">
+                        {/* Hot Leads (US) */}
                         <div className="space-y-4 bg-slate-50/50 p-4 rounded-xl border border-border">
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Hot Leads (HubSpot)</p>
+                            <ReadOnlyField label="Twilio (US)" value="+1 (318) 723-2814" />
+                            <ReadOnlyField label="Agent ID" value="35778275-98f9-4cd9-82f8-a55043b0fa09" />
+                        </div>
+                        {/* Cold Leads (UK) */}
+                        <div className="space-y-4 bg-slate-50/50 p-4 rounded-xl border border-border">
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Cold Leads</p>
                             <ReadOnlyField label="Twilio (UK)" value="+44 (7414) 280238" />
-                            <ReadOnlyField label="Agent ID" value="39fb3ad9-5fdf-449c-827b-05501aeb181c" />
+                            <ReadOnlyField label="Agent ID" value="ddce7ac4-ee94-4286-a9b4-cdb6b10c6fb1" />
                         </div>
                     </div>
                 </CredentialSection>
@@ -163,12 +186,27 @@ export default function CredentialsPage() {
                                     Total Lifetime Consumption
                                 </p>
                             </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-white p-4 rounded-lg border border-borderlue-100 text-center shadow-sm">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Hot Leads Used</p>
+                                    <p className="text-lg font-bold text-slate-800">${vapiHotUsed.toFixed(2)}</p>
+                                    {typeof vapiHotBalance?.balance === 'number' && (
+                                        <p className="text-[10px] text-slate-400 mt-1">${vapiHotBalance.balance.toFixed(2)} left</p>
+                                    )}
+                                </div>
+                                <div className="bg-white p-4 rounded-lg border border-borderlue-100 text-center shadow-sm">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cold Leads Used</p>
+                                    <p className="text-lg font-bold text-slate-800">${vapiColdUsed.toFixed(2)}</p>
+                                    {typeof vapiColdBalance?.balance === 'number' && (
+                                        <p className="text-[10px] text-slate-400 mt-1">${vapiColdBalance.balance.toFixed(2)} left</p>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-
-                        
                     </div>
                 </CredentialSection>
 
+                {/* Maqsam Section */}
                 <CredentialSection
                     title="Maqsam Telephony"
                     description="VoIP and Telephony provider credentials."
@@ -182,7 +220,6 @@ export default function CredentialsPage() {
                         </Button>
                     }
                 >
-
                     <MaqsamBalanceDetail initialBalance={maqsamBalance} />
                 </CredentialSection>
 

@@ -29,6 +29,18 @@ function getCountryName(phoneNumber: string) {
     return rate?.Country || "Unknown";
 }
 
+// Each VAPI account places outbound calls from its own dedicated Twilio number —
+// used to pick the correct BYOC partner rate tier below.
+const PROVIDER_NUMBER_BY_ACCOUNT: Record<string, string> = {
+    'hubspot': '+13187232814',   // Hot leads bot (US)
+    'cold leads': '+447414280238', // Cold leads bot (UK)
+};
+
+function getProviderNumberForAccount(vapiAccount: string | undefined | null): string {
+    const key = (vapiAccount || '').toLowerCase().trim();
+    return PROVIDER_NUMBER_BY_ACCOUNT[key] || process.env.TWILIO_PHONE_NUMBER || '';
+}
+
 function calculateTelephonyCost(durationSecs: number, phoneNumber: string, isInbound: boolean, providerNumber?: string) {
     if (isInbound) return durationSecs > 0 ? 0.02 : 0;
     if (!durationSecs || durationSecs <= 0) return 0;
@@ -192,8 +204,10 @@ async function fetchArchive(from: Date, to: Date) {
                 // Agent Cost from vapi_call_logs
                 const agentCost = db.cost_usd || 0;
                 
-                // Estimate Telephony Cost (Twilio)
-                const telCost = calculateTelephonyCost(duration, db.customer_phone, db.type === 'inbound');
+                // Estimate Telephony Cost (Twilio) — rate tier depends on which
+                // dedicated Twilio number this account calls from
+                const providerNumber = getProviderNumberForAccount(db.vapi_account);
+                const telCost = calculateTelephonyCost(duration, db.customer_phone, db.type === 'inbound', providerNumber);
                 
                 // Total Cost is Agent + Telephony
                 const totalCost = agentCost + telCost;

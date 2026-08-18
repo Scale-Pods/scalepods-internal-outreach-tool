@@ -11,6 +11,8 @@ interface DataContextType {
     loadingCalls: boolean;
     loadingBalances: boolean;
     voiceBalance: any;
+    vapiHotBalance: any;
+    vapiColdBalance: any;
     maqsamBalance: any;
     twilioBalance: any;
     error: string | null;
@@ -31,6 +33,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const [loadingCalls, setLoadingCalls] = useState(true);
     const [loadingBalances, setLoadingBalances] = useState(true);
     const [voiceBalance, setVoiceBalance] = useState<any>(null);
+    const [vapiHotBalance, setVapiHotBalance] = useState<any>(null);
+    const [vapiColdBalance, setVapiColdBalance] = useState<any>(null);
     const [maqsamBalance, setMaqsamBalance] = useState<any>(null);
     const [twilioBalance, setTwilioBalance] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
@@ -91,7 +95,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 fetch('/api/maqsam/balance'),
                 fetch('/api/twilio/balance')
             ]);
-            if (vapiRes.ok) setVoiceBalance(await vapiRes.json());
+            if (vapiRes.ok) {
+                const vapiJson = await vapiRes.json();
+                setVoiceBalance(vapiJson);
+                setVapiHotBalance(vapiJson.vapiHot);
+                setVapiColdBalance(vapiJson.vapiCold);
+            }
             if (maqsamRes.ok) setMaqsamBalance(await maqsamRes.json());
             if (twilioRes.ok) setTwilioBalance(await twilioRes.json());
         } catch (err) { }
@@ -115,6 +124,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             loadingCalls,
             loadingBalances,
             voiceBalance,
+            vapiHotBalance,
+            vapiColdBalance,
             maqsamBalance,
             twilioBalance,
             error,

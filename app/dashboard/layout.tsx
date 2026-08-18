@@ -44,7 +44,7 @@ const sidebarItems = [
 ];
 
 function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolean, onClose: () => void, type: 'vapi' | 'maqsam' | 'twilio', details?: any, calls?: any[] }) {
-    const { voiceBalance, maqsamBalance } = useData();
+    const { voiceBalance, vapiHotBalance, vapiColdBalance, maqsamBalance } = useData();
 
     const title = (() => {
         switch (type) {
@@ -73,21 +73,41 @@ function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolea
         }
         if (!calls || !Array.isArray(calls)) return 0;
         // Fallback to summing 'agent' costs from logs specifically
-        return calls.filter((c: any) => c.source === 'vapi').reduce((acc: number, call: any) => acc + (call.breakdown?.agent || 0), 0);
+        return calls.reduce((acc: number, call: any) => acc + (call.breakdown?.agent || 0), 0);
     }, [calls, voiceBalance]);
+
+    // Hot leads (hubspot) vs Cold leads agent-cost fallback, from call logs' accountType
+    const vapiHotUsedFallback = useMemo(() => {
+        if (!calls || !Array.isArray(calls)) return 0;
+        return calls.filter((c: any) => c.accountType === 'hubspot')
+            .reduce((acc: number, call: any) => acc + (call.breakdown?.agent || 0), 0);
+    }, [calls]);
+
+    const vapiColdUsedFallback = useMemo(() => {
+        if (!calls || !Array.isArray(calls)) return 0;
+        return calls.filter((c: any) => c.accountType === 'cold')
+            .reduce((acc: number, call: any) => acc + (call.breakdown?.agent || 0), 0);
+    }, [calls]);
+
+    const vapiHotUsed = typeof vapiHotBalance?.used === 'number' && vapiHotBalance.used !== 0
+        ? vapiHotBalance.used
+        : vapiHotUsedFallback;
+
+    const vapiColdUsed = typeof vapiColdBalance?.used === 'number' && vapiColdBalance.used !== 0
+        ? vapiColdBalance.used
+        : vapiColdUsedFallback;
 
     const maqsamUsedCost = useMemo(() => {
         if (!calls || !Array.isArray(calls)) return 0;
         return calls.filter((c: any) => {
-            const isMaqsam = c.source === 'maqsam';
             const provisionedNum = String(c.phoneNumber || "");
             const isSpecificMaqsamNum = provisionedNum.replace(/\D/g, '') === '97148714150';
 
-            // Detection based on customer number prefix (legacy)
+            // Detection based on customer number prefix
             const phoneStr = String(c.phone || c.customer_number || "");
             const isUAE = phoneStr.startsWith('+971') || phoneStr.startsWith('971');
 
-            return isMaqsam || isUAE || isSpecificMaqsamNum;
+            return isUAE || isSpecificMaqsamNum;
         }).reduce((acc: number, call: any) => {
             // For Maqsam/Telephony, specifically sum the telephony-only portion
             return acc + (call.breakdown?.telephony || call.costValue || 0);
@@ -117,6 +137,26 @@ function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolea
                                     ${vapiAgentUsed.toFixed(2)}
                                 </span>
 
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="flex flex-col text-center bg-card p-3 rounded-lg border border-borderlue-100 shadow-sm">
+                                    <span className="text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wider mb-1">Hot Leads Used</span>
+                                    <span className="text-lg font-bold text-foreground/90">
+                                        ${vapiHotUsed.toFixed(2)}
+                                    </span>
+                                    {typeof vapiHotBalance?.balance === 'number' && (
+                                        <span className="text-[10px] text-muted-foreground/70 mt-1">${vapiHotBalance.balance.toFixed(2)} left</span>
+                                    )}
+                                </div>
+                                <div className="flex flex-col text-center bg-card p-3 rounded-lg border border-borderlue-100 shadow-sm">
+                                    <span className="text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wider mb-1">Cold Leads Used</span>
+                                    <span className="text-lg font-bold text-foreground/90">
+                                        ${vapiColdUsed.toFixed(2)}
+                                    </span>
+                                    {typeof vapiColdBalance?.balance === 'number' && (
+                                        <span className="text-[10px] text-muted-foreground/70 mt-1">${vapiColdBalance.balance.toFixed(2)} left</span>
+                                    )}
+                                </div>
                             </div>
                             <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2 h-12" onClick={() => window.open('https://vapi.ai', '_blank')}>
                                 <ExternalLink className="h-4 w-4" /> Add Funds to VAPI
@@ -297,21 +337,20 @@ function DashboardContent({
         }
         if (!calls || !Array.isArray(calls)) return 0;
         // Fallback to summing 'agent' costs from logs specifically
-        return calls.filter((c: any) => c.source === 'vapi').reduce((acc: number, call: any) => acc + (call.breakdown?.agent || 0), 0);
+        return calls.reduce((acc: number, call: any) => acc + (call.breakdown?.agent || 0), 0);
     }, [calls, voiceBalance]);
 
     const maqsamUsedCost = useMemo(() => {
         if (!calls || !Array.isArray(calls)) return 0;
         return calls.filter((c: any) => {
-            const isMaqsam = c.source === 'maqsam';
             const provisionedNum = String(c.phoneNumber || "");
             const isSpecificMaqsamNum = provisionedNum.replace(/\D/g, '') === '97148714150';
 
-            // Detection based on customer number prefix (legacy)
+            // Detection based on customer number prefix
             const phoneStr = String(c.phone || c.customer_number || "");
             const isUAE = phoneStr.startsWith('+971') || phoneStr.startsWith('971');
 
-            return isMaqsam || isUAE || isSpecificMaqsamNum;
+            return isUAE || isSpecificMaqsamNum;
         }).reduce((acc: number, call: any) => {
             // For Maqsam/Telephony, specifically sum the telephony-only portion
             return acc + (call.breakdown?.telephony || call.costValue || 0);
