@@ -35,15 +35,20 @@ export async function GET(request: NextRequest) {
         const contentLength = response.headers.get('Content-Length');
         const contentRange = response.headers.get('Content-Range');
 
+        const outHeaders: Record<string, string> = {
+            'Content-Type': contentType,
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'no-cache',
+        };
+        // Only set these when the upstream actually provided them — an empty
+        // string value is treated as Content-Length: 0 by some clients, which
+        // makes the audio appear to have no data even though bytes are streaming.
+        if (contentLength) outHeaders['Content-Length'] = contentLength;
+        if (contentRange) outHeaders['Content-Range'] = contentRange;
+
         return new NextResponse(response.body, {
             status: response.status === 206 ? 206 : 200,
-            headers: {
-                'Content-Type': contentType,
-                'Content-Length': contentLength || '',
-                'Content-Range': contentRange || '',
-                'Accept-Ranges': 'bytes',
-                'Cache-Control': 'no-cache',
-            },
+            headers: outHeaders,
         });
     } catch (error) {
         console.error('[AudioProxy] Internal error:', error);
