@@ -26,7 +26,15 @@ export async function POST(req: NextRequest) {
         return twimlResponse('<Say>Invalid or missing phone number.</Say>');
     }
 
+    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin).replace(/\/$/, '');
+    const statusCallback = `${baseUrl}/api/twilio/status-callback`;
+    const recordingCallback = `${baseUrl}/api/twilio/recording-callback`;
+
     return twimlResponse(
-        `<Dial callerId="${callerId}" timeout="30" record="do-not-record"><Number>${sanitized}</Number></Dial>`
+        `<Dial callerId="${callerId}" timeout="30" record="record-from-answer-dual" ` +
+        `recordingStatusCallback="${recordingCallback}" recordingStatusCallbackEvent="completed" ` +
+        `action="${statusCallback}">` +
+        `<Number>${sanitized}</Number>` +
+        `</Dial>`
     );
 }

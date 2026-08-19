@@ -19,6 +19,10 @@ export async function GET(request: NextRequest) {
         // Auth for providers
         if (url.includes('api.elevenlabs.io') && process.env.ELEVENLABS_API_KEY) headers['xi-api-key'] = process.env.ELEVENLABS_API_KEY;
         if (url.includes('api.vapi.ai') && process.env.VAPI_PRIVATE_KEY) headers['Authorization'] = `Bearer ${process.env.VAPI_PRIVATE_KEY}`;
+        if (url.includes('api.twilio.com') && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+            const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+            headers['Authorization'] = `Basic ${auth}`;
+        }
 
         const response = await fetch(url, { headers, redirect: 'follow' });
 

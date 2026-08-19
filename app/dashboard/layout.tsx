@@ -309,6 +309,7 @@ function DashboardContent({
             items: [
                 { title: "Overview", href: "/dashboard/voice", icon: LayoutDashboard },
                 { title: "Call Logs", href: "/dashboard/voice/logs", icon: Mic },
+                { title: "Cold Call Logs", href: "/dashboard/voice/cold-logs", icon: Phone },
                 { title: "Analytics", href: "/dashboard/voice/analytics", icon: BarChart2 },
             ]
         }
