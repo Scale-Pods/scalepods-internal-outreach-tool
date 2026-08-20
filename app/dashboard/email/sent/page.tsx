@@ -93,7 +93,7 @@ function buildEntries(leads: NormalizedLeadRow[]): SentEmailEntry[] {
             fullName: lead.fullName,
             email: lead.email,
             senderEmail: lead.senderEmail || "N/A",
-            replied: lead.replies.length > 0 || !!lead.replied,
+            replied: lead.emailReplyTrack,
             lastContactedRaw,
             lastContactedFormatted,
             relativeTime,

@@ -53,6 +53,26 @@ function hasWhatsappReplied(lead: any): boolean {
   return false;
 }
 
+/** Has the lead replied, per the WTS_Reply_Track / Email_Reply_Track flag columns? */
+function hasReplyTrack(lead: any): boolean {
+  return hasTruthy(lead["WTS_Reply_Track"]) || hasTruthy(lead["Email_Reply_Track"]);
+}
+
+/** Best-effort display identity for a lead row, for the replies modal */
+function extractLeadIdentity(lead: any) {
+  const name = lead.full_name || `${lead["First Name"] || ''} ${lead["Last Name"] || ''}`.trim() || 'Unknown Lead';
+  const email = lead["Work Email"] || lead["Personal Email"] || lead.email || null;
+  const phone = lead.company_phone_number || lead.personal_phone || lead.mobile_number || null;
+  return {
+    id: String(lead.lead_uuid || lead.lead_id || lead.id || email || phone || Math.random()),
+    name,
+    email,
+    phone,
+    repliedViaWhatsapp: hasTruthy(lead["WTS_Reply_Track"]),
+    repliedViaEmail: hasTruthy(lead["Email_Reply_Track"]),
+  };
+}
+
 /** Has the lead been called? */
 function hasVoiceSent(lead: any): boolean {
   // icp_tracker / ENRICHED_LEADS use "Voice_1_Status", "Voice_1_Date"
@@ -113,6 +133,8 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
     `;
 
     const ENRICHED_DASHBOARD_COLUMNS = `
+      lead_uuid, full_name, "First Name", "Last Name", "Work Email", "Personal Email",
+      company_phone_number, personal_phone,
       created_at,
       "Email Last Contacted",
       "Whatsapp Last Contacted",
@@ -120,7 +142,26 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
       voice_last_contacted,
       "Email_1", "Email_2", "Email_3", "Email_4", "Email_5", "Email_6",
       "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_5",
-      "WTS_Reply_Track",
+      "WTS_Reply_Track", "Email_Reply_Track",
+      "Voice_1_Status", "Voice_1_Date", "Voice_2_Status", "Voice_2_Date",
+      "User_Replied_1", "User_Replied_2", "User_Replied_3", "User_Replied_4", "User_Replied_5",
+      "User_Replied_6", "User_Replied_7", "User_Replied_8", "User_Replied_9", "User_Replied_10",
+      "User_Replied_11", "User_Replied_12", "User_Replied_13", "User_Replied_14", "User_Replied_15",
+      "User_Replied_16", "User_Replied_17", "User_Replied_18", "User_Replied_19", "User_Replied_20",
+      "User_Replied_21", "User_Replied_22", "User_Replied_23", "User_Replied_24", "User_Replied_25"
+    `;
+
+    const HUBSPOT_DASHBOARD_COLUMNS = `
+      lead_id, full_name, "First Name", "Last Name", "Work Email", "Personal Email",
+      company_phone_number, personal_phone,
+      created_at,
+      "Email Last Contacted",
+      "Whatsapp Last Contacted",
+      "Voice Last Contacted",
+      voice_last_contacted,
+      "Email_1", "Email_2", "Email_3", "Email_4", "Email_5", "Email_6",
+      "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_5",
+      "WTS_Reply_Track", "Email_Reply_Track",
       "Voice_1_Status", "Voice_1_Date", "Voice_2_Status", "Voice_2_Date",
       "User_Replied_1", "User_Replied_2", "User_Replied_3", "User_Replied_4", "User_Replied_5",
       "User_Replied_6", "User_Replied_7", "User_Replied_8", "User_Replied_9", "User_Replied_10",
@@ -157,7 +198,7 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
         .select('started_at, duration_seconds, status, vapi_account')
         .gte('created_at', fromFull.toISOString())
         .lte('created_at', toFull.toISOString()),
-      fetchTable("hubspot_lead", ICP_DASHBOARD_COLUMNS),
+      fetchTable("hubspot_lead", HUBSPOT_DASHBOARD_COLUMNS),
       // Cold leads voice calls count
       supabaseAdmin
         .from('vapi_call_logs')
@@ -215,6 +256,10 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
     let whatsappSentCount = 0, voiceContactedCount = 0;
     let whatsappReplyCount = 0, icpRepliedCount = 0, metaRepliedCount = 0, enrichedRepliedCount = 0;
 
+    // Total Replies (Cold section) — leads from ENRICHED_LEADS whose
+    // WTS_Reply_Track or Email_Reply_Track flag is set, within the date range.
+    const coldRepliedLeads: ReturnType<typeof extractLeadIdentity>[] = [];
+
     allLeads.forEach((lead: any) => {
       const dateStr = extractDate(lead);
       if (!dateStr) return;
@@ -240,10 +285,18 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
         else if (lead._table === 'ENRICHED_LEADS') enrichedRepliedCount++;
         else icpRepliedCount++;
       }
+
+      if (lead._table === 'ENRICHED_LEADS' && hasReplyTrack(lead)) {
+        coldRepliedLeads.push(extractLeadIdentity(lead));
+      }
     });
 
     let hubspotLeads = 0, hubspotWhatsappSent = 0, hubspotVoiceContacted = 0, hubspotWhatsappReply = 0;
-    
+
+    // Total Replies (Hot CRM section) — leads from hubspot_lead whose
+    // WTS_Reply_Track or Email_Reply_Track flag is set, within the date range.
+    const hotRepliedLeads: ReturnType<typeof extractLeadIdentity>[] = [];
+
     hubspotRows.forEach((lead: any) => {
       const dateStr = extractDate(lead);
       if (!dateStr) return;
@@ -255,6 +308,10 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
       if (hasWhatsappSent(lead)) hubspotWhatsappSent++;
       if (hasVoiceSent(lead)) hubspotVoiceContacted++;
       if (hasWhatsappReplied(lead)) hubspotWhatsappReply++;
+
+      if (hasReplyTrack(lead)) {
+        hotRepliedLeads.push(extractLeadIdentity(lead));
+      }
     });
 
     const acquisitionChartData = Object.entries(acquisitionMap).map(([name, leads]) => ({ name, leads }));
@@ -279,7 +336,10 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
         whatsappIcpReplied: icpRepliedCount,
         whatsappMetaReplied: metaRepliedCount,
         enrichedRepliedCount,
-        totalReplies: emailReplyCount + whatsappReplyCount,
+        // Total Replies (Cold) — ENRICHED_LEADS leads with WTS_Reply_Track or
+        // Email_Reply_Track set, within the selected date range.
+        totalReplies: coldRepliedLeads.length,
+        repliedLeadsCold: coldRepliedLeads,
         totalVoiceSeconds,
         voiceMinutesString: formatDuration(totalVoiceSeconds),
         totalVoiceCalls,
@@ -293,7 +353,10 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
             whatsapp: hubspotWhatsappSent,
             // Use actual vapi_call_logs count for hubspot voice
             voice: hubspotVoiceCallsCount,
-            replies: hubspotWhatsappReply
+            // Total Replies (Hot CRM) — hubspot_lead leads with WTS_Reply_Track
+            // or Email_Reply_Track set, within the selected date range.
+            replies: hotRepliedLeads.length,
+            repliedLeads: hotRepliedLeads,
         }
       },
       acquisitionChartData,

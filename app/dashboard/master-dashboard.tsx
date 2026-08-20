@@ -50,12 +50,22 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { SPLoader } from "@/components/sp-loader";
 import { useData } from "@/context/DataContext";
 
+interface RepliedLead {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    repliedViaWhatsapp: boolean;
+    repliedViaEmail: boolean;
+}
+
 interface DashboardStats {
     totalLeads: number; totalICP: number; totalMeta: number; totalEnriched: number;
     totalEmails: number; totalWhatsApp: number; totalVoice: number;
     totalEmailReplies: number; totalWhatsappReplies: number;
     whatsappIcpReplied: number; whatsappMetaReplied: number; enrichedRepliedCount: number;
     totalReplies: number; totalVoiceSeconds: number;
+    repliedLeadsCold?: RepliedLead[];
     voiceMinutesString: string; totalVoiceCalls: number;
     totalHubspotLeads: number;
     // Bifurcated voice call counts from vapi_account column
@@ -67,13 +77,14 @@ interface DashboardStats {
         whatsapp: number;
         voice: number;
         replies: number;
+        repliedLeads?: RepliedLead[];
     }
 }
 
 export default function MasterDashboard({ stats, acquisitionChartData }: { stats: DashboardStats, acquisitionChartData: any[] }) {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [isRepliesModalOpen, setIsRepliesModalOpen] = useState(false);
+    const [repliesModal, setRepliesModal] = useState<{ open: boolean; scope: 'cold' | 'hot' }>({ open: false, scope: 'cold' });
     const [dateLabel, setDateLabel] = useState("Last 7 days");
     const handleDateUpdate = (values: any) => {
         if (values.range?.from) {
@@ -173,8 +184,8 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                         color="text-indigo-600"
                         bg="bg-indigo-50"
                         border="border-indigo-100"
-                        onClick={() => setIsRepliesModalOpen(true)}
-                        subtitle={`Email: ${stats.totalEmailReplies} + WA: ${stats.totalWhatsappReplies} (ICP: ${stats.whatsappIcpReplied || 0} Meta: ${stats.whatsappMetaReplied || 0} Enriched: ${(stats as any).enrichedRepliedCount || 0})`}
+                        onClick={() => setRepliesModal({ open: true, scope: 'cold' })}
+                        subtitle="ENRICHED_LEADS: WTS_Reply_Track / Email_Reply_Track"
                     />
                 </div>
             </div>
@@ -233,6 +244,8 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                         color="text-indigo-600"
                         bg="bg-indigo-50"
                         border="border-indigo-100"
+                        onClick={() => setRepliesModal({ open: true, scope: 'hot' })}
+                        subtitle="hubspot_lead: WTS_Reply_Track / Email_Reply_Track"
                     />
                 </div>
             </div>
@@ -309,7 +322,64 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                     </CardContent>
                 </Card>
             </div>
+
+            <RepliesModal
+                open={repliesModal.open}
+                onOpenChange={(open) => setRepliesModal(prev => ({ ...prev, open }))}
+                scope={repliesModal.scope}
+                leads={repliesModal.scope === 'cold' ? (stats.repliedLeadsCold || []) : (stats.hubspot?.repliedLeads || [])}
+            />
         </div >
+    );
+}
+
+function RepliesModal({ open, onOpenChange, scope, leads }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    scope: 'cold' | 'hot';
+    leads: RepliedLead[];
+}) {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[560px] max-h-[80vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>
+                        {scope === 'cold' ? 'Cold Outreach — Total Replies' : 'Hot CRM Outreach — Total Replies'}
+                    </DialogTitle>
+                    <p className="text-xs text-slate-500 mt-1">
+                        Source: {scope === 'cold' ? 'ENRICHED_LEADS' : 'hubspot_lead'} — WTS_Reply_Track / Email_Reply_Track
+                    </p>
+                </DialogHeader>
+                <div className="flex-1 overflow-y-auto -mx-1 px-1 space-y-2">
+                    {leads.length === 0 ? (
+                        <p className="text-sm text-slate-400 text-center py-10">No replies in this range.</p>
+                    ) : (
+                        leads.map((lead) => (
+                            <div key={lead.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50/50">
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-slate-900 truncate">{lead.name}</p>
+                                    <p className="text-xs text-slate-500 truncate">
+                                        {lead.email || lead.phone || 'No contact info'}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                    {lead.repliedViaEmail && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                            <Mail className="h-2.5 w-2.5" /> Email
+                                        </span>
+                                    )}
+                                    {lead.repliedViaWhatsapp && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                            <MessageCircle className="h-2.5 w-2.5" /> WhatsApp
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }
 

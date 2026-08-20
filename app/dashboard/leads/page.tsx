@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SPLoader } from "@/components/sp-loader";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Database, ChevronLeft, ChevronRight, ArrowLeft, Send, Search, Loader2, CheckCircle2, AlertCircle, X, Phone, MessageCircle, Copy, Check, ExternalLink, Braces } from "lucide-react";
+import { Database, ChevronLeft, ChevronRight, ArrowLeft, Send, Search, Loader2, CheckCircle2, AlertCircle, X, Phone, MessageCircle, Copy, Check, ExternalLink, Braces, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 // Columns whose values should render as clickable links (with copy) rather than plain text
@@ -339,6 +339,7 @@ export default function LeadsPage() {
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [sendingIds, setSendingIds] = useState(false);
+    const [exporting, setExporting] = useState(false);
     const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({ show: false, message: '', type: 'success' });
 
     // Auto-dismiss toast
@@ -432,6 +433,39 @@ export default function LeadsPage() {
             setToast({ show: true, message: 'Failed to send leads.', type: 'error' });
         } finally {
             setSendingIds(false);
+        }
+    };
+
+    const handleExportCsv = async () => {
+        if (!activeTable || exporting) return;
+        setExporting(true);
+        try {
+            const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : '';
+            const res = await fetch(`/api/leads/export?table=${activeTable}${searchParam}`);
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.error || `Export failed (${res.status})`);
+            }
+            const blob = await res.blob();
+            const disposition = res.headers.get('Content-Disposition') || '';
+            const match = disposition.match(/filename="([^"]+)"/);
+            const filename = match?.[1] || `${activeTable}-export.csv`;
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+            setToast({ show: true, message: 'CSV export downloaded successfully!', type: 'success' });
+        } catch (error: any) {
+            console.error(error);
+            setToast({ show: true, message: error.message || 'Failed to export CSV.', type: 'error' });
+        } finally {
+            setExporting(false);
         }
     };
 
@@ -539,7 +573,7 @@ export default function LeadsPage() {
                         />
                     </div>
                     {(activeTable === 'master_leads_unique' || activeTable === 'master_cold_leads') && selectedIds.size > 0 && (
-                        <Button 
+                        <Button
                             size="sm"
                             disabled={sendingIds}
                             onClick={handleSendSelected}
@@ -549,6 +583,16 @@ export default function LeadsPage() {
                             Send Selected ({selectedIds.size})
                         </Button>
                     )}
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={exporting || tableTotal === 0}
+                        onClick={handleExportCsv}
+                        className="gap-2 h-9 px-4 font-semibold border-slate-200"
+                    >
+                        {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                        Export CSV
+                    </Button>
                 </div>
 
                 <Card className="bg-white shadow-sm overflow-hidden">

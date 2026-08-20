@@ -41,6 +41,7 @@ export interface NormalizedLeadRow {
     lastContacted: string | null;
     createdAt: string | null;
     replied: string | null;
+    emailReplyTrack: boolean;
     bounced: boolean;
     unsubscribed: boolean;
     stages: EmailStageValue[];
@@ -80,14 +81,14 @@ const REPLY_STATUS_COLS = Array.from({ length: MAX_REPLY_STAGES }, (_, i) => i +
 const ENRICHED_LEADS_COLUMNS = `
     id, lead_uuid, lead_type, full_name, "First Name", "Last Name",
     "Personal Email", "Work Email", "SENDERS  EMAIL", company_phone_number, personal_phone,
-    "Email Last Contacted", "Replied", email_bounced, email_unsubscribed, created_at,
+    "Email Last Contacted", "Replied", "Email_Reply_Track", email_bounced, email_unsubscribed, created_at,
     ${EMAIL_STAGE_COLS}, ${REPLY_COLS}
 `;
 
 const MASTER_COLD_LEADS_COLUMNS = `
     lead_uuid, full_name, first_name, last_name, email, "Personal Email",
     mobile_number, company_phone_number, "SENDERS  EMAIL",
-    "Email Last Contacted", "Replied",
+    "Email Last Contacted", "Replied", "Email_Reply_Track",
     email_bounced, email_unsubscribed, email_status, email_last_sent_at, created_at,
     ${EMAIL_STAGE_COLS}, ${REPLY_COLS}, ${REPLY_STATUS_COLS}
 `;
@@ -95,7 +96,7 @@ const MASTER_COLD_LEADS_COLUMNS = `
 const HUBSPOT_LEAD_COLUMNS = `
     lead_id, full_name, "First Name", "Last Name", "Personal Email", "Work Email", "SENDERS  EMAIL",
     company_phone_number, personal_phone,
-    "Email Last Contacted", "Replied", email_bounced, email_unsubscribed, created_at,
+    "Email Last Contacted", "Replied", "Email_Reply_Track", email_bounced, email_unsubscribed, created_at,
     ${EMAIL_STAGE_COLS}, ${REPLY_COLS}
 `;
 
@@ -176,6 +177,7 @@ function normalizeRow(row: any, table: string, leadType: LeadType): NormalizedLe
         lastContacted,
         createdAt: row.created_at || null,
         replied: row.Replied ?? null,
+        emailReplyTrack: truthyText(row.Email_Reply_Track),
         bounced: truthyText(row.email_bounced),
         unsubscribed: truthyText(row.email_unsubscribed),
         stages,
@@ -239,7 +241,7 @@ export function computeMetrics(leads: NormalizedLeadRow[], from: Date, to: Date)
             emailsSent += sentStages.length;
             sentStages.forEach(s => stageSentCounts[s.stage - 1]++);
         }
-        if (lead.replies.length > 0 || truthyText(lead.replied)) {
+        if (lead.emailReplyTrack) {
             repliedLeads++;
             totalReplies += Math.max(lead.replies.length, 1);
         }
