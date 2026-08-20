@@ -50,22 +50,35 @@ export default function CredentialsPage() {
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 
+    // Always shown regardless of live campaign/reply activity
+    const BASELINE_SENDER_EMAILS = [
+        "raunak@scalepods.tech",
+        "adnan@scalepods.org",
+        "palashy@scalepods.org",
+        "shubhodeep@scalepods.tech",
+        "naveen@scalepods.tech",
+        "tanvi@scalepods.co",
+        "hrishikesh@scalepods.co",
+        "vishnu@scalepods.co",
+        "anshuman@scalepods.co",
+    ];
+
     const fetchEmails = async () => {
         setLoading(true);
         try {
             const res = await fetch('/api/email/db-data');
             const data = await res.json();
-            
+
             // Extract unique sender emails from campaign analytics and lead replies
-            const emails = new Set<string>();
-            
+            const emails = new Set<string>(BASELINE_SENDER_EMAILS);
+
             if (data.campaignAnalytics && Array.isArray(data.campaignAnalytics)) {
                 data.campaignAnalytics.forEach((c: any) => {
                     const email = c.email_account || c.senderEmail || c.sender_email;
                     if (email) emails.add(email);
                 });
             }
-            
+
             if (data.leadReplies && Array.isArray(data.leadReplies)) {
                 data.leadReplies.forEach((r: any) => {
                     const email = r.sender_email_id || r.sender_email || r.senderEmail;
@@ -76,6 +89,7 @@ export default function CredentialsPage() {
             setSenderEmails(Array.from(emails).sort());
         } catch (err) {
             console.error("Error fetching credentials emails:", err);
+            setSenderEmails(Array.from(new Set(BASELINE_SENDER_EMAILS)).sort());
         } finally {
             setLoading(false);
         }

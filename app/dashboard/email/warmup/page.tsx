@@ -61,13 +61,19 @@ interface WarmupData {
 const ALL_TARGET_EMAILS = [
     "adnan@scalepods.co",
     "adnan@scalepods.org",
+    "anshuman@scalepods.co",
+    "hrishikesh@scalepods.co",
     "nancy@scalepods.co",
+    "naveen@scalepods.tech",
     "palashy@scalepods.org",
     "raunak@scalepods.co",
     "raunak@scalepods.tech",
+    "shubhodeep@scalepods.tech",
     "tanushree@scalepods.co",
+    "tanvi@scalepods.co",
     "viraj@scalepods.co",
     "viraj@scalepods.tech",
+    "vishnu@scalepods.co",
 ];
 
 const EMPTY_WARMUP: WarmupData = {
