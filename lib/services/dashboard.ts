@@ -18,6 +18,7 @@ function extractDate(lead: any): string | null {
     lead["Whatsapp Last Contacted"] ||
     lead["Voice Last Contacted"] ||
     lead.voice_last_contacted ||
+    lead.email_last_sent_at ||
     lead.created_at ||
     null
   );
@@ -89,21 +90,64 @@ function hasVoiceSent(lead: any): boolean {
 
 // ── fetchers ──────────────────────────────────────────────────────────────────
 
-async function fetchTable(tableName: string, columns: string, limit = 50000) {
-  try {
+const FETCH_BATCH_SIZE = 1000;
+const FETCH_MAX_RETRIES = 2;
+
+async function fetchBatchWithRetry(tableName: string, columns: string, offset: number) {
+  for (let attempt = 0; attempt <= FETCH_MAX_RETRIES; attempt++) {
     const { data, error } = await supabaseAdmin
       .from(tableName)
       .select(columns)
-      .limit(limit);
-    if (error) {
-      console.error(`Error fetching ${tableName}:`, error);
-      return [];
+      .range(offset, offset + FETCH_BATCH_SIZE - 1);
+
+    if (!error) return { data, error: null };
+
+    const isLastAttempt = attempt === FETCH_MAX_RETRIES;
+    console.error(
+      `Error fetching ${tableName} (offset ${offset}, attempt ${attempt + 1}/${FETCH_MAX_RETRIES + 1}):`,
+      error.message || error
+    );
+    if (isLastAttempt) return { data: null, error };
+
+    // Transient network errors (connect timeout, etc.) are common against
+    // Supabase — brief backoff before retrying instead of failing the whole
+    // table on one hiccup.
+    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+  }
+  return { data: null, error: new Error('unreachable') };
+}
+
+// PostgREST caps rows per request (default 1000) regardless of .limit() —
+// batch with .range() so tables larger than that aren't silently truncated.
+// On a batch that still fails after retries, the whole fetch is treated as
+// failed (returns []) rather than silently returning partial rows — a
+// partial result would look like real, complete data to every stat that
+// consumes it.
+async function fetchTable(tableName: string, columns: string, maxRows = 50000) {
+  const allRows: any[] = [];
+  let offset = 0;
+
+  try {
+    while (offset < maxRows) {
+      const { data, error } = await fetchBatchWithRetry(tableName, columns, offset);
+
+      if (error) {
+        console.error(`Giving up on ${tableName} after retries — returning [] instead of partial data.`);
+        return [];
+      }
+      if (!data || data.length === 0) break;
+
+      allRows.push(...data);
+      offset += FETCH_BATCH_SIZE;
+
+      if (data.length < FETCH_BATCH_SIZE) break;
     }
-    return data || [];
-  } catch (e) {
-    console.error(`Exception fetching ${tableName}:`, e);
+  } catch (e: any) {
+    console.error(`Exception fetching ${tableName}:`, e?.message || e);
     return [];
   }
+
+  return allRows;
 }
 
 // ── main export ───────────────────────────────────────────────────────────────
@@ -182,9 +226,19 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
       "User_Replied_21", "User_Replied_22", "User_Replied_23", "User_Replied_24", "User_Replied_25"
     `;
 
+    const MASTER_COLD_DASHBOARD_COLUMNS = `
+      lead_uuid, full_name, first_name, last_name, "Personal Email", email,
+      company_phone_number, mobile_number,
+      created_at,
+      "Email Last Contacted",
+      email_last_sent_at,
+      "Email_1", "Email_2", "Email_3", "Email_4", "Email_5", "Email_6",
+      "WTS_Reply_Track", "Email_Reply_Track"
+    `;
+
     // Fetch all rows from all three lead tables (no DB-level date filter —
     // we filter in-memory because the "contacted" date may differ from created_at)
-    const [icpRows, metaRows, enrichedRows, emailReplies, voiceCalls, hubspotRows, coldVoiceCallsRes, hubspotVoiceCallsRes, outreachLeads] = await Promise.all([
+    const [icpRows, metaRows, enrichedRows, emailReplies, voiceCalls, hubspotRows, coldVoiceCallsRes, hubspotVoiceCallsRes, outreachLeads, masterColdRows] = await Promise.all([
       fetchTable("icp_tracker", ICP_DASHBOARD_COLUMNS),
       fetchTable("meta_lead_tracker", META_DASHBOARD_COLUMNS),
       fetchTable("ENRICHED_LEADS", ENRICHED_DASHBOARD_COLUMNS),
@@ -216,6 +270,8 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
       // Emails Sent counts — sourced from ENRICHED_LEADS + master_cold_leads (cold)
       // and hubspot_lead (hot), counting Email_1..Email_6 columns
       fetchOutreachLeads(),
+      // Master Cold Leads — feeds the Cold "Total Replies" card alongside ENRICHED_LEADS
+      fetchTable("master_cold_leads", MASTER_COLD_DASHBOARD_COLUMNS),
     ]);
 
     const coldOutreachLeads = outreachLeads.filter(l => l.leadType === 'cold');
@@ -287,6 +343,23 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
       }
 
       if (lead._table === 'ENRICHED_LEADS' && hasReplyTrack(lead)) {
+        coldRepliedLeads.push(extractLeadIdentity(lead));
+      }
+    });
+
+    // master_cold_leads doesn't carry WhatsApp/Voice columns like the other
+    // three cold tables, so it's scanned separately here (rather than folded
+    // into allLeads) purely to add its replies into the Cold "Total Replies"
+    // card — it shouldn't affect totalLeads/icpCount/whatsappSentCount/etc.
+    masterColdRows.forEach((lead: any) => {
+      const dateStr = extractDate(lead);
+      if (!dateStr) return;
+
+      const leadDate = new Date(dateStr);
+      if (isNaN(leadDate.getTime())) return;
+      if (leadDate < fromFull || leadDate > toFull) return;
+
+      if (hasReplyTrack(lead)) {
         coldRepliedLeads.push(extractLeadIdentity(lead));
       }
     });

@@ -43,11 +43,21 @@ interface ReceivedEntry {
     replies: ReplyEntry[];
 }
 
+function stripHtml(html: string) {
+    if (!html) return "";
+    return html.replace(/<(br|p|div|li|h[1-6])[^>]*>/gi, " ").replace(/<\/?[^>]+(>|$)/g, "");
+}
+
+function processHtml(html: string) {
+    if (!html) return "";
+    return html.replace(/<a\b([^>]*?)>/gi, '<a $1 target="_blank" rel="noopener noreferrer">');
+}
+
 function buildEntries(leads: NormalizedLeadRow[]): ReceivedEntry[] {
     const entries: ReceivedEntry[] = [];
 
     leads.forEach((lead) => {
-        if (lead.replies.length === 0) return;
+        if (!lead.emailReplyTrack) return;
 
         const lastContactedRaw = lead.lastContacted || lead.createdAt;
         const d = lastContactedRaw ? new Date(lastContactedRaw) : new Date();
@@ -291,7 +301,9 @@ function ReceivedEntryCard({ entry }: { entry: ReceivedEntry }) {
     const [isOpen, setIsOpen] = useState(false);
     const [modalReply, setModalReply] = useState<ReplyEntry | null>(null);
     const lastReply = entry.replies[entry.replies.length - 1];
-    const previewText = (lastReply?.userReplied || lastReply?.botReplied || "").toString().slice(0, 100);
+    const previewText = entry.replies.length > 0
+        ? stripHtml((lastReply?.userReplied || lastReply?.botReplied || "").toString()).slice(0, 100)
+        : "Marked as replied — no message content on file";
 
     return (
         <>
@@ -326,7 +338,9 @@ function ReceivedEntryCard({ entry }: { entry: ReceivedEntry }) {
                                     <span className="text-xs text-slate-400">({entry.relativeTime})</span>
                                 </div>
                                 {!isOpen && previewText && (
-                                    <p className="text-xs text-slate-400 mt-1 italic truncate max-w-lg">{previewText}...</p>
+                                    <p className="text-xs text-slate-400 mt-1 italic truncate max-w-lg">
+                                        {previewText}{entry.replies.length > 0 ? "..." : ""}
+                                    </p>
                                 )}
                             </div>
                             <div className="shrink-0">
@@ -339,6 +353,11 @@ function ReceivedEntryCard({ entry }: { entry: ReceivedEntry }) {
                 <CollapsibleContent>
                     <div className="px-5 pb-5 pt-0">
                         <div className="pl-[56px] space-y-3 border-t border-border pt-4">
+                            {entry.replies.length === 0 && (
+                                <p className="text-[11px] text-slate-400 italic pl-8">
+                                    Marked as replied (Email_Reply_Track) — no message content on file.
+                                </p>
+                            )}
                             {entry.replies.map((reply) => (
                                 <div key={reply.index} className="space-y-2">
                                     {!reply.userReplied && reply.userStatusOnly && (
@@ -361,7 +380,7 @@ function ReceivedEntryCard({ entry }: { entry: ReceivedEntry }) {
                                             </div>
                                             <div className="flex-1 min-w-0 p-2.5 bg-blue-50/50 rounded-lg border border-blue-100 text-[13px] text-slate-700">
                                                 <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">User Replied {reply.index}</p>
-                                                <p className="line-clamp-3 whitespace-pre-wrap">{String(reply.userReplied)}</p>
+                                                <p className="line-clamp-3 whitespace-pre-wrap">{stripHtml(String(reply.userReplied))}</p>
                                             </div>
                                             <ExternalLink className="h-3 w-3 text-slate-300 opacity-0 group-hover/msg:opacity-100 transition-opacity mt-1 shrink-0" />
                                         </div>
@@ -376,7 +395,7 @@ function ReceivedEntryCard({ entry }: { entry: ReceivedEntry }) {
                                             </div>
                                             <div className="flex-1 min-w-0 p-2.5 bg-emerald-50/50 rounded-lg border border-emerald-100 text-[13px] text-slate-700">
                                                 <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Bot Replied {reply.index}</p>
-                                                <p className="line-clamp-3 whitespace-pre-wrap">{String(reply.botReplied)}</p>
+                                                <p className="line-clamp-3 whitespace-pre-wrap">{stripHtml(String(reply.botReplied))}</p>
                                             </div>
                                             <ExternalLink className="h-3 w-3 text-slate-300 opacity-0 group-hover/msg:opacity-100 transition-opacity mt-1 shrink-0" />
                                         </div>
@@ -400,13 +419,27 @@ function ReceivedEntryCard({ entry }: { entry: ReceivedEntry }) {
                         {modalReply?.userReplied && (
                             <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100">
                                 <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-2">User Replied</p>
-                                <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{String(modalReply.userReplied)}</p>
+                                {String(modalReply.userReplied).includes("<") ? (
+                                    <div
+                                        dangerouslySetInnerHTML={{ __html: processHtml(String(modalReply.userReplied)) }}
+                                        className="email-full-content text-slate-700"
+                                    />
+                                ) : (
+                                    <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{String(modalReply.userReplied)}</p>
+                                )}
                             </div>
                         )}
                         {modalReply?.botReplied && (
                             <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-100">
                                 <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-2">Bot Replied</p>
-                                <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{String(modalReply.botReplied)}</p>
+                                {String(modalReply.botReplied).includes("<") ? (
+                                    <div
+                                        dangerouslySetInnerHTML={{ __html: processHtml(String(modalReply.botReplied)) }}
+                                        className="email-full-content text-slate-700"
+                                    />
+                                ) : (
+                                    <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{String(modalReply.botReplied)}</p>
+                                )}
                             </div>
                         )}
                     </div>

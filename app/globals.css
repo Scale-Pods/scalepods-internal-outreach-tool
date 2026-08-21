@@ -40,6 +40,69 @@
     }
 }
 
+/* Readable rendering for raw HTML email/reply content (User_Replied_N,
+   Bot_Replied_N, Email_N columns) injected via dangerouslySetInnerHTML.
+   No @tailwindcss/typography plugin is installed, so `prose` classes are
+   no-ops — these rules stand in for it, scoped to this one class. */
+.email-full-content {
+    font-size: 0.875rem;
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+.email-full-content p {
+    margin: 0 0 0.75em;
+}
+
+.email-full-content p:last-child {
+    margin-bottom: 0;
+}
+
+.email-full-content a {
+    color: #2563eb;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.email-full-content ul,
+.email-full-content ol {
+    margin: 0 0 0.75em;
+    padding-left: 1.5em;
+}
+
+.email-full-content li {
+    margin-bottom: 0.25em;
+}
+
+.email-full-content blockquote {
+    margin: 0.75em 0;
+    padding-left: 1em;
+    border-left: 3px solid #e2e8f0;
+    color: #64748b;
+}
+
+.email-full-content img {
+    max-width: 100%;
+    height: auto;
+}
+
+.email-full-content table {
+    border-collapse: collapse;
+    max-width: 100%;
+}
+
+.email-full-content td,
+.email-full-content th {
+    border: 1px solid #e2e8f0;
+    padding: 0.375em 0.625em;
+}
+
+.email-full-content hr {
+    margin: 1em 0;
+    border: none;
+    border-top: 1px solid #e2e8f0;
+}
+
 /* ─── Cross-browser range input (used in audio player) ─────────────────────
    `appearance: none` removes all native chrome but also hides the thumb in
    Firefox and misaligns it in Safari. These pseudo-element rules restore a

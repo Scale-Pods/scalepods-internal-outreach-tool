@@ -100,18 +100,37 @@ const HUBSPOT_LEAD_COLUMNS = `
     ${EMAIL_STAGE_COLS}, ${REPLY_COLS}
 `;
 
-async function fetchAll(tableName: string, columns: string, limit = 20000) {
+const FETCH_BATCH_SIZE = 1000;
+
+// PostgREST caps rows per request (default 1000) regardless of .limit() —
+// batch with .range() so tables larger than that aren't silently truncated.
+async function fetchAll(tableName: string, columns: string, maxRows = 20000) {
+    const allRows: any[] = [];
+    let offset = 0;
+
     try {
-        const { data, error } = await supabaseAdmin.from(tableName).select(columns).limit(limit);
-        if (error) {
-            console.error(`[email-outreach] fetch error for ${tableName}:`, error.message);
-            return [];
+        while (offset < maxRows) {
+            const { data, error } = await supabaseAdmin
+                .from(tableName)
+                .select(columns)
+                .range(offset, offset + FETCH_BATCH_SIZE - 1);
+
+            if (error) {
+                console.error(`[email-outreach] fetch error for ${tableName}:`, error.message);
+                break;
+            }
+            if (!data || data.length === 0) break;
+
+            allRows.push(...data);
+            offset += FETCH_BATCH_SIZE;
+
+            if (data.length < FETCH_BATCH_SIZE) break;
         }
-        return data || [];
     } catch (e: any) {
         console.error(`[email-outreach] fetch exception for ${tableName}:`, e.message);
-        return [];
     }
+
+    return allRows;
 }
 
 // ── normalization ─────────────────────────────────────────────────────────────
