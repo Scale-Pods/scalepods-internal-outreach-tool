@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DataProvider, useData } from "@/context/DataContext";
-import { MaqsamBalanceDetail } from "@/components/dashboard/maqsam-balance-detail";
 import { calculateDuration } from "@/lib/utils";
 import { useMemo } from "react";
 import { logout } from "@/app/actions/auth";
@@ -43,14 +42,12 @@ const sidebarItems = [
     },
 ];
 
-function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolean, onClose: () => void, type: 'vapi' | 'maqsam' | 'twilio', details?: any, calls?: any[] }) {
-    const { voiceBalance, vapiHotBalance, vapiColdBalance, maqsamBalance } = useData();
+function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolean, onClose: () => void, type: 'vapi' | 'twilio', details?: any, calls?: any[] }) {
+    const { voiceBalance, vapiHotBalance, vapiColdBalance } = useData();
 
     const title = (() => {
         switch (type) {
             case 'vapi': return 'Vapi Wallet';
-
-            case 'maqsam': return 'Maqsam Telephony';
             case 'twilio': return 'Twilio Account';
             default: return 'Balance Detail';
         }
@@ -59,8 +56,6 @@ function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolea
     const icon = (() => {
         switch (type) {
             case 'vapi': return <Mic className="h-5 w-5 text-blue-600" />;
-
-            case 'maqsam': return <Wallet className="h-5 w-5 text-slate-600" />;
             case 'twilio': return <Smartphone className="h-5 w-5 text-rose-600" />;
             default: return <Wallet className="h-5 w-5" />;
         }
@@ -97,28 +92,11 @@ function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolea
         ? vapiColdBalance.used
         : vapiColdUsedFallback;
 
-    const maqsamUsedCost = useMemo(() => {
-        if (!calls || !Array.isArray(calls)) return 0;
-        return calls.filter((c: any) => {
-            const provisionedNum = String(c.phoneNumber || "");
-            const isSpecificMaqsamNum = provisionedNum.replace(/\D/g, '') === '97148714150';
-
-            // Detection based on customer number prefix
-            const phoneStr = String(c.phone || c.customer_number || "");
-            const isUAE = phoneStr.startsWith('+971') || phoneStr.startsWith('971');
-
-            return isUAE || isSpecificMaqsamNum;
-        }).reduce((acc: number, call: any) => {
-            // For Maqsam/Telephony, specifically sum the telephony-only portion
-            return acc + (call.breakdown?.telephony || call.costValue || 0);
-        }, 0);
-    }, [calls]);
-
     const vapiDetails = voiceBalance?.vapi;
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className={type === 'maqsam' ? "sm:max-w-[550px]" : "sm:max-w-[420px]"}>
+            <DialogContent className="sm:max-w-[420px]">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         {icon}
@@ -193,12 +171,6 @@ function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolea
                             <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2" onClick={() => window.open('https://console.twilio.com', '_blank')}>
                                 <ExternalLink className="h-4 w-4" /> Add Funds to Twilio
                             </Button>
-                        </div>
-                    )}
-
-                    {type === 'maqsam' && (
-                        <div className="space-y-4">
-                            <MaqsamBalanceDetail initialBalance={maqsamBalance} />
                         </div>
                     )}
                 </div>
@@ -326,7 +298,6 @@ function DashboardContent({
     const {
         calls,
         voiceBalance,
-        maqsamBalance,
         twilioBalance,
         loadingBalances,
         loadingCalls
@@ -341,24 +312,7 @@ function DashboardContent({
         return calls.reduce((acc: number, call: any) => acc + (call.breakdown?.agent || 0), 0);
     }, [calls, voiceBalance]);
 
-    const maqsamUsedCost = useMemo(() => {
-        if (!calls || !Array.isArray(calls)) return 0;
-        return calls.filter((c: any) => {
-            const provisionedNum = String(c.phoneNumber || "");
-            const isSpecificMaqsamNum = provisionedNum.replace(/\D/g, '') === '97148714150';
-
-            // Detection based on customer number prefix
-            const phoneStr = String(c.phone || c.customer_number || "");
-            const isUAE = phoneStr.startsWith('+971') || phoneStr.startsWith('971');
-
-            return isUAE || isSpecificMaqsamNum;
-        }).reduce((acc: number, call: any) => {
-            // For Maqsam/Telephony, specifically sum the telephony-only portion
-            return acc + (call.breakdown?.telephony || call.costValue || 0);
-        }, 0);
-    }, [calls]);
-
-    const [walletModal, setWalletModal] = useState<{ isOpen: boolean, type: 'vapi' | 'maqsam' | 'twilio' }>({
+    const [walletModal, setWalletModal] = useState<{ isOpen: boolean, type: 'vapi' | 'twilio' }>({
         isOpen: false,
         type: 'vapi'
     });
@@ -588,7 +542,6 @@ function DashboardContent({
                             switch (walletModal.type) {
                                 case 'vapi': return voiceBalance?.vapi;
                                 case 'twilio': return twilioBalance;
-                                case 'maqsam': return maqsamBalance;
                                 default: return null;
                             }
                         })()}

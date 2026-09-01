@@ -1,156 +1,19 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { parseWaConversation } from '@/lib/leads-utils';
-import { fetchOutreachLeads, computeMetrics } from '@/lib/services/email-outreach';
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-function hasTruthy(val: any): boolean {
-  if (val === undefined || val === null) return false;
-  const s = String(val).trim().toLowerCase();
-  return s !== '' && s !== 'no' && s !== 'none' && s !== 'false' && s !== '0';
-}
-
-/** Pick the best date to represent when this lead was last active */
-function extractDate(lead: any): string | null {
-  // Use whichever date is most relevant
-  return (
-    lead["Email Last Contacted"] ||
-    lead["Whatsapp Last Contacted"] ||
-    lead["Voice Last Contacted"] ||
-    lead.voice_last_contacted ||
-    lead.email_last_sent_at ||
-    lead.created_at ||
-    null
-  );
-}
-
-/** Has the lead received at least one WhatsApp message from us? */
-function hasWhatsappSent(lead: any): boolean {
-  for (let i = 1; i <= 6; i++) {
-    if (lead[`Whatsapp_${i}`] && String(lead[`Whatsapp_${i}`]).trim()) return true;
-  }
-  // wa_conversation indicates outbound activity
-  if (parseWaConversation(lead.wa_conversation || lead["wa_conversation"]).length > 0) return true;
-  // fallback: W.P_1 … W.P_12 columns (meta_lead_tracker has these)
-  for (let i = 1; i <= 12; i++) {
-    if (lead[`W.P_${i}`] && String(lead[`W.P_${i}`]).trim()) return true;
-  }
-  return false;
-}
-
-/** Has the user (human) replied on WhatsApp? */
-function hasWhatsappReplied(lead: any): boolean {
-  for (let i = 1; i <= 25; i++) {
-    const r = lead[`User_Replied_${i}`];
-    if (r && String(r).trim() && !['no', 'none', 'false'].includes(String(r).trim().toLowerCase())) return true;
-  }
-  if (parseWaConversation(lead.wa_conversation || lead["wa_conversation"]).some((m: any) => m.role === 'user' || m.direction === 'inbound')) return true;
-  const wts = lead["WTS_Reply_Track"];
-  if (wts && String(wts).trim() && !['no', 'none', 'false', ''].includes(String(wts).trim().toLowerCase())) return true;
-  for (let i = 1; i <= 10; i++) {
-    const r = lead[`W.P_Replied_${i}`];
-    if (r && !['no', 'none'].includes(String(r).trim().toLowerCase())) return true;
-  }
-  return false;
-}
-
-/** Has the lead replied, per the WTS_Reply_Track / Email_Reply_Track flag columns? */
-function hasReplyTrack(lead: any): boolean {
-  return hasTruthy(lead["WTS_Reply_Track"]) || hasTruthy(lead["Email_Reply_Track"]);
-}
-
-/** Best-effort display identity for a lead row, for the replies modal */
-function extractLeadIdentity(lead: any) {
-  const name = lead.full_name || `${lead["First Name"] || ''} ${lead["Last Name"] || ''}`.trim() || 'Unknown Lead';
-  const email = lead["Work Email"] || lead["Personal Email"] || lead.email || null;
-  const phone = lead.company_phone_number || lead.personal_phone || lead.mobile_number || null;
-  return {
-    id: String(lead.lead_uuid || lead.lead_id || lead.id || email || phone || Math.random()),
-    name,
-    email,
-    phone,
-    repliedViaWhatsapp: hasTruthy(lead["WTS_Reply_Track"]),
-    repliedViaEmail: hasTruthy(lead["Email_Reply_Track"]),
-  };
-}
-
-/** Has the lead been called? */
-function hasVoiceSent(lead: any): boolean {
-  // icp_tracker / ENRICHED_LEADS use "Voice_1_Status", "Voice_1_Date"
-  if (lead["Voice_1_Status"] && String(lead["Voice_1_Status"]).trim()) return true;
-  if (lead["Voice_1_Date"]) return true;
-  if (lead["Voice_2_Status"] && String(lead["Voice_2_Status"]).trim()) return true;
-  if (lead["Voice_2_Date"]) return true;
-  // meta_lead_tracker might use Voice_1, Voice_2, Voice_3 text columns
-  for (let i = 1; i <= 3; i++) {
-    if (lead[`Voice_${i}`] && String(lead[`Voice_${i}`]).trim()) return true;
-  }
-  return false;
-}
-
-// ── fetchers ──────────────────────────────────────────────────────────────────
-
-const FETCH_BATCH_SIZE = 1000;
-const FETCH_MAX_RETRIES = 2;
-
-async function fetchBatchWithRetry(tableName: string, columns: string, offset: number) {
-  for (let attempt = 0; attempt <= FETCH_MAX_RETRIES; attempt++) {
-    const { data, error } = await supabaseAdmin
-      .from(tableName)
-      .select(columns)
-      .range(offset, offset + FETCH_BATCH_SIZE - 1);
-
-    if (!error) return { data, error: null };
-
-    const isLastAttempt = attempt === FETCH_MAX_RETRIES;
-    console.error(
-      `Error fetching ${tableName} (offset ${offset}, attempt ${attempt + 1}/${FETCH_MAX_RETRIES + 1}):`,
-      error.message || error
-    );
-    if (isLastAttempt) return { data: null, error };
-
-    // Transient network errors (connect timeout, etc.) are common against
-    // Supabase — brief backoff before retrying instead of failing the whole
-    // table on one hiccup.
-    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
-  }
-  return { data: null, error: new Error('unreachable') };
-}
-
-// PostgREST caps rows per request (default 1000) regardless of .limit() —
-// batch with .range() so tables larger than that aren't silently truncated.
-// On a batch that still fails after retries, the whole fetch is treated as
-// failed (returns []) rather than silently returning partial rows — a
-// partial result would look like real, complete data to every stat that
-// consumes it.
-async function fetchTable(tableName: string, columns: string, maxRows = 50000) {
-  const allRows: any[] = [];
-  let offset = 0;
-
-  try {
-    while (offset < maxRows) {
-      const { data, error } = await fetchBatchWithRetry(tableName, columns, offset);
-
-      if (error) {
-        console.error(`Giving up on ${tableName} after retries — returning [] instead of partial data.`);
-        return [];
-      }
-      if (!data || data.length === 0) break;
-
-      allRows.push(...data);
-      offset += FETCH_BATCH_SIZE;
-
-      if (data.length < FETCH_BATCH_SIZE) break;
-    }
-  } catch (e: any) {
-    console.error(`Exception fetching ${tableName}:`, e?.message || e);
-    return [];
-  }
-
-  return allRows;
-}
+import { getEmailOutreachMetricsRpc } from '@/lib/services/email-outreach';
 
 // ── main export ───────────────────────────────────────────────────────────────
+// Fully RPC-backed: every aggregate below is computed server-side in
+// Postgres (see supabase/migrations/rpc_analysis_and_functions.sql +
+// add_dashboard_hubspot_stats.sql) instead of pulling full row sets into
+// Node and reducing them here. Output shape is unchanged from the previous
+// JS-aggregation version so callers (master-dashboard.tsx) don't need
+// updating.
+
+function formatDuration(totalSeconds: number) {
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = Math.floor(totalSeconds % 60);
+  return `${mins}m ${secs}s`;
+}
 
 export async function getDashboardStats(fromDate: Date, toDate: Date) {
   try {
@@ -159,147 +22,94 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
     const toFull = new Date(toDate);
     toFull.setHours(23, 59, 59, 999);
 
-    const ICP_DASHBOARD_COLUMNS = `
-      created_at,
-      "Email Last Contacted",
-      "Whatsapp Last Contacted",
-      "Voice Last Contacted",
-      voice_last_contacted,
-      "Email_1", "Email_2", "Email_3", "Email_4", "Email_5", "Email_6",
-      "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_5",
-      "WTS_Reply_Track",
-      "Voice_1_Status", "Voice_1_Date", "Voice_2_Status", "Voice_2_Date",
-      "User_Replied_1", "User_Replied_2", "User_Replied_3", "User_Replied_4", "User_Replied_5",
-      "User_Replied_6", "User_Replied_7", "User_Replied_8", "User_Replied_9", "User_Replied_10",
-      "User_Replied_11", "User_Replied_12", "User_Replied_13", "User_Replied_14", "User_Replied_15",
-      "User_Replied_16", "User_Replied_17", "User_Replied_18", "User_Replied_19", "User_Replied_20",
-      "User_Replied_21", "User_Replied_22", "User_Replied_23", "User_Replied_24", "User_Replied_25"
-    `;
+    const fromIso = fromFull.toISOString();
+    const toIso = toFull.toISOString();
 
-    const ENRICHED_DASHBOARD_COLUMNS = `
-      lead_uuid, full_name, "First Name", "Last Name", "Work Email", "Personal Email",
-      company_phone_number, personal_phone,
-      created_at,
-      "Email Last Contacted",
-      "Whatsapp Last Contacted",
-      "Voice Last Contacted",
-      voice_last_contacted,
-      "Email_1", "Email_2", "Email_3", "Email_4", "Email_5", "Email_6",
-      "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_5",
-      "WTS_Reply_Track", "Email_Reply_Track",
-      "Voice_1_Status", "Voice_1_Date", "Voice_2_Status", "Voice_2_Date",
-      "User_Replied_1", "User_Replied_2", "User_Replied_3", "User_Replied_4", "User_Replied_5",
-      "User_Replied_6", "User_Replied_7", "User_Replied_8", "User_Replied_9", "User_Replied_10",
-      "User_Replied_11", "User_Replied_12", "User_Replied_13", "User_Replied_14", "User_Replied_15",
-      "User_Replied_16", "User_Replied_17", "User_Replied_18", "User_Replied_19", "User_Replied_20",
-      "User_Replied_21", "User_Replied_22", "User_Replied_23", "User_Replied_24", "User_Replied_25"
-    `;
-
-    const HUBSPOT_DASHBOARD_COLUMNS = `
-      lead_id, full_name, "First Name", "Last Name", "Work Email", "Personal Email",
-      company_phone_number, personal_phone,
-      created_at,
-      "Email Last Contacted",
-      "Whatsapp Last Contacted",
-      "Voice Last Contacted",
-      voice_last_contacted,
-      "Email_1", "Email_2", "Email_3", "Email_4", "Email_5", "Email_6",
-      "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_5",
-      "WTS_Reply_Track", "Email_Reply_Track",
-      "Voice_1_Status", "Voice_1_Date", "Voice_2_Status", "Voice_2_Date",
-      "User_Replied_1", "User_Replied_2", "User_Replied_3", "User_Replied_4", "User_Replied_5",
-      "User_Replied_6", "User_Replied_7", "User_Replied_8", "User_Replied_9", "User_Replied_10",
-      "User_Replied_11", "User_Replied_12", "User_Replied_13", "User_Replied_14", "User_Replied_15",
-      "User_Replied_16", "User_Replied_17", "User_Replied_18", "User_Replied_19", "User_Replied_20",
-      "User_Replied_21", "User_Replied_22", "User_Replied_23", "User_Replied_24", "User_Replied_25"
-    `;
-
-    const META_DASHBOARD_COLUMNS = `
-      created_at,
-      "Whatsapp Last Contacted",
-      "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_5",
-      "WTS_Reply_Track",
-      "User_Replied_1", "User_Replied_2", "User_Replied_3", "User_Replied_4", "User_Replied_5",
-      "User_Replied_6", "User_Replied_7", "User_Replied_8", "User_Replied_9", "User_Replied_10",
-      "User_Replied_11", "User_Replied_12", "User_Replied_13", "User_Replied_14", "User_Replied_15",
-      "User_Replied_16", "User_Replied_17", "User_Replied_18", "User_Replied_19", "User_Replied_20",
-      "User_Replied_21", "User_Replied_22", "User_Replied_23", "User_Replied_24", "User_Replied_25"
-    `;
-
-    const MASTER_COLD_DASHBOARD_COLUMNS = `
-      lead_uuid, full_name, first_name, last_name, "Personal Email", email,
-      company_phone_number, mobile_number,
-      created_at,
-      "Email Last Contacted",
-      email_last_sent_at,
-      "Email_1", "Email_2", "Email_3", "Email_4", "Email_5", "Email_6",
-      "WTS_Reply_Track", "Email_Reply_Track"
-    `;
-
-    // Fetch all rows from all three lead tables (no DB-level date filter —
-    // we filter in-memory because the "contacted" date may differ from created_at)
-    const [icpRows, metaRows, enrichedRows, emailReplies, voiceCalls, hubspotRows, coldVoiceCallsRes, hubspotVoiceCallsRes, outreachLeads, masterColdRows] = await Promise.all([
-      fetchTable("icp_tracker", ICP_DASHBOARD_COLUMNS),
-      fetchTable("meta_lead_tracker", META_DASHBOARD_COLUMNS),
-      fetchTable("ENRICHED_LEADS", ENRICHED_DASHBOARD_COLUMNS),
+    const [
+      leadStatsRes,
+      hubspotStatsRes,
+      coldEmailRes,
+      hotEmailRes,
+      coldRepliedRes,
+      hotRepliedRes,
+      emailRepliesRes,
+      voiceSecondsRes,
+      coldVoiceCountRes,
+      hubspotVoiceCountRes,
+      acquisitionRes,
+    ] = await Promise.all([
+      supabaseAdmin.rpc('get_dashboard_lead_stats', { p_from: fromIso, p_to: toIso }),
+      supabaseAdmin.rpc('get_dashboard_hubspot_stats', { p_from: fromIso, p_to: toIso }),
+      getEmailOutreachMetricsRpc(fromIso, toIso, 'cold'),
+      getEmailOutreachMetricsRpc(fromIso, toIso, 'hot'),
+      supabaseAdmin.rpc('get_cold_replied_leads_combined', { p_from: fromIso, p_to: toIso }),
+      supabaseAdmin.rpc('get_replied_leads', { p_from: fromIso, p_to: toIso, p_scope: 'hot' }),
       supabaseAdmin
         .from('instantly_lead_replies')
-        .select('id', { count: 'exact', head: false })
-        .gte('reply_timestamp', fromFull.toISOString())
-        .lte('reply_timestamp', toFull.toISOString()),
+        .select('id', { count: 'exact', head: true })
+        .gte('reply_timestamp', fromIso)
+        .lte('reply_timestamp', toIso),
       supabaseAdmin
         .from('vapi_call_logs')
-        .select('started_at, duration_seconds, status, vapi_account')
-        .gte('created_at', fromFull.toISOString())
-        .lte('created_at', toFull.toISOString()),
-      fetchTable("hubspot_lead", HUBSPOT_DASHBOARD_COLUMNS),
-      // Cold leads voice calls count
+        .select('duration_seconds')
+        .gte('created_at', fromIso)
+        .lte('created_at', toIso)
+        .limit(50000),
       supabaseAdmin
         .from('vapi_call_logs')
         .select('id', { count: 'exact', head: true })
-        .gte('created_at', fromFull.toISOString())
-        .lte('created_at', toFull.toISOString())
+        .gte('created_at', fromIso)
+        .lte('created_at', toIso)
         .ilike('vapi_account', 'cold leads'),
-      // HubSpot leads voice calls count
       supabaseAdmin
         .from('vapi_call_logs')
         .select('id', { count: 'exact', head: true })
-        .gte('created_at', fromFull.toISOString())
-        .lte('created_at', toFull.toISOString())
+        .gte('created_at', fromIso)
+        .lte('created_at', toIso)
         .ilike('vapi_account', 'hubspot'),
-      // Emails Sent counts — sourced from ENRICHED_LEADS + master_cold_leads (cold)
-      // and hubspot_lead (hot), counting Email_1..Email_6 columns
-      fetchOutreachLeads(),
-      // Master Cold Leads — feeds the Cold "Total Replies" card alongside ENRICHED_LEADS
-      fetchTable("master_cold_leads", MASTER_COLD_DASHBOARD_COLUMNS),
+      supabaseAdmin.rpc('get_lead_acquisition_by_day', { p_from: fromIso, p_to: toIso }),
     ]);
 
-    const coldOutreachLeads = outreachLeads.filter(l => l.leadType === 'cold');
-    const hotOutreachLeads = outreachLeads.filter(l => l.leadType === 'hot');
-    const coldEmailMetrics = computeMetrics(coldOutreachLeads, fromFull, toFull);
-    const hotEmailMetrics = computeMetrics(hotOutreachLeads, fromFull, toFull);
+    if (leadStatsRes.error) throw leadStatsRes.error;
+    if (hubspotStatsRes.error) throw hubspotStatsRes.error;
+    if (coldRepliedRes.error) throw coldRepliedRes.error;
+    if (hotRepliedRes.error) throw hotRepliedRes.error;
+    if (acquisitionRes.error) throw acquisitionRes.error;
 
-    const allLeads = [
-      ...icpRows.map((l: any) => ({ ...l, _table: 'icp_tracker' })),
-      ...metaRows.map((l: any) => ({ ...l, _table: 'meta_lead_tracker' })),
-      ...enrichedRows.map((l: any) => ({ ...l, _table: 'ENRICHED_LEADS' })),
-    ];
+    const leadStats = leadStatsRes.data?.[0] || {};
+    const hubspotStats = hubspotStatsRes.data?.[0] || {};
+    const coldRepliedLeads = (coldRepliedRes.data || []).map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      phone: r.phone,
+      repliedViaWhatsapp: r.replied_via_whatsapp,
+      repliedViaEmail: r.replied_via_email,
+    }));
+    const hotRepliedLeads = (hotRepliedRes.data || []).map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      phone: r.phone,
+      repliedViaWhatsapp: r.replied_via_whatsapp,
+      repliedViaEmail: r.replied_via_email,
+    }));
 
-    const emailReplyCount = emailReplies.count || 0;
+    const emailReplyCount = emailRepliesRes.count || 0;
 
-    // Voice stats from vapi_call_logs (using created_at filter)
-    const voiceData = voiceCalls.data || [];
+    const voiceData = voiceSecondsRes.data || [];
     const totalVoiceSeconds = voiceData.reduce(
       (acc: number, c: any) => acc + (typeof c.duration_seconds === 'number' ? c.duration_seconds : 0),
       0
     );
     const totalVoiceCalls = voiceData.length;
 
-    // Bifurcated voice call counts by vapi_account
-    const coldVoiceCallsCount = coldVoiceCallsRes.count || 0;
-    const hubspotVoiceCallsCount = hubspotVoiceCallsRes.count || 0;
+    const coldVoiceCallsCount = coldVoiceCountRes.count || 0;
+    const hubspotVoiceCallsCount = hubspotVoiceCountRes.count || 0;
 
-    // Build acquisition chart skeleton (one slot per day in range)
+    // Build acquisition chart with every day in range pre-seeded at 0, then
+    // fill in from the RPC's day-bucketed counts (SQL naturally omits empty
+    // days, same as the old JS which pre-seeded before its main loop).
     const acquisitionMap: Record<string, number> = {};
     const cursor = new Date(fromFull);
     while (cursor <= toFull) {
@@ -307,135 +117,53 @@ export async function getDashboardStats(fromDate: Date, toDate: Date) {
       acquisitionMap[key] = 0;
       cursor.setDate(cursor.getDate() + 1);
     }
-
-    let totalLeads = 0, icpCount = 0, metaCount = 0, enrichedCount = 0;
-    let whatsappSentCount = 0, voiceContactedCount = 0;
-    let whatsappReplyCount = 0, icpRepliedCount = 0, metaRepliedCount = 0, enrichedRepliedCount = 0;
-
-    // Total Replies (Cold section) — leads from ENRICHED_LEADS whose
-    // WTS_Reply_Track or Email_Reply_Track flag is set, within the date range.
-    const coldRepliedLeads: ReturnType<typeof extractLeadIdentity>[] = [];
-
-    allLeads.forEach((lead: any) => {
-      const dateStr = extractDate(lead);
-      if (!dateStr) return;
-
-      const leadDate = new Date(dateStr);
-      if (isNaN(leadDate.getTime())) return;
-      if (leadDate < fromFull || leadDate > toFull) return;
-
-      totalLeads++;
-      if (lead._table === 'meta_lead_tracker') metaCount++;
-      else if (lead._table === 'ENRICHED_LEADS') enrichedCount++;
-      else icpCount++;
-
-      const dayKey = leadDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      if (acquisitionMap[dayKey] !== undefined) acquisitionMap[dayKey]++;
-
-      if (hasWhatsappSent(lead)) whatsappSentCount++;
-      if (hasVoiceSent(lead)) voiceContactedCount++;
-
-      if (hasWhatsappReplied(lead)) {
-        whatsappReplyCount++;
-        if (lead._table === 'meta_lead_tracker') metaRepliedCount++;
-        else if (lead._table === 'ENRICHED_LEADS') enrichedRepliedCount++;
-        else icpRepliedCount++;
-      }
-
-      if (lead._table === 'ENRICHED_LEADS' && hasReplyTrack(lead)) {
-        coldRepliedLeads.push(extractLeadIdentity(lead));
-      }
+    (acquisitionRes.data || []).forEach((row: any) => {
+      const d = new Date(row.day_key);
+      const key = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+      if (acquisitionMap[key] !== undefined) acquisitionMap[key] = row.lead_count;
     });
-
-    // master_cold_leads doesn't carry WhatsApp/Voice columns like the other
-    // three cold tables, so it's scanned separately here (rather than folded
-    // into allLeads) purely to add its replies into the Cold "Total Replies"
-    // card — it shouldn't affect totalLeads/icpCount/whatsappSentCount/etc.
-    masterColdRows.forEach((lead: any) => {
-      const dateStr = extractDate(lead);
-      if (!dateStr) return;
-
-      const leadDate = new Date(dateStr);
-      if (isNaN(leadDate.getTime())) return;
-      if (leadDate < fromFull || leadDate > toFull) return;
-
-      if (hasReplyTrack(lead)) {
-        coldRepliedLeads.push(extractLeadIdentity(lead));
-      }
-    });
-
-    let hubspotLeads = 0, hubspotWhatsappSent = 0, hubspotVoiceContacted = 0, hubspotWhatsappReply = 0;
-
-    // Total Replies (Hot CRM section) — leads from hubspot_lead whose
-    // WTS_Reply_Track or Email_Reply_Track flag is set, within the date range.
-    const hotRepliedLeads: ReturnType<typeof extractLeadIdentity>[] = [];
-
-    hubspotRows.forEach((lead: any) => {
-      const dateStr = extractDate(lead);
-      if (!dateStr) return;
-      const leadDate = new Date(dateStr);
-      if (isNaN(leadDate.getTime())) return;
-      if (leadDate < fromFull || leadDate > toFull) return;
-
-      hubspotLeads++;
-      if (hasWhatsappSent(lead)) hubspotWhatsappSent++;
-      if (hasVoiceSent(lead)) hubspotVoiceContacted++;
-      if (hasWhatsappReplied(lead)) hubspotWhatsappReply++;
-
-      if (hasReplyTrack(lead)) {
-        hotRepliedLeads.push(extractLeadIdentity(lead));
-      }
-    });
-
     const acquisitionChartData = Object.entries(acquisitionMap).map(([name, leads]) => ({ name, leads }));
-
-    function formatDuration(totalSeconds: number) {
-      const mins = Math.floor(totalSeconds / 60);
-      const secs = Math.floor(totalSeconds % 60);
-      return `${mins}m ${secs}s`;
-    }
 
     return {
       stats: {
-        totalLeads,
-        totalICP: icpCount,
-        totalMeta: metaCount,
-        totalEnriched: enrichedCount,
-        totalEmails: coldEmailMetrics.emailsSent,
-        totalWhatsApp: whatsappSentCount,
-        totalVoice: voiceContactedCount,
+        totalLeads: leadStats.total_leads || 0,
+        // icp_tracker is no longer queried anywhere — always 0 now.
+        totalICP: 0,
+        totalMeta: leadStats.meta_count || 0,
+        totalEnriched: leadStats.enriched_count || 0,
+        totalEmails: coldEmailRes.emailsSent,
+        totalWhatsApp: leadStats.whatsapp_sent_count || 0,
+        totalVoice: leadStats.voice_contacted_count || 0,
         totalEmailReplies: emailReplyCount,
-        totalWhatsappReplies: whatsappReplyCount,
-        whatsappIcpReplied: icpRepliedCount,
-        whatsappMetaReplied: metaRepliedCount,
-        enrichedRepliedCount,
-        // Total Replies (Cold) — ENRICHED_LEADS leads with WTS_Reply_Track or
-        // Email_Reply_Track set, within the selected date range.
+        totalWhatsappReplies: leadStats.whatsapp_reply_count || 0,
+        whatsappIcpReplied: 0,
+        whatsappMetaReplied: leadStats.meta_replied_count || 0,
+        enrichedRepliedCount: leadStats.enriched_replied_count || 0,
+        // Total Replies (Cold) — ENRICHED_LEADS + master_cold_leads leads
+        // with WTS_Reply_Track or Email_Reply_Track set, within range.
         totalReplies: coldRepliedLeads.length,
         repliedLeadsCold: coldRepliedLeads,
         totalVoiceSeconds,
         voiceMinutesString: formatDuration(totalVoiceSeconds),
         totalVoiceCalls,
-        // Bifurcated voice call counts from vapi_account
         coldVoiceCallsCount,
         hubspotVoiceCallsCount,
-        totalHubspotLeads: hubspotLeads,
+        totalHubspotLeads: hubspotStats.hubspot_leads || 0,
         hubspot: {
-            leads: hubspotLeads,
-            emails: hotEmailMetrics.emailsSent,
-            whatsapp: hubspotWhatsappSent,
-            // Use actual vapi_call_logs count for hubspot voice
-            voice: hubspotVoiceCallsCount,
-            // Total Replies (Hot CRM) — hubspot_lead leads with WTS_Reply_Track
-            // or Email_Reply_Track set, within the selected date range.
-            replies: hotRepliedLeads.length,
-            repliedLeads: hotRepliedLeads,
-        }
+          leads: hubspotStats.hubspot_leads || 0,
+          emails: hotEmailRes.emailsSent,
+          whatsapp: hubspotStats.hubspot_whatsapp_sent || 0,
+          voice: hubspotVoiceCallsCount,
+          // Total Replies (Hot CRM) — hubspot_lead leads with
+          // WTS_Reply_Track or Email_Reply_Track set, within range.
+          replies: hotRepliedLeads.length,
+          repliedLeads: hotRepliedLeads,
+        },
       },
       acquisitionChartData,
     };
   } catch (error: any) {
-    console.error("Dashboard stats error:", error);
+    console.error('Dashboard stats error:', error?.message || error);
     throw error;
   }
 }

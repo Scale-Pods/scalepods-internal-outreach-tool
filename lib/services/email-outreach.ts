@@ -7,12 +7,10 @@ export const MAX_REPLY_STAGES = 25;
 
 export type LeadType = 'cold' | 'hot';
 
-// Which table backs each lead type. Cold outreach spans two tables because
-// leads live in ENRICHED_LEADS (Lusha-enriched) and master_cold_leads (Instantly-managed).
 export const COLD_TABLES = ['ENRICHED_LEADS', 'master_cold_leads'] as const;
 export const HOT_TABLE = 'hubspot_lead';
 
-// ── row shape (only the columns we actually read) ────────────────────────────
+// ── row shape (matches the jsonb shape returned by get_outreach_leads) ──────
 
 export interface EmailStageValue {
     stage: number;
@@ -55,170 +53,43 @@ function truthyText(val: any): boolean {
     return s !== '' && s !== 'no' && s !== 'none' && s !== 'false' && s !== '0';
 }
 
-function pick(row: any, keys: string[]): any {
-    for (const k of keys) {
-        if (row[k] !== undefined && row[k] !== null && row[k] !== '') return row[k];
-    }
-    return null;
-}
+// ── fetch: full lead rows across the 3 tables, via get_outreach_leads RPC ───
+// Stages/replies/identity are all built server-side in Postgres (see
+// supabase/migrations/add_email_outreach_leads_pagination_fix.sql) — this is
+// now a thin batched-pagination wrapper around the RPC instead of a raw
+// table fetch + JS-side normalization.
 
-// ── column selections per table (only what these pages need) ────────────────
+const RPC_BATCH_SIZE = 1000;
+const RPC_MAX_ROWS = 20000;
 
-const EMAIL_STAGE_COLS = Array.from({ length: EMAIL_STAGE_COUNT }, (_, i) => i + 1)
-    .flatMap(i => [`"Email_${i}"`, `"Email_${i}_Status"`, `"Email_${i}_Message_ID"`])
-    .join(', ');
-
-const REPLY_COLS = Array.from({ length: MAX_REPLY_STAGES }, (_, i) => i + 1)
-    .flatMap(i => [`"User_Replied_${i}"`, `"Bot_Replied_${i}"`])
-    .join(', ');
-
-// master_cold_leads has both the content columns (User_Replied_N / Bot_Replied_N)
-// and separate _Status columns (JSON metadata: status/timestamp/message_id) — fetch both.
-const REPLY_STATUS_COLS = Array.from({ length: MAX_REPLY_STAGES }, (_, i) => i + 1)
-    .flatMap(i => [`"User_Replied_Status_${i}"`, `"Bot_Replied_Status_${i}"`])
-    .join(', ');
-
-const ENRICHED_LEADS_COLUMNS = `
-    id, lead_uuid, lead_type, full_name, "First Name", "Last Name",
-    "Personal Email", "Work Email", "SENDERS  EMAIL", company_phone_number, personal_phone,
-    "Email Last Contacted", "Replied", "Email_Reply_Track", email_bounced, email_unsubscribed, created_at,
-    ${EMAIL_STAGE_COLS}, ${REPLY_COLS}
-`;
-
-const MASTER_COLD_LEADS_COLUMNS = `
-    lead_uuid, full_name, first_name, last_name, email, "Personal Email",
-    mobile_number, company_phone_number, "SENDERS  EMAIL",
-    "Email Last Contacted", "Replied", "Email_Reply_Track",
-    email_bounced, email_unsubscribed, email_status, email_last_sent_at, created_at,
-    ${EMAIL_STAGE_COLS}, ${REPLY_COLS}, ${REPLY_STATUS_COLS}
-`;
-
-const HUBSPOT_LEAD_COLUMNS = `
-    lead_id, full_name, "First Name", "Last Name", "Personal Email", "Work Email", "SENDERS  EMAIL",
-    company_phone_number, personal_phone,
-    "Email Last Contacted", "Replied", "Email_Reply_Track", email_bounced, email_unsubscribed, created_at,
-    ${EMAIL_STAGE_COLS}, ${REPLY_COLS}
-`;
-
-const FETCH_BATCH_SIZE = 1000;
-
-// PostgREST caps rows per request (default 1000) regardless of .limit() —
-// batch with .range() so tables larger than that aren't silently truncated.
-async function fetchAll(tableName: string, columns: string, maxRows = 20000) {
-    const allRows: any[] = [];
+export async function fetchOutreachLeads(leadType?: LeadType): Promise<NormalizedLeadRow[]> {
+    const allRows: NormalizedLeadRow[] = [];
     let offset = 0;
 
     try {
-        while (offset < maxRows) {
-            const { data, error } = await supabaseAdmin
-                .from(tableName)
-                .select(columns)
-                .range(offset, offset + FETCH_BATCH_SIZE - 1);
+        while (offset < RPC_MAX_ROWS) {
+            const { data, error } = await supabaseAdmin.rpc('get_outreach_leads', {
+                p_lead_type: leadType ?? null,
+                p_limit: RPC_BATCH_SIZE,
+                p_offset: offset,
+            });
 
             if (error) {
-                console.error(`[email-outreach] fetch error for ${tableName}:`, error.message);
+                console.error('[email-outreach] get_outreach_leads RPC error:', error.message);
                 break;
             }
             if (!data || data.length === 0) break;
 
-            allRows.push(...data);
-            offset += FETCH_BATCH_SIZE;
+            data.forEach((row: any) => allRows.push({ ...row, raw: row }));
+            offset += RPC_BATCH_SIZE;
 
-            if (data.length < FETCH_BATCH_SIZE) break;
+            if (data.length < RPC_BATCH_SIZE) break;
         }
     } catch (e: any) {
-        console.error(`[email-outreach] fetch exception for ${tableName}:`, e.message);
+        console.error('[email-outreach] get_outreach_leads exception:', e?.message || e);
     }
 
     return allRows;
-}
-
-// ── normalization ─────────────────────────────────────────────────────────────
-
-function normalizeRow(row: any, table: string, leadType: LeadType): NormalizedLeadRow {
-    const stages: EmailStageValue[] = [];
-    for (let i = 1; i <= EMAIL_STAGE_COUNT; i++) {
-        const content = row[`Email_${i}`] ?? null;
-        const status = row[`Email_${i}_Status`] ?? null;
-        const messageId = row[`Email_${i}_Message_ID`] ?? null;
-        stages.push({ stage: i, content, status, messageId });
-    }
-
-    const replies: ReplyEntry[] = [];
-    for (let i = 1; i <= MAX_REPLY_STAGES; i++) {
-        // Use the actual message content columns (User_Replied_N / Bot_Replied_N) as display text.
-        // The _Status columns (master_cold_leads) hold JSON metadata (status/timestamp/message_id),
-        // not display text — only used to detect that a reply happened when content is missing.
-        const userContent = row[`User_Replied_${i}`] ?? null;
-        const botContent = row[`Bot_Replied_${i}`] ?? null;
-        const userStatus = row[`User_Replied_Status_${i}`] ?? null;
-        const botStatus = row[`Bot_Replied_Status_${i}`] ?? null;
-
-        const hasUser = truthyText(userContent) || truthyText(userStatus);
-        const hasBot = truthyText(botContent) || truthyText(botStatus);
-
-        if (hasUser || hasBot) {
-            replies.push({
-                index: i,
-                userReplied: truthyText(userContent) ? userContent : null,
-                botReplied: truthyText(botContent) ? botContent : null,
-                userStatusOnly: hasUser && !truthyText(userContent),
-                botStatusOnly: hasBot && !truthyText(botContent),
-            });
-        }
-    }
-
-    const id = String(
-        row.lead_uuid || row.id || row.lead_id || row.company_phone_number || `${table}-${Math.random().toString(36).slice(2)}`
-    );
-
-    const fullName = String(
-        row.full_name || `${row['First Name'] || row.first_name || ''} ${row['Last Name'] || row.last_name || ''}`.trim() || 'Unknown Lead'
-    );
-
-    const email = String(
-        pick(row, ['Personal Email', 'Work Email', 'email']) || 'No Email'
-    );
-
-    const phone = String(pick(row, ['company_phone_number', 'mobile_number', 'personal_phone']) || '');
-
-    const senderEmail = pick(row, ['SENDERS  EMAIL']) as string | null;
-    const lastContacted = pick(row, ['Email Last Contacted', 'email_last_sent_at']) as string | null;
-
-    return {
-        id,
-        table,
-        leadType,
-        fullName,
-        email,
-        phone,
-        senderEmail,
-        lastContacted,
-        createdAt: row.created_at || null,
-        replied: row.Replied ?? null,
-        emailReplyTrack: truthyText(row.Email_Reply_Track),
-        bounced: truthyText(row.email_bounced),
-        unsubscribed: truthyText(row.email_unsubscribed),
-        stages,
-        replies,
-        raw: row,
-    };
-}
-
-// ── main fetch: all normalized rows across the 3 tables ──────────────────────
-
-export async function fetchOutreachLeads(): Promise<NormalizedLeadRow[]> {
-    const [enrichedRows, masterColdRows, hubspotRows] = await Promise.all([
-        fetchAll('ENRICHED_LEADS', ENRICHED_LEADS_COLUMNS),
-        fetchAll('master_cold_leads', MASTER_COLD_LEADS_COLUMNS),
-        fetchAll(HOT_TABLE, HUBSPOT_LEAD_COLUMNS),
-    ]);
-
-    return [
-        ...enrichedRows.map((r: any) => normalizeRow(r, 'ENRICHED_LEADS', 'cold')),
-        ...masterColdRows.map((r: any) => normalizeRow(r, 'master_cold_leads', 'cold')),
-        ...hubspotRows.map((r: any) => normalizeRow(r, HOT_TABLE, 'hot')),
-    ];
 }
 
 function inRange(dateStr: string | null, from: Date, to: Date): boolean {
@@ -228,7 +99,7 @@ function inRange(dateStr: string | null, from: Date, to: Date): boolean {
     return d >= from && d <= to;
 }
 
-// ── aggregated metrics for a set of leads ────────────────────────────────────
+// ── aggregated metrics ────────────────────────────────────────────────────────
 
 export interface OutreachMetrics {
     totalLeads: number;
@@ -242,6 +113,11 @@ export interface OutreachMetrics {
     replyRate: number;
 }
 
+// Client-side JS aggregation over already-fetched leads — kept for callers
+// that already have a NormalizedLeadRow[] in hand (e.g. after date-range
+// filtering client-side). For a fresh from/to query, prefer
+// getEmailOutreachMetricsRpc() below, which computes this server-side in a
+// single round trip instead of pulling every row into Node first.
 export function computeMetrics(leads: NormalizedLeadRow[], from: Date, to: Date): OutreachMetrics {
     const stageSentCounts = new Array(EMAIL_STAGE_COUNT).fill(0);
     let contactedLeads = 0;
@@ -281,13 +157,56 @@ export function computeMetrics(leads: NormalizedLeadRow[], from: Date, to: Date)
     };
 }
 
-export async function getOutreachDashboardData(from: Date, to: Date) {
-    const allLeads = await fetchOutreachLeads();
-    const coldLeads = allLeads.filter(l => l.leadType === 'cold');
-    const hotLeads = allLeads.filter(l => l.leadType === 'hot');
+// Server-side metrics via get_email_outreach_metrics RPC — computes
+// contacted/sent/replied/bounced/unsubscribed counts entirely in Postgres.
+// Used by the master dashboard and the email dashboard's summary cards,
+// where only the numbers (not full row content) are needed.
+export async function getEmailOutreachMetricsRpc(
+    fromIso: string,
+    toIso: string,
+    leadType: LeadType
+): Promise<OutreachMetrics> {
+    const { data, error } = await supabaseAdmin.rpc('get_email_outreach_metrics', {
+        p_from: fromIso,
+        p_to: toIso,
+        p_lead_type: leadType,
+    });
 
+    if (error) {
+        console.error('[email-outreach] get_email_outreach_metrics RPC error:', error.message);
+        return {
+            totalLeads: 0, contactedLeads: 0, emailsSent: 0,
+            stageSentCounts: [0, 0, 0, 0, 0, 0],
+            repliedLeads: 0, totalReplies: 0,
+            bouncedLeads: 0, unsubscribedLeads: 0, replyRate: 0,
+        };
+    }
+
+    const row = data?.[0] || {};
     return {
-        cold: computeMetrics(coldLeads, from, to),
-        hot: computeMetrics(hotLeads, from, to),
+        totalLeads: row.total_leads || 0,
+        contactedLeads: row.contacted_leads || 0,
+        emailsSent: row.emails_sent || 0,
+        stageSentCounts: [
+            row.stage_1_sent || 0, row.stage_2_sent || 0, row.stage_3_sent || 0,
+            row.stage_4_sent || 0, row.stage_5_sent || 0, row.stage_6_sent || 0,
+        ],
+        repliedLeads: row.replied_leads || 0,
+        totalReplies: row.total_replies || 0,
+        bouncedLeads: row.bounced_leads || 0,
+        unsubscribedLeads: row.unsubscribed_leads || 0,
+        replyRate: row.reply_rate || 0,
     };
+}
+
+export async function getOutreachDashboardData(from: Date, to: Date) {
+    const fromIso = from.toISOString();
+    const toIso = to.toISOString();
+
+    const [cold, hot] = await Promise.all([
+        getEmailOutreachMetricsRpc(fromIso, toIso, 'cold'),
+        getEmailOutreachMetricsRpc(fromIso, toIso, 'hot'),
+    ]);
+
+    return { cold, hot };
 }

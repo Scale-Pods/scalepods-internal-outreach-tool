@@ -7,13 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Mail, MessageCircle, Mic, ExternalLink, Copy, Eye, EyeOff, ShieldCheck, Wallet, Phone, BarChart3, Settings, Smartphone } from "lucide-react";
 import React, { useState, useEffect } from "react";
-import { MaqsamBalanceDetail } from "@/components/dashboard/maqsam-balance-detail";
 import { useRouter } from "next/navigation";
 
 import { useData } from "@/context/DataContext";
 
 export default function CredentialsPage() {
-    const { calls, voiceBalance, vapiHotBalance, vapiColdBalance, maqsamBalance, twilioBalance, loadingBalances } = useData();
+    const { calls, voiceBalance, vapiHotBalance, vapiColdBalance, twilioBalance, loadingBalances } = useData();
 
     const vapiAgentUsed = React.useMemo(() => {
         if (voiceBalance?.vapi?.used !== undefined && voiceBalance?.vapi?.used !== 0) {
@@ -36,15 +35,6 @@ export default function CredentialsPage() {
         return calls.filter((c: any) => c.accountType === 'cold')
             .reduce((acc: number, call: any) => acc + (call.breakdown?.agent || 0), 0);
     }, [calls, vapiColdBalance]);
-
-    const maqsamUsedCost = React.useMemo(() => {
-        if (!calls || !Array.isArray(calls)) return 0;
-        return calls.filter((c: any) => {
-            const phoneStr = String(c.phone || c.customer_number || "");
-            const isUAE = phoneStr.startsWith('+971') || phoneStr.startsWith('971');
-            return isUAE;
-        }).reduce((acc: number, call: any) => acc + (call.costValue || 0), 0);
-    }, [calls]);
 
     const [senderEmails, setSenderEmails] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
@@ -218,23 +208,6 @@ export default function CredentialsPage() {
                             </div>
                         </div>
                     </div>
-                </CredentialSection>
-
-                {/* Maqsam Section */}
-                <CredentialSection
-                    title="Maqsam Telephony"
-                    description="VoIP and Telephony provider credentials."
-                    icon={Phone}
-                    iconColor="text-slate-600"
-                    iconBg="bg-slate-50"
-                    action={
-                        <Button className="bg-slate-600 hover:bg-slate-700 text-white gap-2" onClick={() => window.open('https://maqsam.com', '_blank')}>
-                            <Wallet className="h-4 w-4" />
-                            Manage Billing
-                        </Button>
-                    }
-                >
-                    <MaqsamBalanceDetail initialBalance={maqsamBalance} />
                 </CredentialSection>
 
                 {/* Twilio Section */}

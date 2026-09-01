@@ -10,7 +10,7 @@ export const COLD_TABLE = 'ENRICHED_LEADS';
 export const HOT_TABLE = 'hubspot_lead';
 export const HUBSPOT_WA_TABLE = 'hubspot_wa_outreach';
 
-// ── row shape ─────────────────────────────────────────────────────────────────
+// ── row shape (matches the jsonb shape returned by get_wa_leads) ────────────
 
 export interface WaStageValue {
     stage: number;
@@ -89,7 +89,7 @@ function parseStatusDate(tsRaw: any): Date | null {
 
 /** Resolve the best "last contacted" timestamp for a lead */
 export function getWaLastContacted(lead: NormalizedWaLead): string | null {
-    const direct = lead.raw['Whatsapp Last Contacted'] || lead.raw['whatsapp_last_contacted'];
+    const direct = lead.raw['Whatsapp Last Contacted'] || lead.raw['whatsapp_last_contacted'] || lead.lastContacted;
     const directDate = parseStatusDate(direct);
     if (directDate) return directDate.toISOString();
 
@@ -111,97 +111,48 @@ export function getWaLastContacted(lead: NormalizedWaLead): string | null {
     return lead.createdAt;
 }
 
-// ── column selections ─────────────────────────────────────────────────────────
+// ── fetch: full lead rows across the 3 tables, via get_wa_leads RPC ─────────
+// stages/conversation are built server-side in Postgres (see
+// supabase/migrations/add_wa_outreach_leads.sql) — this is now a thin
+// batched-pagination wrapper around the RPC.
 
-// Whatsapp_1..5 are capitalized on both tables, but stage 6 is lowercase
-// (whatsapp_6 / whatsapp_6_status) on ENRICHED_LEADS while hubspot_lead keeps it capitalized.
-const WA_STAGE_COLS_1_5 = Array.from({ length: WA_STAGE_COUNT - 1 }, (_, i) => i + 1)
-    .flatMap(i => [`"Whatsapp_${i}"`, `"Whatsapp_${i}_status"`])
-    .join(', ');
+const RPC_BATCH_SIZE = 1000;
+const RPC_MAX_ROWS = 20000;
 
-const ENRICHED_LEADS_COLUMNS = `
-    id, lead_uuid, full_name, "First Name", "Last Name", company_phone_number, personal_phone,
-    "Whatsapp Last Contacted", wa_conversation, created_at,
-    ${WA_STAGE_COLS_1_5}, whatsapp_6, whatsapp_6_status
-`;
+export async function fetchWaLeads(leadType?: LeadType): Promise<NormalizedWaLead[]> {
+    const allRows: NormalizedWaLead[] = [];
+    let offset = 0;
 
-const HUBSPOT_LEAD_COLUMNS = `
-    lead_id, full_name, "First Name", "Last Name", company_phone_number, personal_phone,
-    "Whatsapp Last Contacted", lifecyclestage, wa_conversation, created_at,
-    ${WA_STAGE_COLS_1_5}, "Whatsapp_6", "Whatsapp_6_status"
-`;
-
-// hubspot_wa_outreach only carries a single WhatsApp drip stage.
-const HUBSPOT_WA_OUTREACH_COLUMNS = `
-    lead_id, full_name, company_phone_number, lifecyclestage,
-    "Whatsapp Last Contacted", "Whatsapp_1", "Whatsapp_1_status", wa_conversation,
-    "Lead_Classification", "Lead_Classification_Reason", created_at
-`;
-
-async function fetchAll(tableName: string, columns: string, limit = 20000) {
     try {
-        const { data, error } = await supabaseAdmin.from(tableName).select(columns).limit(limit);
-        if (error) {
-            console.error(`[whatsapp-outreach] fetch error for ${tableName}:`, error.message);
-            return [];
+        while (offset < RPC_MAX_ROWS) {
+            const { data, error } = await supabaseAdmin.rpc('get_wa_leads', {
+                p_lead_type: leadType ?? null,
+                p_limit: RPC_BATCH_SIZE,
+                p_offset: offset,
+            });
+
+            if (error) {
+                console.error('[whatsapp-outreach] get_wa_leads RPC error:', error.message);
+                break;
+            }
+            if (!data || data.length === 0) break;
+
+            data.forEach((row: any) => {
+                allRows.push({
+                    ...row,
+                    conversation: parseWaConversation(row.conversation),
+                    raw: row.raw || {},
+                });
+            });
+            offset += RPC_BATCH_SIZE;
+
+            if (data.length < RPC_BATCH_SIZE) break;
         }
-        return data || [];
     } catch (e: any) {
-        console.error(`[whatsapp-outreach] fetch exception for ${tableName}:`, e.message);
-        return [];
-    }
-}
-
-// ── normalization ─────────────────────────────────────────────────────────────
-
-export function normalizeWaRow(row: any, table: string, leadType: LeadType, stageCount: number = WA_STAGE_COUNT): NormalizedWaLead {
-    const stages: WaStageValue[] = [];
-    for (let i = 1; i <= stageCount; i++) {
-        // Stage 6 is lowercase (whatsapp_6/whatsapp_6_status) on ENRICHED_LEADS.
-        stages.push({
-            stage: i,
-            content: row[`Whatsapp_${i}`] ?? row[`whatsapp_${i}`] ?? null,
-            status: row[`Whatsapp_${i}_status`] ?? row[`whatsapp_${i}_status`] ?? null,
-        });
+        console.error('[whatsapp-outreach] get_wa_leads exception:', e?.message || e);
     }
 
-    const conversation = parseWaConversation(row.wa_conversation);
-
-    const id = String(row.lead_uuid || row.id || row.lead_id || row.company_phone_number || `${table}-${Math.random().toString(36).slice(2)}`);
-    const fullName = String(
-        row.full_name || `${row['First Name'] || ''} ${row['Last Name'] || ''}`.trim() || 'Unknown Lead'
-    );
-    const phone = String(row.company_phone_number || row.personal_phone || '');
-
-    return {
-        id,
-        table,
-        leadType,
-        fullName,
-        phone,
-        lastContacted: row['Whatsapp Last Contacted'] || null,
-        createdAt: row.created_at || null,
-        lifecycleStage: row.lifecyclestage || null,
-        leadClassification: row['Lead_Classification'] || null,
-        leadClassificationReason: row['Lead_Classification_Reason'] || null,
-        stages,
-        conversation,
-        raw: row,
-    };
-}
-
-export async function fetchWaLeads(): Promise<NormalizedWaLead[]> {
-    const [enrichedRows, hubspotRows, hubspotWaRows] = await Promise.all([
-        fetchAll(COLD_TABLE, ENRICHED_LEADS_COLUMNS),
-        fetchAll(HOT_TABLE, HUBSPOT_LEAD_COLUMNS),
-        fetchAll(HUBSPOT_WA_TABLE, HUBSPOT_WA_OUTREACH_COLUMNS),
-    ]);
-
-    return [
-        ...enrichedRows.map((r: any) => normalizeWaRow(r, COLD_TABLE, 'cold')),
-        ...hubspotRows.map((r: any) => normalizeWaRow(r, HOT_TABLE, 'hot')),
-        ...hubspotWaRows.map((r: any) => normalizeWaRow(r, HUBSPOT_WA_TABLE, 'hubspot_wa', 1)),
-    ];
+    return allRows;
 }
 
 /** Does this lead have any WhatsApp activity at all (sent or received)? */
@@ -244,6 +195,10 @@ export interface WaMetrics {
     replyRate: number;
 }
 
+// Client-side JS aggregation over already-fetched leads — kept for callers
+// that have a NormalizedWaLead[] in hand already. For a fresh from/to
+// query, prefer getWaOutreachMetricsRpc() below, which computes this
+// server-side in a single round trip.
 export function computeWaMetrics(leads: NormalizedWaLead[], from: Date, to: Date): WaMetrics {
     const stageSentCounts = new Array(WA_STAGE_COUNT).fill(0);
     let contactedLeads = 0;
@@ -293,17 +248,55 @@ export function computeWaMetrics(leads: NormalizedWaLead[], from: Date, to: Date
     };
 }
 
-export async function getWaDashboardData(from: Date, to: Date) {
-    const allLeads = await fetchWaLeads();
-    const coldLeads = allLeads.filter(l => l.leadType === 'cold' && hasWaActivity(l));
-    const hotLeads = allLeads.filter(l => l.leadType === 'hot' && hasWaActivity(l));
-    const hubspotWaLeads = allLeads.filter(l => l.leadType === 'hubspot_wa' && hasWaActivity(l));
+// Server-side metrics via get_wa_outreach_metrics RPC.
+export async function getWaOutreachMetricsRpc(
+    fromIso: string,
+    toIso: string,
+    leadType: LeadType
+): Promise<WaMetrics> {
+    const { data, error } = await supabaseAdmin.rpc('get_wa_outreach_metrics', {
+        p_from: fromIso,
+        p_to: toIso,
+        p_lead_type: leadType,
+    });
 
+    if (error) {
+        console.error('[whatsapp-outreach] get_wa_outreach_metrics RPC error:', error.message);
+        return {
+            totalLeads: 0, contactedLeads: 0, messagesSent: 0, botMessages: 0,
+            stageSentCounts: [0, 0, 0, 0, 0, 0],
+            repliedLeads: 0, totalReplies: 0, failedMessages: 0, replyRate: 0,
+        };
+    }
+
+    const row = data?.[0] || {};
     return {
-        cold: computeWaMetrics(coldLeads, from, to),
-        hot: computeWaMetrics(hotLeads, from, to),
-        hubspotWa: computeWaMetrics(hubspotWaLeads, from, to),
+        totalLeads: row.total_leads || 0,
+        contactedLeads: row.contacted_leads || 0,
+        messagesSent: row.messages_sent || 0,
+        botMessages: row.messages_sent || 0, // RPC doesn't split bot vs total — same value in the old JS too (botMessages += leadSent, identical to messagesSent)
+        stageSentCounts: [
+            row.stage_1_sent || 0, row.stage_2_sent || 0, row.stage_3_sent || 0,
+            row.stage_4_sent || 0, row.stage_5_sent || 0, row.stage_6_sent || 0,
+        ],
+        repliedLeads: row.replied_leads || 0,
+        totalReplies: row.replied_leads || 0, // RPC counts replied leads, not raw reply-message count — see get_email_outreach_metrics's identical note
+        failedMessages: row.failed_messages || 0,
+        replyRate: row.reply_rate || 0,
     };
+}
+
+export async function getWaDashboardData(from: Date, to: Date) {
+    const fromIso = from.toISOString();
+    const toIso = to.toISOString();
+
+    const [cold, hot, hubspotWa] = await Promise.all([
+        getWaOutreachMetricsRpc(fromIso, toIso, 'cold'),
+        getWaOutreachMetricsRpc(fromIso, toIso, 'hot'),
+        getWaOutreachMetricsRpc(fromIso, toIso, 'hubspot_wa'),
+    ]);
+
+    return { cold, hot, hubspotWa };
 }
 
 // ── unified conversation timeline (bot drips + wa_conversation, chronological) ──

@@ -14,10 +14,14 @@ export async function GET(req: Request) {
         const to = toParam ? new Date(toParam) : new Date();
         to.setHours(23, 59, 59, 999);
 
-        const allLeads = await fetchWaLeads();
-        const coldLeads = allLeads.filter(l => l.leadType === 'cold' && hasWaActivity(l));
-        const hotLeads = allLeads.filter(l => l.leadType === 'hot' && hasWaActivity(l));
-        const hubspotWaLeads = allLeads.filter(l => l.leadType === 'hubspot_wa' && hasWaActivity(l));
+        const [coldAll, hotAll, hubspotWaAll] = await Promise.all([
+            fetchWaLeads('cold'),
+            fetchWaLeads('hot'),
+            fetchWaLeads('hubspot_wa'),
+        ]);
+        const coldLeads = coldAll.filter(hasWaActivity);
+        const hotLeads = hotAll.filter(hasWaActivity);
+        const hubspotWaLeads = hubspotWaAll.filter(hasWaActivity);
 
         return NextResponse.json({
             cold: {

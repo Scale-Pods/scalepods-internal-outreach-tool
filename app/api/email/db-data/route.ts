@@ -76,16 +76,13 @@ export async function GET(req: Request) {
         }
 
         // Use efficient aggregate count queries instead of fetching 50k rows
-        const [icpStats, enrichedStats] = await Promise.all([
-            countTableEmailStats('icp_tracker', fromISO, toISO),
-            countTableEmailStats('ENRICHED_LEADS', fromISO, toISO)
-        ]);
+        const enrichedStats = await countTableEmailStats('ENRICHED_LEADS', fromISO, toISO);
 
         const emailStats = {
-            totalEmails: icpStats.totalEmails + enrichedStats.totalEmails,
-            leadsContacted: icpStats.contacted + enrichedStats.contacted,
-            repliedLeads: icpStats.replied + enrichedStats.replied,
-            emailCounts: icpStats.emailCounts.map((c, i) => c + enrichedStats.emailCounts[i])
+            totalEmails: enrichedStats.totalEmails,
+            leadsContacted: enrichedStats.contacted,
+            repliedLeads: enrichedStats.replied,
+            emailCounts: enrichedStats.emailCounts
         };
 
         return NextResponse.json({

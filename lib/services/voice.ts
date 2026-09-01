@@ -1,5 +1,4 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { format, getHours } from "date-fns";
 
 // vapi_account values
 export const COLD_LEADS_ACCOUNT = "cold leads";
@@ -12,84 +11,105 @@ function classifyAccount(vapiAccount: string | null | undefined): 'cold' | 'hubs
     return 'other';
 }
 
-const POSITIVE_SENTIMENTS = [
-    "expression of interest",
-    "callback- plan postponed",
-    "callback plan postponed",
-    "callback-plan postponed",
-];
+const emptyStats = {
+    totalCalls: 0, totalDuration: 0, avgDuration: 0,
+    totalCost: 0, avgCost: 0, successRate: 0, successCount: 0,
+    pickupRate: 0, pickedUpCount: 0, completionRate: 0, completedCount: 0,
+};
 
-function isPositiveSentiment(val: any): boolean {
-    if (!val) return false;
-    const lower = String(val).trim().toLowerCase();
-    return POSITIVE_SENTIMENTS.some(s => lower.includes(s));
+async function getScopedStats(fromIso: string, toIso: string, scope: 'all' | 'cold' | 'hubspot') {
+    const { data, error } = await supabaseAdmin.rpc('get_voice_call_stats', {
+        p_from: fromIso, p_to: toIso, p_account_scope: scope,
+    });
+    if (error) {
+        console.error(`[voice] get_voice_call_stats(${scope}) error:`, error.message);
+        return emptyStats;
+    }
+    const row = data?.[0];
+    if (!row) return emptyStats;
+    return {
+        totalCalls: row.total_calls || 0,
+        totalDuration: row.total_duration || 0,
+        avgDuration: row.avg_duration || 0,
+        totalCost: row.total_cost || 0,
+        avgCost: row.avg_cost || 0,
+        successRate: row.success_rate || 0,
+        successCount: row.success_count || 0,
+        pickupRate: row.pickup_rate || 0,
+        pickedUpCount: row.picked_up_count || 0,
+        completionRate: row.completion_rate || 0,
+        completedCount: row.completed_count || 0,
+    };
 }
 
-function buildMetrics(calls: any[]) {
-    let totalDuration = 0, totalCost = 0, successCount = 0;
-    let pickedUpCount = 0;
-    let completedCount = 0;
-    const dayMap = new Map<string, { count: number; display: string; totalDuration: number }>();
-    const hourMap = new Array(24).fill(0);
-    const statusBreakdown: Record<string, number> = {};
-
-    calls.forEach((call: any) => {
-        const duration = typeof call.duration_seconds === 'number' ? call.duration_seconds : 0;
-        const cost = typeof call.cost_usd === 'number' ? call.cost_usd : 0;
-        const rawStatus = (call.status || '').toLowerCase().trim();
-
-        if (['done', 'ended', 'completed', 'success', 'answered'].includes(rawStatus)) successCount++;
-        if (duration > 18) pickedUpCount++;
-        if (rawStatus === 'customer-ended-call' || rawStatus === 'assistant-ended-call') completedCount++;
-
-        totalDuration += duration;
-        totalCost += cost;
-        statusBreakdown[rawStatus] = (statusBreakdown[rawStatus] || 0) + 1;
-
-        const dt = new Date(call.created_at);
-        if (!isNaN(dt.getTime())) {
-            const dayKey = format(dt, 'yyyy-MM-dd');
-            const displayKey = format(dt, 'MMM dd');
-            if (!dayMap.has(dayKey)) dayMap.set(dayKey, { count: 0, display: displayKey, totalDuration: 0 });
-            const entry = dayMap.get(dayKey)!;
-            entry.count++;
-            entry.totalDuration += duration;
-            hourMap[getHours(dt)]++;
-        }
+async function getScopedDailyVolume(fromIso: string, toIso: string, scope: 'all' | 'cold' | 'hubspot') {
+    const { data, error } = await supabaseAdmin.rpc('get_voice_daily_volume', {
+        p_from: fromIso, p_to: toIso, p_account_scope: scope,
     });
+    if (error) {
+        console.error(`[voice] get_voice_daily_volume(${scope}) error:`, error.message);
+        return [];
+    }
+    return (data || []).map((row: any) => ({
+        dayKey: row.day_key,
+        name: row.display_name,
+        calls: row.calls,
+        totalDuration: row.total_duration_minutes,
+    }));
+}
 
-    const total = calls.length;
-    const dailyVolume = Array.from(dayMap.entries())
-        .map(([dayKey, d]) => ({
-            dayKey,
-            name: d.display,
-            calls: d.count,
-            totalDuration: Math.round(d.totalDuration / 60)
-        }))
-        .sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+async function getScopedHourlyDistribution(fromIso: string, toIso: string, scope: 'all' | 'cold' | 'hubspot') {
+    const { data, error } = await supabaseAdmin.rpc('get_voice_hourly_distribution', {
+        p_from: fromIso, p_to: toIso, p_account_scope: scope,
+    });
+    if (error) {
+        console.error(`[voice] get_voice_hourly_distribution(${scope}) error:`, error.message);
+        return [];
+    }
+    const byHour = new Map<number, number>();
+    (data || []).forEach((row: any) => byHour.set(row.hour_of_day, row.calls));
+    // Mirrors the old JS: 24 hourly buckets, then keep every 3rd for display.
+    return Array.from({ length: 24 }, (_, hour) => ({
+        name: `${hour.toString().padStart(2, '0')}:00`,
+        calls: byHour.get(hour) || 0,
+    })).filter((_, i) => i % 3 === 0);
+}
 
-    const hourlyDistribution = hourMap
-        .map((calls, hour) => ({ name: `${hour.toString().padStart(2, '0')}:00`, calls }))
-        .filter((_, i) => i % 3 === 0);
+async function getStatusBreakdown(fromIso: string, toIso: string, scope: 'all' | 'cold' | 'hubspot') {
+    const { data, error } = await supabaseAdmin.rpc('get_voice_status_breakdown', {
+        p_from: fromIso, p_to: toIso, p_account_scope: scope,
+    });
+    if (error) {
+        console.error(`[voice] get_voice_status_breakdown(${scope}) error:`, error.message);
+        return {};
+    }
+    const breakdown: Record<string, number> = {};
+    (data || []).forEach((row: any) => { breakdown[row.status] = row.calls; });
+    return breakdown;
+}
 
-    return {
-        stats: {
-            totalCalls: total,
-            totalDuration,
-            avgDuration: total > 0 ? totalDuration / total : 0,
-            totalCost,
-            avgCost: total > 0 ? totalCost / total : 0,
-            successRate: total > 0 ? (successCount / total) * 100 : 0,
-            successCount,
-            pickupRate: total > 0 ? (pickedUpCount / total) * 100 : 0,
-            pickedUpCount,
-            completionRate: total > 0 ? (completedCount / total) * 100 : 0,
-            completedCount,
-        },
-        dailyVolume,
-        hourlyDistribution,
-        statusBreakdown,
-    };
+const CALL_LOGS_BATCH_SIZE = 1000;
+const CALL_LOGS_MAX_ROWS = 20000;
+
+async function fetchAllCallLogs(fromIso: string, toIso: string) {
+    const allRows: any[] = [];
+    let offset = 0;
+
+    while (offset < CALL_LOGS_MAX_ROWS) {
+        const { data, error } = await supabaseAdmin.rpc('get_call_logs', {
+            p_from: fromIso, p_to: toIso, p_limit: CALL_LOGS_BATCH_SIZE, p_offset: offset,
+        });
+        if (error) {
+            console.error('[voice] get_call_logs error:', error.message);
+            break;
+        }
+        if (!data || data.length === 0) break;
+        allRows.push(...data);
+        offset += CALL_LOGS_BATCH_SIZE;
+        if (data.length < CALL_LOGS_BATCH_SIZE) break;
+    }
+
+    return allRows;
 }
 
 export async function getVoiceStats(fromDate: Date, toDate: Date, providerFilter: string = "all") {
@@ -102,83 +122,79 @@ export async function getVoiceStats(fromDate: Date, toDate: Date, providerFilter
         const fromStr = fromFull.toISOString();
         const toStr = toFull.toISOString();
 
-        // ── 1. Fetch vapi_call_logs in the date range ──────────
-        let query = supabaseAdmin
-            .from('vapi_call_logs')
-            .select('id, created_at, started_at, customer_phone, customer_name, duration_seconds, status, cost_usd, source, transcript, summary, recording_url, vapi_account, type, "assistantId"')
-            .gte('created_at', fromStr)
-            .lte('created_at', toStr)
-            .order('created_at', { ascending: false });
+        const [
+            allStats, coldStats, hubspotStats,
+            allDaily, coldDaily, hubspotDaily,
+            allHourly, coldHourly, hubspotHourly,
+            statusBreakdown,
+            callLogs,
+            lifetimeCostRes,
+        ] = await Promise.all([
+            getScopedStats(fromStr, toStr, 'all'),
+            getScopedStats(fromStr, toStr, 'cold'),
+            getScopedStats(fromStr, toStr, 'hubspot'),
+            getScopedDailyVolume(fromStr, toStr, 'all'),
+            getScopedDailyVolume(fromStr, toStr, 'cold'),
+            getScopedDailyVolume(fromStr, toStr, 'hubspot'),
+            getScopedHourlyDistribution(fromStr, toStr, 'all'),
+            getScopedHourlyDistribution(fromStr, toStr, 'cold'),
+            getScopedHourlyDistribution(fromStr, toStr, 'hubspot'),
+            getStatusBreakdown(fromStr, toStr, 'all'),
+            fetchAllCallLogs(fromStr, toStr),
+            supabaseAdmin.from('vapi_call_logs').select('cost_usd').limit(50000),
+        ]);
 
-        if (providerFilter !== "all") {
-            query = query.eq('source', providerFilter);
-        }
+        // providerFilter (source column) isn't part of the RPC scope params —
+        // apply it client-side to the already-fetched call log feed, same
+        // narrow use as before (only affects recentCalls, not the aggregate
+        // stat cards, which the original JS also computed off the unfiltered
+        // vapi_account-scoped set).
+        const filteredCallLogs = providerFilter === 'all'
+            ? callLogs
+            : callLogs.filter((c: any) => c.source === providerFilter);
 
-        const { data: filteredCallsRaw, error: callsErr } = await query;
-        if (callsErr) console.error("vapi_call_logs fetch error:", callsErr);
-        const filteredCalls = filteredCallsRaw || [];
-
-        // Estimate lifetime VAPI cost
-        const { data: allCostData } = await supabaseAdmin
-            .from('vapi_call_logs')
-            .select('cost_usd')
-            .limit(50000);
         let lifetimeCostVapi = 0;
-        (allCostData || []).forEach((c: any) => {
+        (lifetimeCostRes.data || []).forEach((c: any) => {
             lifetimeCostVapi += typeof c.cost_usd === 'number' ? c.cost_usd : 0;
         });
 
-        // ── 2. Bifurcate by vapi_account ─────────────────────────────────────
-        const coldCalls = filteredCalls.filter(c => classifyAccount((c as any).vapi_account) === 'cold');
-        const hubspotCalls = filteredCalls.filter(c => classifyAccount((c as any).vapi_account) === 'hubspot');
-
-        // ── 3. Build metrics for all / cold / hubspot ─────────────────────────
-        const allMetrics = buildMetrics(filteredCalls);
-        const coldMetrics = buildMetrics(coldCalls);
-        const hubspotMetrics = buildMetrics(hubspotCalls);
-
-        const total = filteredCalls.length;
-
         return {
             stats: {
-                ...allMetrics.stats,
-                totalCalls: total,
+                ...allStats,
                 lifetimeCostVapi,
                 positiveResponseRate: 0,
                 positiveSentimentCount: 0,
                 totalSentimentCount: 0,
-                // Bifurcated counts
-                coldCallsCount: coldCalls.length,
-                hubspotCallsCount: hubspotCalls.length,
+                coldCallsCount: coldStats.totalCalls,
+                hubspotCallsCount: hubspotStats.totalCalls,
             },
-            dailyVolume: allMetrics.dailyVolume,
-            hourlyDistribution: allMetrics.hourlyDistribution,
-            statusBreakdown: allMetrics.statusBreakdown,
-            // Bifurcated data for sub-views
+            dailyVolume: allDaily,
+            hourlyDistribution: allHourly,
+            statusBreakdown,
             cold: {
-                stats: coldMetrics.stats,
-                dailyVolume: coldMetrics.dailyVolume,
-                hourlyDistribution: coldMetrics.hourlyDistribution,
+                stats: coldStats,
+                dailyVolume: coldDaily,
+                hourlyDistribution: coldHourly,
             },
             hubspot: {
-                stats: hubspotMetrics.stats,
-                dailyVolume: hubspotMetrics.dailyVolume,
-                hourlyDistribution: hubspotMetrics.hourlyDistribution,
+                stats: hubspotStats,
+                dailyVolume: hubspotDaily,
+                hourlyDistribution: hubspotHourly,
             },
-            recentCalls: filteredCalls.map((c: any) => ({
+            recentCalls: filteredCallLogs.map((c: any) => ({
                 id: c.id,
                 created_at: c.created_at,
-                customer_phone: c.customer_phone || '—',
-                customer_name: c.customer_name || '—',
+                customer_phone: c.phone || '—',
+                customer_name: c.name || '—',
                 duration_seconds: c.duration_seconds || 0,
                 status: c.status || 'unknown',
-                cost_usd: c.cost_usd || 0,
+                cost_usd: c.agent_cost || 0,
                 source: c.source || '—',
-                summary: c.summary || null,
-                recording_url: c.recording_url || null,
+                summary: c.call_summary || null,
+                recording_url: c.audio_url || null,
                 transcript: c.transcript || null,
                 vapi_account: c.vapi_account || null,
-                accountType: classifyAccount(c.vapi_account),
+                accountType: c.account_type || classifyAccount(c.vapi_account),
             })),
         };
     } catch (e) {
@@ -196,8 +212,8 @@ export async function getVoiceStats(fromDate: Date, toDate: Date, providerFilter
             dailyVolume: [],
             hourlyDistribution: [],
             statusBreakdown: {},
-            cold: { stats: { totalCalls: 0, totalDuration: 0, avgDuration: 0, totalCost: 0, avgCost: 0, successRate: 0, successCount: 0, pickupRate: 0, pickedUpCount: 0, completionRate: 0, completedCount: 0 }, dailyVolume: [], hourlyDistribution: [] },
-            hubspot: { stats: { totalCalls: 0, totalDuration: 0, avgDuration: 0, totalCost: 0, avgCost: 0, successRate: 0, successCount: 0, pickupRate: 0, pickedUpCount: 0, completionRate: 0, completedCount: 0 }, dailyVolume: [], hourlyDistribution: [] },
+            cold: { stats: emptyStats, dailyVolume: [], hourlyDistribution: [] },
+            hubspot: { stats: emptyStats, dailyVolume: [], hourlyDistribution: [] },
             recentCalls: [],
         };
     }

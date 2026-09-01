@@ -327,7 +327,7 @@ export default function VoiceLogsPage() {
                         />
                     </div>
 
-                    <div className="flex items-center gap-2 px-3 h-9 border border-border rounded-md bg-slate-50 text-xs font-semibold text-slate-600" title="Vapi and Maqsam sources only">
+                    <div className="flex items-center gap-2 px-3 h-9 border border-border rounded-md bg-slate-50 text-xs font-semibold text-slate-600" title="Vapi sources only">
                         <Phone className="h-3.5 w-3.5 text-blue-600" />
                         <span>Voice AI (Active Channels)</span>
                     </div>

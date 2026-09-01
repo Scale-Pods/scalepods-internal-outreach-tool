@@ -14,9 +14,10 @@ export async function GET(req: Request) {
         const to = toParam ? new Date(toParam) : new Date();
         to.setHours(23, 59, 59, 999);
 
-        const allLeads = await fetchOutreachLeads();
-        const coldLeads = allLeads.filter(l => l.leadType === 'cold');
-        const hotLeads = allLeads.filter(l => l.leadType === 'hot');
+        const [coldLeads, hotLeads] = await Promise.all([
+            fetchOutreachLeads('cold'),
+            fetchOutreachLeads('hot'),
+        ]);
 
         return NextResponse.json({
             cold: {

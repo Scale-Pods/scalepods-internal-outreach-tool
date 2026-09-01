@@ -1,29 +1,19 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
-const TABLES = [
-    'ENRICHED_LEADS',
-    'LinkedIn_leads',
-    'gmap_leadsv2',
-    'hubspot_lead',
-    'icp_tracker',
-    'meta_lead_tracker',
-    'master_leads_unique',
-    'master_cold_leads'
-];
-
+// Replaces 8 separate {count:'estimated'} head requests with a single
+// get_leads_table_counts RPC call — one round trip instead of 8, and exact
+// counts (COUNT(*)) instead of Postgres's approximate planner-stats estimate.
 export async function GET() {
     try {
-        const counts = await Promise.all(TABLES.map(async (table) => {
-            const { count, error } = await supabaseAdmin
-                .from(table)
-                .select('*', { count: 'estimated', head: true });
-            
-            return { table, count: count || 0, error: error?.message };
-        }));
+        const { data, error } = await supabaseAdmin.rpc('get_leads_table_counts');
 
-        const result = counts.reduce((acc, curr) => {
-            acc[curr.table] = curr.count;
+        if (error) {
+            return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+
+        const result = (data || []).reduce((acc: Record<string, number>, row: any) => {
+            acc[row.table_name] = row.row_count;
             return acc;
         }, {} as Record<string, number>);
 

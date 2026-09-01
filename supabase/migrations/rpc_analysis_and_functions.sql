@@ -5,17 +5,36 @@
 -- calls any of these functions. This file is the reference set of RPCs to
 -- swap in later, one dashboard at a time, once explicitly requested.
 --
--- Why: every current dashboard/service function (lib/services/*.ts) pulls
--- full row sets into Node and aggregates in JS. Several of those fetches are
--- not properly paginated (.limit(N) without .range() batching, or no limit
--- at all) and silently truncate on tables above ~1000 rows. Moving the
--- aggregation into Postgres functions means: (a) only the final numbers
--- cross the network, not full row sets, (b) no truncation risk since a
--- server-side COUNT/SUM never hits a PostgREST row cap, (c) the DB does the
--- filtering/scanning with indexes instead of Node doing a full table scan
--- in memory.
+-- v2: rewritten against the ACTUAL table DDL (previous version guessed at
+-- column types and got several wrong — this version was checked against the
+-- real CREATE TABLE statements). Key type facts baked in below:
 --
--- Every function below reproduces the exact business logic found in the
+--   ENRICHED_LEADS   : "Email Last Contacted" timestamptz, "Whatsapp Last
+--                       Contacted" TEXT, "Voice Last Contacted" timestamptz,
+--                       voice_last_contacted TEXT, lead_uuid uuid (PK)
+--   hubspot_lead      : "Email Last Contacted" timestamptz, "Whatsapp Last
+--                       Contacted" TEXT, "Voice Last Contacted" timestamptz,
+--                       voice_last_contacted TEXT, lead_id uuid,
+--                       company_phone_number TEXT (PK, NOT NULL)
+--   icp_tracker       : "Email Last Contacted" TEXT, "Whatsapp Last
+--                       Contacted" TEXT, "Voice Last Contacted" TEXT,
+--                       "Voice_1_Date"/"Voice_2_Date" TEXT, created_at
+--                       timestamptz, no lead_uuid/lead_id, email/personal_email
+--                       are lowercase columns (not "Personal Email")
+--   master_cold_leads : "Email Last Contacted" timestamptz, email_last_sent_at
+--                       timestamptz — the one table where these agree
+--   vapi_call_logs    : id TEXT (not uuid), started_at TEXT (not timestamptz),
+--                       duration_seconds/cost_usd double precision,
+--                       created_at timestamptz
+--
+-- Because "the same logical field" is timestamptz in one table and text in
+-- another (sometimes within the SAME table, e.g. ENRICHED_LEADS has one
+-- Last-Contacted column of each type), every COALESCE below routes through
+-- _safe_ts() first, which accepts either a timestamptz or text input and
+-- always returns timestamptz — this is what fixes the original file's
+-- COALESCE 42804 error.
+--
+-- Every function still reproduces the exact business logic found in the
 -- current JS (truthy-value rules, date-fallback chains, reply-detection
 -- gates) so swapping the call site later is a like-for-like replacement,
 -- not a behavior change. Inconsistencies already present in the JS (e.g.
@@ -32,7 +51,8 @@
 
 -- Mirrors truthyText()/hasTruthy() from the JS: false for null, '', 'no',
 -- 'none', 'false', '0' (case-insensitive, trimmed). Used everywhere a
--- "Yes/No"-style flag column is checked.
+-- "Yes/No"-style flag column is checked. Overloaded for text and jsonb so it
+-- can be called directly on either without the caller casting first.
 create or replace function public._is_truthy(val text)
 returns boolean
 language sql
@@ -55,6 +75,39 @@ as $$
   select val is not null
      and length(trim(val)) > 0
      and lower(trim(val)) not in ('no', 'none', 'false');
+$$;
+
+-- Some "date" columns in this schema are stored as text (icp_tracker's
+-- entire date set, ENRICHED_LEADS/hubspot_lead's "Whatsapp Last Contacted"
+-- and voice_last_contacted), others as real timestamptz. This safely parses
+-- either into timestamptz, returning NULL instead of erroring on garbage
+-- text (empty string, non-date text) so a bad value in one row doesn't
+-- crash a whole aggregate query.
+create or replace function public._safe_ts(val text)
+returns timestamptz
+language plpgsql
+immutable
+as $$
+begin
+    if val is null or trim(val) = '' then
+        return null;
+    end if;
+    return val::timestamptz;
+exception
+    when others then
+        return null;
+end;
+$$;
+
+-- Overload so _safe_ts can be called uniformly on a column regardless of
+-- whether it's already timestamptz or text — lets every COALESCE chain
+-- below use the same helper on every argument without per-column casting.
+create or replace function public._safe_ts(val timestamptz)
+returns timestamptz
+language sql
+immutable
+as $$
+  select val;
 $$;
 
 
@@ -98,7 +151,7 @@ $$;
 -- Mirrors calculateTelephonyCost() from app/api/calls/route.ts exactly,
 -- including the hardcoded BYOC partner-rate tiers for US/UK caller numbers.
 create or replace function public._calculate_telephony_cost(
-    duration_secs integer,
+    duration_secs double precision,
     phone_number text,
     is_inbound boolean,
     provider_number text
@@ -183,10 +236,9 @@ $$;
 -- (leadType='hot'). Date filter: COALESCE("Email Last Contacted",
 -- email_last_sent_at, created_at) — the same lastContacted-then-createdAt
 -- fallback chain as inRange(l.lastContacted || l.createdAt, from, to).
---
--- Returns one row: the OutreachMetrics shape. Call twice (cold/hot) from the
--- application layer, same as computeMetrics(coldLeads,...) /
--- computeMetrics(hotLeads,...) today.
+-- All three tables' "Email Last Contacted" is timestamptz, so no _safe_ts
+-- needed here specifically — but created_at/email_last_sent_at are also
+-- timestamptz on all three, so this one is type-clean already.
 create or replace function public.get_email_outreach_metrics(
     p_from timestamptz,
     p_to timestamptz,
@@ -225,7 +277,7 @@ begin
 
         select
             "Email_1", "Email_2", "Email_3", "Email_4", "Email_5", "Email_6",
-            "Email_Reply_Track", email_bounced::text, email_unsubscribed::text,
+            "Email_Reply_Track", email_bounced, email_unsubscribed,
             coalesce("Email Last Contacted", email_last_sent_at, created_at) as effective_date
         from public.master_cold_leads
         where p_lead_type = 'cold'
@@ -297,7 +349,9 @@ $$;
 
 -- Backing function for the "Total Replies" modal on the master dashboard —
 -- mirrors extractLeadIdentity()/hasReplyTrack() gating from dashboard.ts,
--- scoped to ENRICHED_LEADS (cold) or hubspot_lead (hot).
+-- scoped to ENRICHED_LEADS (cold) or hubspot_lead (hot). Both tables' four
+-- date-ish columns are a MIX of timestamptz and text (see header notes),
+-- so every one routes through _safe_ts() before COALESCE.
 create or replace function public.get_replied_leads(
     p_from timestamptz,
     p_to timestamptz,
@@ -315,26 +369,32 @@ language sql
 stable
 as $$
     select
-        coalesce(lead_uuid::text, lead_id::text, coalesce("Work Email", "Personal Email"), company_phone_number, gen_random_uuid()::text) as id,
+        coalesce(lead_uuid::text, lead_id_text, coalesce("Work Email", "Personal Email"), company_phone_number, gen_random_uuid()::text) as id,
         coalesce(full_name, trim(coalesce("First Name", '') || ' ' || coalesce("Last Name", '')), 'Unknown Lead') as name,
         coalesce("Work Email", "Personal Email") as email,
         coalesce(company_phone_number, personal_phone) as phone,
         _is_truthy("WTS_Reply_Track") as replied_via_whatsapp,
         _is_truthy("Email_Reply_Track") as replied_via_email
     from (
-        select lead_uuid, null::text as lead_id, full_name, "First Name", "Last Name",
+        select lead_uuid, null::text as lead_id_text, full_name, "First Name", "Last Name",
                "Work Email", "Personal Email", company_phone_number, personal_phone,
                "WTS_Reply_Track", "Email_Reply_Track",
-               coalesce("Email Last Contacted", "Whatsapp Last Contacted", "Voice Last Contacted", voice_last_contacted, created_at) as effective_date
+               coalesce(
+                   _safe_ts("Email Last Contacted"), _safe_ts("Whatsapp Last Contacted"),
+                   _safe_ts("Voice Last Contacted"), _safe_ts(voice_last_contacted), created_at
+               ) as effective_date
         from public."ENRICHED_LEADS"
         where p_scope = 'cold'
 
         union all
 
-        select null::uuid as lead_uuid, lead_id, full_name, "First Name", "Last Name",
+        select null::uuid as lead_uuid, lead_id::text as lead_id_text, full_name, "First Name", "Last Name",
                "Work Email", "Personal Email", company_phone_number, personal_phone,
                "WTS_Reply_Track", "Email_Reply_Track",
-               coalesce("Email Last Contacted", "Whatsapp Last Contacted", "Voice Last Contacted", voice_last_contacted, created_at) as effective_date
+               coalesce(
+                   _safe_ts("Email Last Contacted"), _safe_ts("Whatsapp Last Contacted"),
+                   _safe_ts("Voice Last Contacted"), _safe_ts(voice_last_contacted), created_at
+               ) as effective_date
         from public.hubspot_lead
         where p_scope = 'hot'
     ) src
@@ -346,6 +406,10 @@ $$;
 -- ────────────────────────────────────────────────────────────────────────────
 -- 3. VOICE DOMAIN
 -- ────────────────────────────────────────────────────────────────────────────
+-- vapi_call_logs.duration_seconds/cost_usd are `double precision`, id is
+-- TEXT (not uuid), started_at is TEXT (not timestamptz). created_at IS a
+-- real timestamptz and is what every date filter below uses — matches the
+-- JS, which also filters on created_at, not started_at.
 
 -- Mirrors buildMetrics() from lib/services/voice.ts, filtered by
 -- vapi_account classification ('all' | 'cold' | 'hubspot').
@@ -370,8 +434,6 @@ returns table (
 language plpgsql
 stable
 as $$
-declare
-    v_total integer;
 begin
     return query
     with scoped as (
@@ -387,9 +449,9 @@ begin
     select
         count(*)::int,
         coalesce(sum(duration_seconds), 0)::int,
-        case when count(*) > 0 then round(coalesce(sum(duration_seconds), 0)::numeric / count(*), 2) else 0 end,
+        case when count(*) > 0 then round((coalesce(sum(duration_seconds), 0) / count(*))::numeric, 2) else 0 end,
         coalesce(sum(cost_usd), 0)::numeric,
-        case when count(*) > 0 then round(coalesce(sum(cost_usd), 0) / count(*), 4) else 0 end,
+        case when count(*) > 0 then round((coalesce(sum(cost_usd), 0) / count(*))::numeric, 4) else 0 end,
         count(*) filter (where status_norm in ('done', 'ended', 'completed', 'success', 'answered'))::int,
         case when count(*) > 0 then round(
             count(*) filter (where status_norm in ('done', 'ended', 'completed', 'success', 'answered'))::numeric
@@ -497,7 +559,8 @@ $$;
 -- full cost breakdown, used by the Call Logs / Cold Call Logs tables and the
 -- CSV-adjacent detail views. This is the big one: replaces both the raw REST
 -- fetch (10000-row hard cap, no true pagination) AND the per-row JS cost
--- calculation with a single indexed, paginated query.
+-- calculation with a single indexed, paginated query. id/started_at are TEXT
+-- to match vapi_call_logs' actual column types (not uuid/timestamptz).
 create or replace function public.get_call_logs(
     p_from timestamptz,
     p_to timestamptz,
@@ -505,10 +568,10 @@ create or replace function public.get_call_logs(
     p_offset integer default 0
 )
 returns table (
-    id uuid,
+    id text,
     name text,
-    started_at timestamptz,
-    duration_seconds integer,
+    started_at text,
+    duration_seconds double precision,
     cost_value numeric,
     agent_cost numeric,
     telephony_cost numeric,
@@ -595,7 +658,9 @@ $$;
 
 -- 4a. Mirrors lib/services/whatsapp.ts's per-source stats (icp_tracker,
 -- meta_lead_tracker, ENRICHED_LEADS, hubspot_lead). Date filter:
--- COALESCE("Whatsapp Last Contacted", created_at).
+-- COALESCE("Whatsapp Last Contacted", created_at) — "Whatsapp Last
+-- Contacted" is TEXT on every one of these four tables, so this routes
+-- through _safe_ts().
 create or replace function public.get_whatsapp_stats_v1(
     p_from timestamptz,
     p_to timestamptz
@@ -617,7 +682,7 @@ begin
             "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_5",
             "WTS_Reply_Track",
             "User_Replied_1", "User_Replied_2", "User_Replied_3", "User_Replied_4", "User_Replied_5",
-            coalesce("Whatsapp Last Contacted", created_at) as effective_date
+            coalesce(_safe_ts("Whatsapp Last Contacted"), created_at) as effective_date
         from public.icp_tracker
 
         union all
@@ -626,7 +691,7 @@ begin
             "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_5",
             "WTS_Reply_Track",
             "User_Replied_1", "User_Replied_2", "User_Replied_3", "User_Replied_4", "User_Replied_5",
-            coalesce("Whatsapp Last Contacted", created_at)
+            coalesce(_safe_ts("Whatsapp Last Contacted"), created_at)
         from public.meta_lead_tracker
 
         union all
@@ -635,7 +700,7 @@ begin
             "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_5",
             "WTS_Reply_Track",
             "User_Replied_1", "User_Replied_2", "User_Replied_3", "User_Replied_4", "User_Replied_5",
-            coalesce("Whatsapp Last Contacted", created_at)
+            coalesce(_safe_ts("Whatsapp Last Contacted"), created_at)
         from public."ENRICHED_LEADS"
 
         union all
@@ -644,7 +709,7 @@ begin
             "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_5",
             "WTS_Reply_Track",
             "User_Replied_1", "User_Replied_2", "User_Replied_3", "User_Replied_4", "User_Replied_5",
-            coalesce("Whatsapp Last Contacted", created_at)
+            coalesce(_safe_ts("Whatsapp Last Contacted"), created_at)
         from public.hubspot_lead
     ),
     in_scope as (
@@ -680,7 +745,9 @@ $$;
 -- 4b. Mirrors lib/services/whatsapp-outreach.ts's computeWaMetrics(), for
 -- ENRICHED_LEADS/hubspot_lead (leadType='cold'/'hot') or hubspot_wa_outreach
 -- (leadType='hubspot_wa'). Date filter: COALESCE("Whatsapp Last Contacted",
--- created_at) — same fallback as get_email_outreach_metrics.
+-- created_at). hubspot_wa_outreach's "Whatsapp Last Contacted" IS
+-- timestamptz (unlike the other two tables, where it's text) — _safe_ts
+-- handles both transparently via its two overloads.
 create or replace function public.get_whatsapp_outreach_metrics(
     p_from timestamptz,
     p_to timestamptz,
@@ -702,7 +769,7 @@ begin
         select
             "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", whatsapp_6,
             wa_conversation,
-            coalesce("Whatsapp Last Contacted", created_at) as effective_date
+            coalesce(_safe_ts("Whatsapp Last Contacted"), created_at) as effective_date
         from public."ENRICHED_LEADS"
         where p_lead_type = 'cold'
 
@@ -711,7 +778,7 @@ begin
         select
             "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_6",
             wa_conversation,
-            coalesce("Whatsapp Last Contacted", created_at)
+            coalesce(_safe_ts("Whatsapp Last Contacted"), created_at)
         from public.hubspot_lead
         where p_lead_type = 'hot'
 
@@ -720,7 +787,7 @@ begin
         select
             "Whatsapp_1", null, null, null, null,
             wa_conversation,
-            coalesce("Whatsapp Last Contacted", created_at)
+            coalesce(_safe_ts("Whatsapp Last Contacted"), created_at)
         from public.hubspot_wa_outreach
         where p_lead_type = 'hubspot_wa'
     ),
@@ -750,11 +817,9 @@ begin
         end;
 end;
 $$;
--- NOTE: wa_conversation is assumed jsonb here (matches the column's default
--- '[]'::jsonb / '{}'::jsonb pattern seen on master_cold_leads' equivalent
--- columns). If any of ENRICHED_LEADS/hubspot_lead/hubspot_wa_outreach store
--- it as text-encoded JSON instead of a native jsonb column, this needs a
--- ::jsonb cast added — confirm actual column type before wiring this in.
+-- wa_conversation is native jsonb on all three tables per the DDL you
+-- provided (`wa_conversation jsonb not null default '[]'::jsonb`) — no cast
+-- needed, confirms open question #2 from the original analysis.
 
 
 -- ────────────────────────────────────────────────────────────────────────────
@@ -801,6 +866,9 @@ $$;
 -- safely without dynamic SQL, this is written with EXECUTE + format(%I) for
 -- identifier-safety (allowlist enforced inside the function body, NOT left
 -- open like the current route, which accepts any table name unchecked).
+-- Note: hubspot_lead's search filter below still uses full_name/
+-- company_phone_number, both of which exist on it per the DDL, so no change
+-- needed there versus the original allowlist.
 create or replace function public.get_leads_page(
     p_table text,
     p_page integer default 1,
@@ -856,11 +924,10 @@ begin
 end;
 $$;
 -- NOTE: get_leads_page assumes every allowlisted table has full_name and
--- company_phone_number columns for the search filter — true for the 5
--- tables the current UI actually uses (per app/dashboard/leads/page.tsx's
--- TABLES config), matching the same fragile assumption already present in
--- the JS route. Flagged, not fixed, since fixing it means per-table search
--- column config, a bigger change than a straight RPC port.
+-- company_phone_number columns for the search filter — true for
+-- ENRICHED_LEADS/master_cold_leads/hubspot_lead per the confirmed DDL.
+-- LinkedIn_leads/gmap_leadsv2 DDL wasn't provided — confirm they also carry
+-- both columns before relying on this for those two tables.
 
 
 -- ────────────────────────────────────────────────────────────────────────────
@@ -869,12 +936,16 @@ $$;
 -- Mirrors the icp_tracker + meta_lead_tracker + ENRICHED_LEADS aggregate
 -- portion of lib/services/dashboard.ts's getDashboardStats() — the
 -- hasWhatsappSent/hasVoiceSent/hasWhatsappReplied counts and the
--- acquisitionChartData day-bucketing. hubspot_lead's parallel counts and
--- email/voice sub-metrics are covered by the functions above (this one is
--- specifically the "Cold Outreach bot" section's non-email/voice/whatsapp-
--- outreach numbers — the ICP/Meta/Enriched lead-volume and WhatsApp-flag
--- counts that dashboard.ts computes independently of email-outreach.ts /
--- voice.ts / whatsapp-outreach.ts).
+-- acquisitionChartData day-bucketing, PLUS master_cold_leads' contribution
+-- to the Cold "Total Replies" card (added per the most recent app change —
+-- see get_replied_leads_cold_combined below). hubspot_lead's parallel
+-- counts and email/voice sub-metrics are covered by the functions above.
+--
+-- icp_tracker's four date-ish columns ("Email Last Contacted", "Whatsapp
+-- Last Contacted", "Voice Last Contacted", "Voice_1_Date"/"Voice_2_Date")
+-- are ALL text, unlike ENRICHED_LEADS where two of the four are
+-- timestamptz — every one routes through _safe_ts() so the UNION ALL below
+-- doesn't hit the same 42804 error as the original file.
 
 create or replace function public.get_dashboard_lead_stats(
     p_from timestamptz,
@@ -900,30 +971,38 @@ begin
     with unioned as (
         select 'icp_tracker' as src,
             "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_5",
-            "Voice_1_Status", "Voice_1_Date", "Voice_2_Status", "Voice_2_Date",
+            "Voice_1_Status", _safe_ts("Voice_1_Date") as voice_1_date,
+            "Voice_2_Status", _safe_ts("Voice_2_Date") as voice_2_date,
             "WTS_Reply_Track",
             "User_Replied_1", "User_Replied_2", "User_Replied_3", "User_Replied_4", "User_Replied_5",
-            coalesce("Email Last Contacted", "Whatsapp Last Contacted", "Voice Last Contacted", voice_last_contacted, created_at) as effective_date
+            coalesce(
+                _safe_ts("Email Last Contacted"), _safe_ts("Whatsapp Last Contacted"),
+                _safe_ts("Voice Last Contacted"), _safe_ts(voice_last_contacted), created_at
+            ) as effective_date
         from public.icp_tracker
 
         union all
 
         select 'meta_lead_tracker',
             "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_5",
-            null, null, null, null,
+            null::text, null::timestamptz, null::text, null::timestamptz,
             "WTS_Reply_Track",
             "User_Replied_1", "User_Replied_2", "User_Replied_3", "User_Replied_4", "User_Replied_5",
-            coalesce("Whatsapp Last Contacted", created_at)
+            coalesce(_safe_ts("Whatsapp Last Contacted"), created_at)
         from public.meta_lead_tracker
 
         union all
 
         select 'ENRICHED_LEADS',
             "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_5",
-            "Voice_1_Status", "Voice_1_Date", "Voice_2_Status", "Voice_2_Date",
+            "Voice_1_Status", "Voice_1_Date",
+            "Voice_2_Status", "Voice_2_Date",
             "WTS_Reply_Track",
             "User_Replied_1", "User_Replied_2", "User_Replied_3", "User_Replied_4", "User_Replied_5",
-            coalesce("Email Last Contacted", "Whatsapp Last Contacted", "Voice Last Contacted", voice_last_contacted, created_at)
+            coalesce(
+                _safe_ts("Email Last Contacted"), _safe_ts("Whatsapp Last Contacted"),
+                _safe_ts("Voice Last Contacted"), _safe_ts(voice_last_contacted), created_at
+            )
         from public."ENRICHED_LEADS"
     ),
     in_scope as (
@@ -931,8 +1010,8 @@ begin
             (_is_truthy("Whatsapp_1") or _is_truthy("Whatsapp_2") or _is_truthy("Whatsapp_3")
              or _is_truthy("Whatsapp_4") or _is_truthy("Whatsapp_5")) as was_wa_sent,
             (
-                _is_truthy_narrow("Voice_1_Status") or "Voice_1_Date" is not null
-                or _is_truthy_narrow("Voice_2_Status") or "Voice_2_Date" is not null
+                _is_truthy_narrow("Voice_1_Status") or voice_1_date is not null
+                or _is_truthy_narrow("Voice_2_Status") or voice_2_date is not null
             ) as was_voice_sent,
             (
                 _is_truthy_narrow("User_Replied_1") or _is_truthy_narrow("User_Replied_2")
@@ -969,6 +1048,136 @@ $$;
 -- left out of this first pass to keep the function's core logic reviewable;
 -- they must be added before this fully replaces getDashboardStats(), not
 -- silently skipped.
+--
+-- meta_lead_tracker's DDL wasn't provided in this round — its "Whatsapp
+-- Last Contacted" is assumed text (consistent with every other table that
+-- has this exact column name) and routed through _safe_ts() defensively;
+-- confirm against its actual DDL before trusting this in production.
+
+-- hubspot_lead's parallel to get_dashboard_lead_stats — the JS computes
+-- these independently (hubspotLeads/hubspotWhatsappSent/
+-- hubspotVoiceContacted/hubspotWhatsappReply) inside the same
+-- getDashboardStats() function, scanning hubspotRows with the same
+-- hasWhatsappSent/hasVoiceSent/hasWhatsappReplied helpers used for the
+-- icp/meta/enriched union above. Kept as its own function (not folded into
+-- get_dashboard_lead_stats) since hubspot_lead uses a different date-column
+-- shape than the three-table union and the JS keeps its counting loop
+-- entirely separate too.
+create or replace function public.get_dashboard_hubspot_stats(
+    p_from timestamptz,
+    p_to timestamptz
+)
+returns table (
+    hubspot_leads integer,
+    hubspot_whatsapp_sent integer,
+    hubspot_voice_contacted integer,
+    hubspot_whatsapp_reply integer
+)
+language plpgsql
+stable
+as $$
+begin
+    return query
+    with scoped as (
+        select
+            "Whatsapp_1", "Whatsapp_2", "Whatsapp_3", "Whatsapp_4", "Whatsapp_5",
+            "Voice_1_Status", "Voice_1_Date", "Voice_2_Status", "Voice_2_Date",
+            "WTS_Reply_Track",
+            "User_Replied_1", "User_Replied_2", "User_Replied_3", "User_Replied_4", "User_Replied_5",
+            coalesce(
+                _safe_ts("Email Last Contacted"), _safe_ts("Whatsapp Last Contacted"),
+                _safe_ts("Voice Last Contacted"), _safe_ts(voice_last_contacted), created_at
+            ) as effective_date
+        from public.hubspot_lead
+    ),
+    in_scope as (
+        select *,
+            (_is_truthy("Whatsapp_1") or _is_truthy("Whatsapp_2") or _is_truthy("Whatsapp_3")
+             or _is_truthy("Whatsapp_4") or _is_truthy("Whatsapp_5")) as was_wa_sent,
+            (
+                _is_truthy_narrow("Voice_1_Status") or "Voice_1_Date" is not null
+                or _is_truthy_narrow("Voice_2_Status") or "Voice_2_Date" is not null
+            ) as was_voice_sent,
+            (
+                _is_truthy_narrow("User_Replied_1") or _is_truthy_narrow("User_Replied_2")
+                or _is_truthy_narrow("User_Replied_3") or _is_truthy_narrow("User_Replied_4")
+                or _is_truthy_narrow("User_Replied_5")
+                or (
+                    "WTS_Reply_Track" is not null and length(trim("WTS_Reply_Track")) > 0
+                    and lower(trim("WTS_Reply_Track")) not in ('no', 'none', 'false')
+                )
+            ) as did_wa_reply
+        from scoped
+        where effective_date between p_from and p_to
+    )
+    select
+        count(*)::int,
+        count(*) filter (where was_wa_sent)::int,
+        count(*) filter (where was_voice_sent)::int,
+        count(*) filter (where did_wa_reply)::int
+    from in_scope;
+end;
+$$;
+
+-- Mirrors the Cold "Total Replies" card's inclusion of master_cold_leads
+-- (added in the latest app change alongside ENRICHED_LEADS) — leads with
+-- WTS_Reply_Track or Email_Reply_Track set, unioned across both tables,
+-- within the date range. This is the SQL equivalent of dashboard.ts's
+-- coldRepliedLeads array (ENRICHED_LEADS scan + the separate
+-- masterColdRows.forEach scan added alongside it).
+create or replace function public.get_cold_replied_leads_combined(
+    p_from timestamptz,
+    p_to timestamptz
+)
+returns table (
+    id text,
+    name text,
+    email text,
+    phone text,
+    replied_via_whatsapp boolean,
+    replied_via_email boolean,
+    source_table text
+)
+language sql
+stable
+as $$
+    select
+        coalesce(lead_uuid::text, email, phone, gen_random_uuid()::text) as id,
+        name, email, phone,
+        _is_truthy(wts_reply_track) as replied_via_whatsapp,
+        _is_truthy(email_reply_track) as replied_via_email,
+        src
+    from (
+        select
+            lead_uuid,
+            coalesce(full_name, trim(coalesce("First Name", '') || ' ' || coalesce("Last Name", '')), 'Unknown Lead') as name,
+            coalesce("Work Email", "Personal Email") as email,
+            coalesce(company_phone_number, personal_phone) as phone,
+            "WTS_Reply_Track" as wts_reply_track,
+            "Email_Reply_Track" as email_reply_track,
+            coalesce(
+                _safe_ts("Email Last Contacted"), _safe_ts("Whatsapp Last Contacted"),
+                _safe_ts("Voice Last Contacted"), _safe_ts(voice_last_contacted), created_at
+            ) as effective_date,
+            'ENRICHED_LEADS' as src
+        from public."ENRICHED_LEADS"
+
+        union all
+
+        select
+            lead_uuid,
+            coalesce(full_name, trim(coalesce("First Name", '') || ' ' || coalesce("Last Name", '')), 'Unknown Lead'),
+            coalesce("Personal Email", email),
+            coalesce(company_phone_number, mobile_number, personal_phone),
+            "WTS_Reply_Track",
+            "Email_Reply_Track",
+            coalesce("Email Last Contacted", email_last_sent_at, created_at),
+            'master_cold_leads'
+        from public.master_cold_leads
+    ) src
+    where effective_date between p_from and p_to
+      and (_is_truthy(wts_reply_track) or _is_truthy(email_reply_track));
+$$;
 
 -- Mirrors the acquisitionMap day-bucketing in getDashboardStats(): one row
 -- per calendar day in range, count of icp+meta+enriched leads whose
@@ -988,13 +1197,19 @@ language sql
 stable
 as $$
     with unioned as (
-        select coalesce("Email Last Contacted", "Whatsapp Last Contacted", "Voice Last Contacted", voice_last_contacted, created_at) as effective_date
+        select coalesce(
+            _safe_ts("Email Last Contacted"), _safe_ts("Whatsapp Last Contacted"),
+            _safe_ts("Voice Last Contacted"), _safe_ts(voice_last_contacted), created_at
+        ) as effective_date
         from public.icp_tracker
         union all
-        select coalesce("Whatsapp Last Contacted", created_at)
+        select coalesce(_safe_ts("Whatsapp Last Contacted"), created_at)
         from public.meta_lead_tracker
         union all
-        select coalesce("Email Last Contacted", "Whatsapp Last Contacted", "Voice Last Contacted", voice_last_contacted, created_at)
+        select coalesce(
+            _safe_ts("Email Last Contacted"), _safe_ts("Whatsapp Last Contacted"),
+            _safe_ts("Voice Last Contacted"), _safe_ts(voice_last_contacted), created_at
+        )
         from public."ENRICHED_LEADS"
     )
     select (effective_date at time zone 'UTC')::date as day_key, count(*)::int as lead_count
@@ -1011,8 +1226,8 @@ $$;
 -- 1. total_replies in get_email_outreach_metrics() approximates repliedLeads
 --    count rather than summing actual reply-thread entries (see inline note)
 --    — confirm whether the UI actually needs thread-count precision.
--- 2. wa_conversation column type (jsonb vs text-encoded JSON) needs
---    confirming per table before get_whatsapp_outreach_metrics is trusted.
+-- 2. wa_conversation confirmed jsonb on ENRICHED_LEADS/hubspot_lead/
+--    hubspot_wa_outreach per the DDL you provided — no longer an open item.
 -- 3. get_whatsapp_stats_v1 and get_dashboard_lead_stats omit the
 --    wa_conversation-jsonb-scan and legacy W.P_i / Voice_i text-column
 --    fallbacks that the JS has — need those added for full parity.
@@ -1031,4 +1246,11 @@ $$;
 --    current JS route applies no explicit ordering either — confirm this
 --    is acceptable, or specify a real sort column (e.g. created_at) if the
 --    UI expects stable/meaningful ordering across pages.
+-- 7. meta_lead_tracker's exact DDL wasn't provided this round — its columns
+--    are assumed to match the shape used elsewhere (text "Whatsapp Last
+--    Contacted", timestamptz created_at); confirm before trusting
+--    get_whatsapp_stats_v1 / get_dashboard_lead_stats for that table.
+-- 8. LinkedIn_leads / gmap_leadsv2 DDL wasn't provided — get_leads_page's
+--    full_name/company_phone_number search-column assumption is unverified
+--    for those two.
 -- ============================================================================

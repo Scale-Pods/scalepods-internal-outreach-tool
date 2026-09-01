@@ -13,7 +13,6 @@ interface DataContextType {
     voiceBalance: any;
     vapiHotBalance: any;
     vapiColdBalance: any;
-    maqsamBalance: any;
     twilioBalance: any;
     error: string | null;
     refreshLeads: (from?: Date, to?: Date, type?: 'email' | 'whatsapp') => Promise<void>;
@@ -35,7 +34,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const [voiceBalance, setVoiceBalance] = useState<any>(null);
     const [vapiHotBalance, setVapiHotBalance] = useState<any>(null);
     const [vapiColdBalance, setVapiColdBalance] = useState<any>(null);
-    const [maqsamBalance, setMaqsamBalance] = useState<any>(null);
     const [twilioBalance, setTwilioBalance] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -90,9 +88,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
     const fetchBalances = useCallback(async () => {
         try {
-            const [vapiRes, maqsamRes, twilioRes] = await Promise.all([
+            const [vapiRes, twilioRes] = await Promise.all([
                 fetch('/api/vapi/balance'),
-                fetch('/api/maqsam/balance'),
                 fetch('/api/twilio/balance')
             ]);
             if (vapiRes.ok) {
@@ -101,7 +98,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 setVapiHotBalance(vapiJson.vapiHot);
                 setVapiColdBalance(vapiJson.vapiCold);
             }
-            if (maqsamRes.ok) setMaqsamBalance(await maqsamRes.json());
             if (twilioRes.ok) setTwilioBalance(await twilioRes.json());
         } catch (err) { }
         finally { setLoadingBalances(false); }
@@ -126,7 +122,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             voiceBalance,
             vapiHotBalance,
             vapiColdBalance,
-            maqsamBalance,
             twilioBalance,
             error,
             refreshLeads: fetchLeads,

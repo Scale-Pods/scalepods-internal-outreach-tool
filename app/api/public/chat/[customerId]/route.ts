@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
-import { normalizeWaRow, COLD_TABLE, HOT_TABLE, HUBSPOT_WA_TABLE, type LeadType } from '@/lib/services/whatsapp-outreach';
+import { fetchWaLeads, COLD_TABLE, HOT_TABLE, HUBSPOT_WA_TABLE, type LeadType } from '@/lib/services/whatsapp-outreach';
 
 export async function GET(
     req: Request,
@@ -16,24 +15,21 @@ export async function GET(
         return NextResponse.json({ error: "Invalid phone number" }, { status: 400 });
     }
 
-    const tables: { table: string; leadType: LeadType }[] = sourceParam === HOT_TABLE
-        ? [{ table: HOT_TABLE, leadType: 'hot' }]
+    const leadTypes: LeadType[] = sourceParam === HOT_TABLE
+        ? ['hot']
         : sourceParam === COLD_TABLE
-            ? [{ table: COLD_TABLE, leadType: 'cold' }]
+            ? ['cold']
             : sourceParam === HUBSPOT_WA_TABLE
-                ? [{ table: HUBSPOT_WA_TABLE, leadType: 'hubspot_wa' }]
-                : [{ table: COLD_TABLE, leadType: 'cold' }, { table: HOT_TABLE, leadType: 'hot' }, { table: HUBSPOT_WA_TABLE, leadType: 'hubspot_wa' }];
+                ? ['hubspot_wa']
+                : ['cold', 'hot', 'hubspot_wa'];
 
     try {
-        for (const { table, leadType } of tables) {
-            const stageCount = leadType === 'hubspot_wa' ? 1 : undefined;
-            const { data } = await supabaseAdmin.from(table)
-                .select('*')
-                .ilike('company_phone_number', `%${phoneVal}%`)
-                .limit(1);
+        for (const leadType of leadTypes) {
+            const leads = await fetchWaLeads(leadType);
+            const match = leads.find(l => l.phone.replace(/\D/g, '').includes(phoneVal));
 
-            if (data && data.length > 0) {
-                return NextResponse.json({ lead: normalizeWaRow(data[0], table, leadType, stageCount) });
+            if (match) {
+                return NextResponse.json({ lead: match });
             }
         }
 

@@ -139,7 +139,7 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                         bg="bg-blue-50"
                         border="border-blue-100"
                         onClick={() => router.push('/dashboard/leads')}
-                        subtitle={`ICP: ${stats.totalICP} | Meta: ${stats.totalMeta} | Enriched: ${(stats as any).totalEnriched || 0}`}
+                        subtitle={`Meta: ${stats.totalMeta} | Enriched: ${(stats as any).totalEnriched || 0}`}
                     />
                     <MetricCard
                         title="Emails Sent"
