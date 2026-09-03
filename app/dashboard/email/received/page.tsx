@@ -97,10 +97,17 @@ export default function ReceivedEmailsPage() {
         to: new Date(),
     });
 
-    const fetchData = async () => {
+    const fetchData = async (range?: { from: Date; to?: Date }) => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/email/outreach`);
+            const r = range || dateRange;
+            const from = new Date(r.from);
+            from.setHours(0, 0, 0, 0);
+            const to = r.to ? new Date(r.to) : new Date(from);
+            to.setHours(23, 59, 59, 999);
+
+            const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+            const res = await fetch(`/api/email/outreach?${params.toString()}`);
             if (!res.ok) throw new Error("Failed to fetch");
             const json = await res.json();
             setColdLeads(json.cold?.leads || []);
@@ -114,6 +121,7 @@ export default function ReceivedEmailsPage() {
 
     useEffect(() => {
         fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const allEntries = useMemo(() => buildEntries([...coldLeads, ...hotLeads]), [coldLeads, hotLeads]);
@@ -125,15 +133,8 @@ export default function ReceivedEmailsPage() {
             const q = searchQuery.toLowerCase();
             if (q && !entry.fullName.toLowerCase().includes(q) && !entry.email.toLowerCase().includes(q)) return false;
 
-            if (dateRange?.from) {
-                const rd = entry.lastContactedRaw ? new Date(entry.lastContactedRaw) : null;
-                if (!rd || isNaN(rd.getTime())) return false;
-                const from = new Date(dateRange.from);
-                from.setHours(0, 0, 0, 0);
-                const to = dateRange.to ? new Date(dateRange.to) : new Date(from);
-                to.setHours(23, 59, 59, 999);
-                if (rd < from || rd > to) return false;
-            }
+            // Date range is now applied server-side (fetchData passes
+            // from/to to the API), so the fetched set is already scoped.
 
             return true;
         });
@@ -167,10 +168,14 @@ export default function ReceivedEmailsPage() {
                 <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
                     <DateRangePicker
                         className="h-10 w-full sm:w-[260px] shadow-sm"
-                        onUpdate={(values) => setDateRange(values.range)}
+                        onUpdate={(values) => {
+                            if (!values.range?.from) return;
+                            setDateRange(values.range);
+                            fetchData(values.range as { from: Date; to?: Date });
+                        }}
                     />
                     <Button
-                        onClick={fetchData}
+                        onClick={() => fetchData()}
                         variant="outline"
                         size="sm"
                         className="gap-2 h-10 px-4 hover:bg-slate-50 transition-all text-xs font-semibold shadow-sm border-slate-200 bg-white"
@@ -270,10 +275,12 @@ export default function ReceivedEmailsPage() {
                         size="sm"
                         className="text-slate-500 h-10 px-4 text-xs bg-white hover:bg-slate-50 shadow-sm border-slate-200 font-semibold"
                         onClick={() => {
+                            const resetRange = { from: subDays(new Date(), 7), to: new Date() };
                             setSearchQuery("");
-                            setDateRange({ from: subDays(new Date(), 7), to: new Date() });
+                            setDateRange(resetRange);
                             setSortBy("newest");
                             setFilterType("all");
+                            fetchData(resetRange);
                         }}
                     >
                         Reset

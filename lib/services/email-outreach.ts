@@ -62,7 +62,16 @@ function truthyText(val: any): boolean {
 const RPC_BATCH_SIZE = 1000;
 const RPC_MAX_ROWS = 20000;
 
-export async function fetchOutreachLeads(leadType?: LeadType): Promise<NormalizedLeadRow[]> {
+// from/to scope the fetch server-side (get_outreach_leads filters by
+// lastContacted/createdAt in SQL) — omitting them fetches the entire
+// table, which is thousands of rows of full HTML email content and should
+// only be done when a caller genuinely needs the whole dataset (e.g. an
+// export), not for a normal dashboard/page view.
+export async function fetchOutreachLeads(
+    leadType?: LeadType,
+    from?: Date,
+    to?: Date
+): Promise<NormalizedLeadRow[]> {
     const allRows: NormalizedLeadRow[] = [];
     let offset = 0;
 
@@ -72,6 +81,8 @@ export async function fetchOutreachLeads(leadType?: LeadType): Promise<Normalize
                 p_lead_type: leadType ?? null,
                 p_limit: RPC_BATCH_SIZE,
                 p_offset: offset,
+                p_from: from ? from.toISOString() : null,
+                p_to: to ? to.toISOString() : null,
             });
 
             if (error) {

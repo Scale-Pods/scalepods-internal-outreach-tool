@@ -131,10 +131,17 @@ export default function SentEmailsPage() {
     const [filterStatus, setFilterStatus] = useState("all");
     const [filterType, setFilterType] = useState<"all" | LeadType>("all");
 
-    const fetchData = async () => {
+    const fetchData = async (range?: { from: Date; to?: Date }) => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/email/outreach`);
+            const r = range || dateRange;
+            const from = new Date(r.from);
+            from.setHours(0, 0, 0, 0);
+            const to = r.to ? new Date(r.to) : new Date(from);
+            to.setHours(23, 59, 59, 999);
+
+            const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+            const res = await fetch(`/api/email/outreach?${params.toString()}`);
             if (!res.ok) throw new Error("Failed to fetch");
             const json = await res.json();
             setColdLeads(json.cold?.leads || []);
@@ -148,6 +155,11 @@ export default function SentEmailsPage() {
 
     useEffect(() => {
         fetchData();
+        // Fetch scoped to the initial dateRange only — date-range changes
+        // are handled by the DateRangePicker's onUpdate below, which
+        // re-fetches with the new range directly (avoids a stale-closure
+        // double-fetch from also depending on dateRange here).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const sentEmails = useMemo(() => buildEntries([...coldLeads, ...hotLeads]), [coldLeads, hotLeads]);
@@ -166,15 +178,9 @@ export default function SentEmailsPage() {
                     return false;
             }
 
-            if (dateRange?.from) {
-                const ed = entry.lastContactedRaw ? new Date(entry.lastContactedRaw) : null;
-                if (!ed || isNaN(ed.getTime())) return false;
-                const from = new Date(dateRange.from);
-                from.setHours(0, 0, 0, 0);
-                const to = dateRange.to ? new Date(dateRange.to) : new Date(from);
-                to.setHours(23, 59, 59, 999);
-                if (ed < from || ed > to) return false;
-            }
+            // Date range is now applied server-side (fetchData passes
+            // from/to to the API), so the fetched set is already scoped —
+            // no client-side date filter needed here.
 
             if (filterStage !== "all") {
                 const stageIdx = parseInt(filterStage) - 1;
@@ -216,7 +222,12 @@ export default function SentEmailsPage() {
                 <div className="flex items-center gap-3">
                     <DateRangePicker
                         className="h-9 w-[240px]"
-                        onUpdate={(values) => { setDateRange(values.range); setPage(1); }}
+                        onUpdate={(values) => {
+                            if (!values.range?.from) return;
+                            setDateRange(values.range);
+                            setPage(1);
+                            fetchData(values.range as { from: Date; to?: Date });
+                        }}
                     />
                 </div>
             </div>
@@ -317,12 +328,14 @@ export default function SentEmailsPage() {
                         size="sm"
                         className="text-slate-500 h-9 text-xs ml-auto bg-slate-100 hover:bg-slate-200"
                         onClick={() => {
+                            const resetRange = { from: subDays(new Date(), 7), to: new Date() };
                             setSearchQuery("");
-                            setDateRange({ from: subDays(new Date(), 7), to: new Date() });
+                            setDateRange(resetRange);
                             setFilterStage("all");
                             setFilterStatus("all");
                             setFilterType("all");
                             setPage(1);
+                            fetchData(resetRange);
                         }}
                     >
                         Reset All Filters

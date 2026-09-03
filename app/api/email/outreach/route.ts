@@ -15,8 +15,8 @@ export async function GET(req: Request) {
         to.setHours(23, 59, 59, 999);
 
         const [coldLeads, hotLeads] = await Promise.all([
-            fetchOutreachLeads('cold'),
-            fetchOutreachLeads('hot'),
+            fetchOutreachLeads('cold', from, to),
+            fetchOutreachLeads('hot', from, to),
         ]);
 
         return NextResponse.json({
