@@ -119,7 +119,17 @@ export function getWaLastContacted(lead: NormalizedWaLead): string | null {
 const RPC_BATCH_SIZE = 1000;
 const RPC_MAX_ROWS = 20000;
 
-export async function fetchWaLeads(leadType?: LeadType): Promise<NormalizedWaLead[]> {
+// from/to scope the fetch server-side (get_wa_leads filters by
+// lastContacted/createdAt in SQL) — omitting them fetches the entire
+// table's conversation history, which should only be done when a caller
+// genuinely needs the whole dataset. activityOnly (default true) mirrors
+// the old client-side hasWaActivity() gate, now applied in SQL.
+export async function fetchWaLeads(
+    leadType?: LeadType,
+    from?: Date,
+    to?: Date,
+    activityOnly: boolean = true
+): Promise<NormalizedWaLead[]> {
     const allRows: NormalizedWaLead[] = [];
     let offset = 0;
 
@@ -129,6 +139,9 @@ export async function fetchWaLeads(leadType?: LeadType): Promise<NormalizedWaLea
                 p_lead_type: leadType ?? null,
                 p_limit: RPC_BATCH_SIZE,
                 p_offset: offset,
+                p_from: from ? from.toISOString() : null,
+                p_to: to ? to.toISOString() : null,
+                p_activity_only: activityOnly,
             });
 
             if (error) {

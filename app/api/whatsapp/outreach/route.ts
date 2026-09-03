@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchWaLeads, computeWaMetrics, hasWaActivity } from '@/lib/services/whatsapp-outreach';
+import { fetchWaLeads, computeWaMetrics } from '@/lib/services/whatsapp-outreach';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,14 +14,11 @@ export async function GET(req: Request) {
         const to = toParam ? new Date(toParam) : new Date();
         to.setHours(23, 59, 59, 999);
 
-        const [coldAll, hotAll, hubspotWaAll] = await Promise.all([
-            fetchWaLeads('cold'),
-            fetchWaLeads('hot'),
-            fetchWaLeads('hubspot_wa'),
+        const [coldLeads, hotLeads, hubspotWaLeads] = await Promise.all([
+            fetchWaLeads('cold', from, to),
+            fetchWaLeads('hot', from, to),
+            fetchWaLeads('hubspot_wa', from, to),
         ]);
-        const coldLeads = coldAll.filter(hasWaActivity);
-        const hotLeads = hotAll.filter(hasWaActivity);
-        const hubspotWaLeads = hubspotWaAll.filter(hasWaActivity);
 
         return NextResponse.json({
             cold: {

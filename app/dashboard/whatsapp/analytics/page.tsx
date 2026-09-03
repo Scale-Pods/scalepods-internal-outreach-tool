@@ -26,10 +26,16 @@ export default function WhatsappAnalyticsPage() {
 
     const hasActiveFilters = !!dateRange.from;
 
-    const fetchData = async () => {
+    const fetchData = async (range?: { from?: Date; to?: Date }) => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/whatsapp/outreach`);
+            const r = range ?? dateRange;
+            const params = new URLSearchParams();
+            if (r.from) {
+                params.set('from', startOfDay(new Date(r.from)).toISOString());
+                params.set('to', endOfDay(new Date(r.to || r.from)).toISOString());
+            }
+            const res = await fetch(`/api/whatsapp/outreach${params.toString() ? `?${params.toString()}` : ''}`);
             if (!res.ok) throw new Error("Failed to fetch");
             const json = await res.json();
             setColdLeads(json.cold?.leads || []);
@@ -44,19 +50,15 @@ export default function WhatsappAnalyticsPage() {
 
     useEffect(() => {
         fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const combinedLeads = useMemo(() => [...coldLeads, ...hotLeads, ...hubspotWaLeads], [coldLeads, hotLeads, hubspotWaLeads]);
 
-    const filteredLeads = useMemo(() => {
-        return combinedLeads.filter(lead => {
-            if (!dateRange.from) return true;
-            const wlc = getWaLastContacted(lead);
-            if (!wlc) return false;
-            const contactDate = new Date(wlc);
-            return contactDate >= startOfDay(new Date(dateRange.from)) && contactDate <= endOfDay(new Date(dateRange.to || dateRange.from));
-        });
-    }, [combinedLeads, dateRange]);
+    // Date range is now applied server-side (fetchData passes from/to to
+    // the API), so combinedLeads is already scoped — no client-side date
+    // filter needed here.
+    const filteredLeads = combinedLeads;
 
     const stats = useMemo(() => {
         let totalSent = 0, repliedCount = 0, leadsContacted = 0;
@@ -97,7 +99,9 @@ export default function WhatsappAnalyticsPage() {
     }, [filteredLeads]);
 
     const resetFilters = () => {
-        setDateRange({ from: undefined, to: undefined });
+        const cleared = { from: undefined, to: undefined };
+        setDateRange(cleared);
+        fetchData(cleared);
     };
 
     return (
@@ -110,13 +114,17 @@ export default function WhatsappAnalyticsPage() {
                     <p className="text-slate-500 text-sm">Cold (ENRICHED_LEADS), Hot (hubspot_lead) & HubSpot WA (hubspot_wa_outreach) engagement performance</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <DateRangePicker onUpdate={({ range }) => setDateRange({ from: range?.from, to: range?.to })} />
+                    <DateRangePicker onUpdate={({ range }) => {
+                        const next = { from: range?.from, to: range?.to };
+                        setDateRange(next);
+                        fetchData(next);
+                    }} />
                     {hasActiveFilters && (
                         <Button variant="ghost" size="sm" onClick={resetFilters} className="h-9 gap-2 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 border border-rose-100">
                             <X className="h-3.5 w-3.5" /> Reset
                         </Button>
                     )}
-                    <Button variant="outline" size="sm" onClick={fetchData} className="h-9 w-9 p-0 border-slate-200">
+                    <Button variant="outline" size="sm" onClick={() => fetchData()} className="h-9 w-9 p-0 border-slate-200">
                         <RefreshCw className="h-4 w-4 text-slate-600" />
                     </Button>
                 </div>

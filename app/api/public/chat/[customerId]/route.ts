@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
-import { fetchWaLeads, COLD_TABLE, HOT_TABLE, HUBSPOT_WA_TABLE, type LeadType } from '@/lib/services/whatsapp-outreach';
+import { supabaseAdmin } from '@/lib/supabase';
+import { COLD_TABLE, HOT_TABLE, HUBSPOT_WA_TABLE, type LeadType } from '@/lib/services/whatsapp-outreach';
 
+// Targeted single-lead lookup via get_wa_lead_by_phone RPC — does the phone
+// match as a SQL WHERE clause instead of fetching every lead in the
+// relevant table(s) and filtering in JS (the previous approach, which was
+// a major source of unnecessary egress since this route has no date range
+// to bound the fetch by).
 export async function GET(
     req: Request,
     { params }: { params: Promise<{ customerId: string }> }
@@ -15,25 +21,30 @@ export async function GET(
         return NextResponse.json({ error: "Invalid phone number" }, { status: 400 });
     }
 
-    const leadTypes: LeadType[] = sourceParam === HOT_TABLE
-        ? ['hot']
+    const leadType: LeadType | null = sourceParam === HOT_TABLE
+        ? 'hot'
         : sourceParam === COLD_TABLE
-            ? ['cold']
+            ? 'cold'
             : sourceParam === HUBSPOT_WA_TABLE
-                ? ['hubspot_wa']
-                : ['cold', 'hot', 'hubspot_wa'];
+                ? 'hubspot_wa'
+                : null;
 
     try {
-        for (const leadType of leadTypes) {
-            const leads = await fetchWaLeads(leadType);
-            const match = leads.find(l => l.phone.replace(/\D/g, '').includes(phoneVal));
+        const { data, error } = await supabaseAdmin.rpc('get_wa_lead_by_phone', {
+            p_phone_digits: phoneVal,
+            p_lead_type: leadType,
+        });
 
-            if (match) {
-                return NextResponse.json({ lead: match });
-            }
+        if (error) {
+            console.error('Public chat lookup RPC error:', error.message);
+            return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+        if (!data) {
+            return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+        }
+
+        return NextResponse.json({ lead: data });
     } catch (error: any) {
         console.error('Public chat lookup error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

@@ -63,10 +63,16 @@ export default function WhatsappChatPage() {
         to: new Date(),
     });
 
-    const fetchData = async () => {
+    const fetchData = async (range?: { from: Date; to?: Date }) => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/whatsapp/outreach`);
+            const r = range || dateRange;
+            const params = new URLSearchParams();
+            if (r?.from) {
+                params.set('from', startOfDay(new Date(r.from)).toISOString());
+                params.set('to', endOfDay(new Date(r.to || r.from)).toISOString());
+            }
+            const res = await fetch(`/api/whatsapp/outreach${params.toString() ? `?${params.toString()}` : ''}`);
             if (!res.ok) throw new Error("Failed to fetch");
             const json = await res.json();
             setColdLeads(json.cold?.leads || []);
@@ -81,6 +87,7 @@ export default function WhatsappChatPage() {
 
     useEffect(() => {
         fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const combinedLeads = useMemo(() => {
@@ -101,14 +108,8 @@ export default function WhatsappChatPage() {
                 (activeFilters.replyStatus.includes("No Reply") && !replied);
             if (!matchesReplyStatus) return false;
 
-            if (dateRange?.from) {
-                const wlc = getWaLastContacted(lead);
-                if (!wlc) return false;
-                const contactDate = new Date(wlc);
-                const from = startOfDay(new Date(dateRange.from));
-                const to = endOfDay(new Date(dateRange.to || dateRange.from));
-                if (contactDate < from || contactDate > to) return false;
-            }
+            // Date range is applied server-side (fetchData passes from/to
+            // to the API), so combinedLeads is already scoped.
 
             return true;
         }).sort((a, b) => {
@@ -226,8 +227,12 @@ export default function WhatsappChatPage() {
                             <Building2 className="h-3.5 w-3.5" /> HubSpot WA
                         </button>
                     </div>
-                    <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
-                    <Button variant="outline" size="sm" onClick={fetchData} className="gap-2 h-10 px-4">
+                    <DateRangePicker onUpdate={(values) => {
+                        if (!values.range?.from) return;
+                        setDateRange(values.range);
+                        fetchData(values.range as { from: Date; to?: Date });
+                    }} />
+                    <Button variant="outline" size="sm" onClick={() => fetchData()} className="gap-2 h-10 px-4">
                         <RefreshCw className="h-4 w-4" /> Refresh Chat
                     </Button>
                 </div>

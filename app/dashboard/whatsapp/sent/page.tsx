@@ -79,10 +79,17 @@ export default function WhatsappSentPage() {
         to: new Date()
     });
 
-    const fetchData = async () => {
+    const fetchData = async (range?: { from: Date; to?: Date }) => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/whatsapp/outreach`);
+            const r = range || dateRange;
+            const from = new Date(r.from);
+            from.setHours(0, 0, 0, 0);
+            const to = r.to ? new Date(r.to) : new Date(from);
+            to.setHours(23, 59, 59, 999);
+
+            const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+            const res = await fetch(`/api/whatsapp/outreach?${params.toString()}`);
             if (!res.ok) throw new Error("Failed to fetch");
             const json = await res.json();
             setColdLeads(json.cold?.leads || []);
@@ -97,24 +104,15 @@ export default function WhatsappSentPage() {
 
     useEffect(() => {
         fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const dateFilteredLeads = useMemo(() => {
-        const all = [...coldLeads, ...hotLeads, ...hubspotWaLeads];
-        if (!dateRange?.from) return all;
-        const from = new Date(dateRange.from);
-        from.setHours(0, 0, 0, 0);
-        const to = dateRange.to ? new Date(dateRange.to) : from;
-        to.setHours(23, 59, 59, 999);
-
-        return all.filter(lead => {
-            const wlc = lead.lastContacted || lead.createdAt;
-            if (!wlc) return false;
-            const d = new Date(wlc);
-            if (isNaN(d.getTime())) return false;
-            return d >= from && d <= to;
-        });
-    }, [coldLeads, hotLeads, hubspotWaLeads, dateRange]);
+    // Date range is applied server-side (fetchData passes from/to to the
+    // API), so the fetched set is already scoped.
+    const dateFilteredLeads = useMemo(
+        () => [...coldLeads, ...hotLeads, ...hubspotWaLeads],
+        [coldLeads, hotLeads, hubspotWaLeads]
+    );
 
     const { messages, delivered, read, failed } = useMemo(() => buildMessages(dateFilteredLeads), [dateFilteredLeads]);
 
@@ -132,7 +130,11 @@ export default function WhatsappSentPage() {
                     <h1 className="text-2xl font-bold">Total Sent Messages</h1>
                     <p className="text-slate-500">Outbound WhatsApp messages from ENRICHED_LEADS, hubspot_lead & hubspot_wa_outreach</p>
                 </div>
-                <DateRangePicker onUpdate={(val) => setDateRange(val.range)} />
+                <DateRangePicker onUpdate={(val) => {
+                    if (!val.range?.from) return;
+                    setDateRange(val.range);
+                    fetchData(val.range as { from: Date; to?: Date });
+                }} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

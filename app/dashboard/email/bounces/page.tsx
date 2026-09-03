@@ -40,10 +40,17 @@ export default function BouncedEmailsPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
-    const fetchData = async () => {
+    const fetchData = async (range?: { from: Date; to?: Date }) => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/email/outreach`);
+            const r = range || dateRange;
+            const from = new Date(r.from);
+            from.setHours(0, 0, 0, 0);
+            const to = r.to ? new Date(r.to) : new Date(from);
+            to.setHours(23, 59, 59, 999);
+
+            const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+            const res = await fetch(`/api/email/outreach?${params.toString()}`);
             if (!res.ok) throw new Error("Failed to fetch");
             const json = await res.json();
             setColdLeads(json.cold?.leads || []);
@@ -57,6 +64,7 @@ export default function BouncedEmailsPage() {
 
     useEffect(() => {
         fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const bounces: BounceEntry[] = [...coldLeads, ...hotLeads]
@@ -75,16 +83,8 @@ export default function BouncedEmailsPage() {
             (b.name && b.name.toLowerCase().includes(searchTerm.toLowerCase()));
         if (!matchesSearch) return false;
 
-        if (dateRange?.from) {
-            if (!b.date || b.date === "N/A") return false;
-            const bounceDate = new Date(b.date);
-            if (isNaN(bounceDate.getTime())) return false;
-            const from = new Date(dateRange.from);
-            from.setHours(0, 0, 0, 0);
-            const to = new Date(dateRange.to || dateRange.from);
-            to.setHours(23, 59, 59, 999);
-            if (bounceDate < from || bounceDate > to) return false;
-        }
+        // Date range is applied server-side (fetchData passes from/to to
+        // the API), so coldLeads/hotLeads are already scoped.
 
         return true;
     });
@@ -108,8 +108,12 @@ export default function BouncedEmailsPage() {
                     <p className="text-sm text-slate-500 mt-1">email_bounced across ENRICHED_LEADS, master_cold_leads & hubspot_lead</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    <DateRangePicker onUpdate={(values) => setDateRange(values.range)} />
-                    <Button onClick={fetchData} variant="outline" className="gap-2 h-10 px-4 hover:bg-slate-50 transition-colors" disabled={loading}>
+                    <DateRangePicker onUpdate={(values) => {
+                        if (!values.range?.from) return;
+                        setDateRange(values.range);
+                        fetchData(values.range as { from: Date; to?: Date });
+                    }} />
+                    <Button onClick={() => fetchData()} variant="outline" className="gap-2 h-10 px-4 hover:bg-slate-50 transition-colors" disabled={loading}>
                         <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
                         {loading ? "Refreshing..." : "Refresh List"}
                     </Button>

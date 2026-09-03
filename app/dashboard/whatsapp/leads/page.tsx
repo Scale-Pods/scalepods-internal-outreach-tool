@@ -47,10 +47,16 @@ export default function WhatsappLeadsPage() {
 
     const hasActiveFilters = activeFilters.replyStatus.length > 0 || activeFilters.source.length > 0 || !!dateRange.from || !!searchQuery;
 
-    const fetchData = async () => {
+    const fetchData = async (range?: { from?: Date; to?: Date }) => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/whatsapp/outreach`);
+            const r = range ?? dateRange;
+            const params = new URLSearchParams();
+            if (r.from) {
+                params.set('from', startOfDay(new Date(r.from)).toISOString());
+                params.set('to', endOfDay(new Date(r.to || r.from)).toISOString());
+            }
+            const res = await fetch(`/api/whatsapp/outreach${params.toString() ? `?${params.toString()}` : ''}`);
             if (!res.ok) throw new Error("Failed to fetch");
             const json = await res.json();
             setColdLeads(json.cold?.leads || []);
@@ -65,6 +71,7 @@ export default function WhatsappLeadsPage() {
 
     useEffect(() => {
         fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const combinedLeads = useMemo(() => [...coldLeads, ...hotLeads, ...hubspotWaLeads], [coldLeads, hotLeads, hubspotWaLeads]);
@@ -74,14 +81,8 @@ export default function WhatsappLeadsPage() {
             const q = searchQuery.toLowerCase();
             if (q && !lead.fullName.toLowerCase().includes(q) && !lead.phone.includes(searchQuery)) return false;
 
-            if (dateRange.from) {
-                const wlc = getWaLastContacted(lead);
-                if (!wlc) return false;
-                const contactDate = new Date(wlc);
-                const from = startOfDay(new Date(dateRange.from));
-                const to = endOfDay(new Date(dateRange.to || dateRange.from));
-                if (contactDate < from || contactDate > to) return false;
-            }
+            // Date range is applied server-side (fetchData passes from/to
+            // to the API), so combinedLeads is already scoped.
 
             const replied = hasReplied(lead);
             if (activeFilters.replyStatus.length > 0) {
@@ -117,9 +118,11 @@ export default function WhatsappLeadsPage() {
     };
 
     const resetFilters = () => {
+        const cleared = { from: undefined, to: undefined };
         setActiveFilters({ replyStatus: [], source: [] });
-        setDateRange({ from: undefined, to: undefined });
+        setDateRange(cleared);
         setSearchQuery("");
+        fetchData(cleared);
     };
 
     const totalPages = Math.ceil(filteredLeads.length / leadsPerPage);
@@ -135,7 +138,11 @@ export default function WhatsappLeadsPage() {
                     <p className="text-slate-500 text-xs">Cold (ENRICHED_LEADS), Hot (hubspot_lead) & HubSpot WA (hubspot_wa_outreach) leads with WhatsApp activity</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                    <DateRangePicker onUpdate={({ range }) => setDateRange({ from: range?.from, to: range?.to })} />
+                    <DateRangePicker onUpdate={({ range }) => {
+                        const next = { from: range?.from, to: range?.to };
+                        setDateRange(next);
+                        fetchData(next);
+                    }} />
                 </div>
             </div>
 
@@ -178,7 +185,7 @@ export default function WhatsappLeadsPage() {
                     </Button>
                 )}
 
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={fetchData}>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => fetchData()}>
                     <RefreshCw className="h-3 w-3" />
                 </Button>
             </div>

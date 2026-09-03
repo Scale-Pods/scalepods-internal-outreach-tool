@@ -14,18 +14,12 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ custo
         const fetchLead = async () => {
             setLoading(true);
             try {
-                const res = await fetch('/api/whatsapp/outreach');
+                const res = await fetch(`/api/public/chat/${encodeURIComponent(decodedCustomerId)}`);
                 if (res.ok) {
                     const data = await res.json();
-                    const allLeads: NormalizedWaLead[] = [...(data.cold?.leads || []), ...(data.hot?.leads || []), ...(data.hubspotWa?.leads || [])];
-                    const searchVal = decodedCustomerId.toLowerCase().trim();
-                    const found = allLeads.find(l => {
-                        if (l.id.toLowerCase() === searchVal) return true;
-                        const normalized = l.phone.replace(/\D/g, '');
-                        const searchNormalized = searchVal.replace(/\D/g, '');
-                        return !!searchNormalized && normalized === searchNormalized;
-                    });
-                    setLead(found || null);
+                    setLead(data.lead || null);
+                } else {
+                    setLead(null);
                 }
             } catch (err) {
                 console.error("Error fetching lead:", err);
