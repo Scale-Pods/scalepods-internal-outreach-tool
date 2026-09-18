@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getLinkedInLeads } from '@/lib/services/linkedin-sheets';
+import { getLinkedInQuota } from '@/lib/services/linkedin-sheets';
 
 export async function GET() {
     try {
-        const leads = await getLinkedInLeads();
-        return NextResponse.json({ data: leads });
+        const quota = await getLinkedInQuota();
+        return NextResponse.json({ data: quota });
     } catch (error: any) {
         return NextResponse.json({ data: [], error: error.message }, { status: 500 });
     }

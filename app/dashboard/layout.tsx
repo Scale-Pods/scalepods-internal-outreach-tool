@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity, Building2, Phone, Menu, X } from "lucide-react";
+import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity, Building2, Phone, Menu, X, Linkedin, Gauge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import {
@@ -39,6 +39,11 @@ const sidebarItems = [
         title: "Voice Agent",
         href: "/dashboard/voice",
         icon: Mic,
+    },
+    {
+        title: "LinkedIn",
+        href: "/dashboard/linkedin",
+        icon: Linkedin,
     },
 ];
 
@@ -246,6 +251,7 @@ function DashboardContent({
                 { title: "Email Marketing", href: "/dashboard/email", icon: Mail },
                 { title: "WhatsApp CRM", href: "/dashboard/whatsapp", icon: MessageCircle },
                 { title: "Voice Agent", href: "/dashboard/voice", icon: Mic },
+                { title: "LinkedIn", href: "/dashboard/linkedin", icon: Linkedin },
                 { title: "Lead Scrapper", href: "/dashboard/lead-scrapper", icon: Search },
                 { title: "Leads", href: "/dashboard/leads", icon: Users },
 
@@ -284,6 +290,16 @@ function DashboardContent({
                 { title: "Cold Call Logs", href: "/dashboard/voice/cold-logs", icon: Phone },
                 { title: "Analytics", href: "/dashboard/voice/analytics", icon: BarChart2 },
             ]
+        },
+        linkedin: {
+            label: "LinkedIn",
+            icon: Linkedin,
+            items: [
+                { title: "Dashboard", href: "/dashboard/linkedin", icon: LayoutDashboard },
+                { title: "Chat", href: "/dashboard/linkedin/chat", icon: MessageCircle },
+                { title: "Leads", href: "/dashboard/linkedin/leads", icon: Users },
+                { title: "Analytics", href: "/dashboard/linkedin/analytics", icon: BarChart2 },
+            ]
         }
     };
 
@@ -292,6 +308,7 @@ function DashboardContent({
     if (pathname.startsWith("/dashboard/email")) currentContext = "email";
     else if (pathname.startsWith("/dashboard/whatsapp")) currentContext = "whatsapp";
     else if (pathname.startsWith("/dashboard/voice")) currentContext = "voice";
+    else if (pathname.startsWith("/dashboard/linkedin")) currentContext = "linkedin";
 
     const activeConfig = (dashboardConfig as any)[currentContext];
 
@@ -403,6 +420,9 @@ function DashboardContent({
                                 </DropdownMenuItem>
                                 <DropdownMenuItem className="hover:bg-cyan-50 hover:text-cyan-600 cursor-pointer" onClick={() => router.push("/dashboard/voice")}>
                                     <Mic className="mr-2 h-4 w-4" /> Voice Agent
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="hover:bg-cyan-50 hover:text-cyan-600 cursor-pointer" onClick={() => router.push("/dashboard/linkedin")}>
+                                    <Linkedin className="mr-2 h-4 w-4" /> LinkedIn
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
