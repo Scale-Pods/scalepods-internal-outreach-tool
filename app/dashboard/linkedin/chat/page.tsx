@@ -9,16 +9,21 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
     Search, RefreshCw, MessageSquare, User, Send, ExternalLink,
 } from "lucide-react";
 import { SPLoader } from "@/components/sp-loader";
-import type { LinkedInConversationThread } from "@/lib/services/linkedin-sheets";
+import { LINKEDIN_ACCOUNTS, type LinkedInConversationThread } from "@/lib/services/linkedin-sheets";
+import { LinkedInAccountBadge } from "@/components/dashboard/linkedin-account-badge";
 
 export default function LinkedInChatPage() {
     const [threads, setThreads] = useState<LinkedInConversationThread[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedThread, setSelectedThread] = useState<LinkedInConversationThread | null>(null);
+    const [accountFilter, setAccountFilter] = useState<string[]>([]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -38,15 +43,20 @@ export default function LinkedInChatPage() {
         fetchData();
     }, []);
 
+    const toggleAccountFilter = (value: string) => {
+        setAccountFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+    };
+
     const filteredThreads = useMemo(() => {
         const q = searchQuery.toLowerCase();
-        if (!q) return threads;
         return threads.filter(t => {
+            if (accountFilter.length > 0 && !accountFilter.includes(t.accountId.trim())) return false;
+            if (!q) return true;
             const name = t.lead?.companyName || t.personId;
             const haystack = `${name} ${t.lead?.title || ''} ${t.messages.map(m => m.message).join(' ')}`.toLowerCase();
             return haystack.includes(q);
         });
-    }, [threads, searchQuery]);
+    }, [threads, searchQuery, accountFilter]);
 
     if (loading) return <SPLoader />;
 
@@ -62,9 +72,25 @@ export default function LinkedInChatPage() {
                 </Button>
             </div>
 
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input className="pl-10 bg-white" placeholder="Search by company, title, or message..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input className="pl-10 bg-white" placeholder="Search by company, title, or message..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                </div>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className={`h-10 gap-1.5 text-xs font-bold px-4 ${accountFilter.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-700' : ''}`}>
+                            {accountFilter.length > 0 ? `Account (${accountFilter.length})` : 'Account'}
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52">
+                        {LINKEDIN_ACCOUNTS.map(acc => (
+                            <DropdownMenuItem key={acc.accountId} onClick={() => toggleAccountFilter(acc.accountId)}>
+                                {acc.name} {accountFilter.includes(acc.accountId) && "✓"}
+                            </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
 
             <Card className="border-border shadow-sm bg-white overflow-hidden">
@@ -74,6 +100,7 @@ export default function LinkedInChatPage() {
                     <table className="w-full text-left text-sm">
                         <thead className="bg-slate-50 text-slate-500 font-bold border-b border-border">
                             <tr>
+                                <th className="px-4 py-3">Account</th>
                                 <th className="px-4 py-3">Lead</th>
                                 <th className="px-4 py-3 text-center">Messages</th>
                                 <th className="px-4 py-3">Last Message</th>
@@ -85,6 +112,9 @@ export default function LinkedInChatPage() {
                                 const lastMsg = thread.messages[thread.messages.length - 1];
                                 return (
                                     <tr key={`${thread.chatId}-${idx}`} className="hover:bg-slate-50 transition-colors cursor-pointer group" onClick={() => setSelectedThread(thread)}>
+                                        <td className="px-4 py-3">
+                                            <LinkedInAccountBadge accountId={thread.accountId} />
+                                        </td>
                                         <td className="px-4 py-3">
                                             <div className="font-bold text-slate-900 group-hover:text-blue-700">
                                                 {thread.lead?.companyName || thread.personId}
@@ -121,8 +151,9 @@ function LinkedInChatDetail({ thread }: { thread: LinkedInConversationThread }) 
             <div className="flex items-center justify-between shrink-0 pr-12">
                 <div>
                     <h2 className="text-xl font-bold text-slate-900">{lead?.companyName || thread.personId}</h2>
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
                         <span>{lead?.title || thread.providerId}</span>
+                        <LinkedInAccountBadge accountId={thread.accountId} />
                     </div>
                 </div>
                 {lead?.linkedIn && (

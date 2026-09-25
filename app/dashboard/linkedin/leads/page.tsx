@@ -12,7 +12,8 @@ import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SPLoader } from "@/components/sp-loader";
-import type { LinkedInLead } from "@/lib/services/linkedin-sheets";
+import { LINKEDIN_ACCOUNTS, getAccountMeta, type LinkedInLead } from "@/lib/services/linkedin-sheets";
+import { LinkedInAccountBadge } from "@/components/dashboard/linkedin-account-badge";
 
 const STATUS_STYLES: Record<string, string> = {
     connected: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -38,6 +39,7 @@ export default function LinkedInLeadsPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const leadsPerPage = 15;
     const [connectionFilter, setConnectionFilter] = useState<string[]>([]);
+    const [accountFilter, setAccountFilter] = useState<string[]>([]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -67,10 +69,15 @@ export default function LinkedInLeadsPage() {
         setConnectionFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
     };
 
-    const hasActiveFilters = connectionFilter.length > 0 || !!searchQuery;
+    const toggleAccountFilter = (value: string) => {
+        setAccountFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+    };
+
+    const hasActiveFilters = connectionFilter.length > 0 || accountFilter.length > 0 || !!searchQuery;
 
     const resetFilters = () => {
         setConnectionFilter([]);
+        setAccountFilter([]);
         setSearchQuery("");
     };
 
@@ -82,11 +89,12 @@ export default function LinkedInLeadsPage() {
                 if (!haystack.includes(q)) return false;
             }
             if (connectionFilter.length > 0 && !connectionFilter.includes(lead.connectionStatus.trim())) return false;
+            if (accountFilter.length > 0 && !accountFilter.includes(lead.accountId.trim())) return false;
             return true;
         });
-    }, [leads, searchQuery, connectionFilter]);
+    }, [leads, searchQuery, connectionFilter, accountFilter]);
 
-    useEffect(() => { setCurrentPage(1); }, [searchQuery, connectionFilter]);
+    useEffect(() => { setCurrentPage(1); }, [searchQuery, connectionFilter, accountFilter]);
 
     const totalPages = Math.ceil(filteredLeads.length / leadsPerPage) || 1;
     const paginatedLeads = filteredLeads.slice((currentPage - 1) * leadsPerPage, currentPage * leadsPerPage);
@@ -119,6 +127,21 @@ export default function LinkedInLeadsPage() {
 
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className={`h-8 gap-1.5 text-xs font-bold ${accountFilter.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-700' : ''}`}>
+                            {accountFilter.length > 0 ? `Account (${accountFilter.length})` : 'Account'}
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52">
+                        {LINKEDIN_ACCOUNTS.map(acc => (
+                            <DropdownMenuItem key={acc.accountId} onClick={() => toggleAccountFilter(acc.accountId)}>
+                                {acc.name} {accountFilter.includes(acc.accountId) && "✓"}
+                            </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm" className={`h-8 gap-1.5 text-xs font-bold ${connectionFilter.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-700' : ''}`}>
                             {connectionFilter.length > 0 ? `Connection (${connectionFilter.length})` : 'Connection Status'}
                         </Button>
@@ -147,6 +170,7 @@ export default function LinkedInLeadsPage() {
                         <table className="w-full text-left text-sm">
                             <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase sticky top-0 z-10">
                                 <tr className="border-b border-border">
+                                    <th className="px-3 py-2.5">Account</th>
                                     <th className="px-3 py-2.5">Company Name</th>
                                     <th className="px-3 py-2.5">Company Website</th>
                                     <th className="px-3 py-2.5">Email</th>
@@ -167,7 +191,7 @@ export default function LinkedInLeadsPage() {
                             </thead>
                             <tbody className="divide-y divide-border">
                                 {filteredLeads.length === 0 ? (
-                                    <tr><td colSpan={16} className="px-3 py-12 text-center text-slate-400 text-sm">No leads found.</td></tr>
+                                    <tr><td colSpan={17} className="px-3 py-12 text-center text-slate-400 text-sm">No leads found.</td></tr>
                                 ) : (
                                     paginatedLeads.map((lead, index) => {
                                     const accepted = isAcceptedConnection(lead);
@@ -176,6 +200,9 @@ export default function LinkedInLeadsPage() {
                                             key={`${lead.personId}-${index}`}
                                             className={`transition-colors ${accepted ? 'bg-emerald-50 hover:bg-emerald-100/70' : 'bg-rose-50 hover:bg-rose-100/70'}`}
                                         >
+                                            <td className="px-3 py-2">
+                                                <LinkedInAccountBadge accountId={lead.accountId} />
+                                            </td>
                                             <td className="px-3 py-2 font-semibold text-slate-900 text-xs whitespace-nowrap">{lead.companyName || "—"}</td>
                                             <td className="px-3 py-2 text-[11px]">
                                                 {lead.companyWebsite ? (

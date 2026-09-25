@@ -8,6 +8,30 @@ const LEADS_SHEET_NAME = 'Leads';
 const CONVERSATIONS_SHEET_NAME = 'Conversations';
 const QUOTA_SHEET_NAME = 'Quota Tracker';
 
+// Known LinkedIn sender accounts (Account ID -> display name), shared across
+// Dashboard / Chat / Leads / Analytics so every page bifurcates data the same way.
+export interface LinkedInAccount {
+    accountId: string;
+    name: string;
+    color: string; // tailwind color token, e.g. "blue"
+}
+
+export const LINKEDIN_ACCOUNTS: LinkedInAccount[] = [
+    { accountId: 'THgf5G4aQ_6ySkG97g3-UA', name: 'Adnan Shaikh', color: 'blue' },
+    { accountId: 'skWloOywQJeCP9Ys3eXt9g', name: 'Vishnu Girish', color: 'violet' },
+    { accountId: '9SwCve6hQDGCULIufHvCZQ', name: 'Raunak Kumar', color: 'emerald' },
+];
+
+const UNKNOWN_ACCOUNT_COLOR = 'slate';
+
+export function getAccountMeta(accountId: string | null | undefined): { name: string; color: string } {
+    const id = (accountId || '').trim();
+    if (!id) return { name: 'Unassigned', color: UNKNOWN_ACCOUNT_COLOR };
+    const known = LINKEDIN_ACCOUNTS.find(a => a.accountId === id);
+    if (known) return { name: known.name, color: known.color };
+    return { name: id, color: UNKNOWN_ACCOUNT_COLOR };
+}
+
 export interface LinkedInLead {
     companyName: string;
     companyWebsite: string;
@@ -20,6 +44,7 @@ export interface LinkedInLead {
     personId: string;
     companyPhoneNumber: string;
     providerId: string;
+    accountId: string;
     status: string;
     connectionStatus: string;
     sequenceStep: string;
@@ -60,6 +85,7 @@ const LEADS_COLUMNS: Record<string, keyof LinkedInLead> = {
     'Person ID': 'personId',
     'Company Phone Number': 'companyPhoneNumber',
     'Provider ID': 'providerId',
+    'Account ID': 'accountId',
     'Status': 'status',
     'Connection Status': 'connectionStatus',
     'Sequence Step': 'sequenceStep',
@@ -173,12 +199,13 @@ export interface LinkedInConversationThread {
     chatId: string;
     personId: string;
     providerId: string;
+    accountId: string;
     lead: LinkedInLead | null;
     messages: LinkedInMessage[];
     lastMessageAt: string | null;
 }
 
-/** Groups raw conversation messages into per-lead threads, joined against the leads list. */
+/** Groups raw conversation messages into per-lead threads, joined against the leads list (which carries Account ID). */
 export function buildConversationThreads(
     messages: LinkedInMessage[],
     leads: LinkedInLead[]
@@ -191,11 +218,13 @@ export function buildConversationThreads(
         if (!key) continue;
         let thread = threads.get(key);
         if (!thread) {
+            const lead = leadsByPersonId.get(msg.personId) || null;
             thread = {
                 chatId: msg.chatId,
                 personId: msg.personId,
                 providerId: msg.providerId,
-                lead: leadsByPersonId.get(msg.personId) || null,
+                accountId: lead?.accountId || '',
+                lead,
                 messages: [],
                 lastMessageAt: null,
             };

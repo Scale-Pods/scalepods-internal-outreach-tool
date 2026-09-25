@@ -9,6 +9,23 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SPLoader } from "@/components/sp-loader";
+import { LinkedInAccountBadge, accountColorClasses } from "@/components/dashboard/linkedin-account-badge";
+
+interface AccountBreakdown {
+    accountId: string;
+    name: string;
+    color: string;
+    totalLeads: number;
+    connectedLeads: number;
+    notConnectedLeads: number;
+    conversations: number;
+    messages: number;
+    quota: {
+        dailyCap: number;
+        sentCount: number;
+        remaining: number;
+    };
+}
 
 interface DashboardStats {
     totalLeads: number;
@@ -21,6 +38,7 @@ interface DashboardStats {
         sentCount: number;
         remaining: number;
     };
+    accountBreakdown: AccountBreakdown[];
 }
 
 export default function LinkedInDashboardPage() {
@@ -128,6 +146,50 @@ export default function LinkedInDashboardPage() {
                     <div className="flex items-center gap-4 mt-2 text-[11px] font-semibold text-slate-500">
                         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" /> Accepted / Connected ({stats?.connectedLeads ?? 0})</span>
                         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-rose-400" /> Not Connected ({stats?.notConnectedLeads ?? 0})</span>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card className="bg-white border-border shadow-sm">
+                <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-5">
+                        <div>
+                            <h3 className="text-base font-bold text-slate-900">Bifurcation by Account</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">Leads, connections, conversations &amp; quota per LinkedIn sender account</p>
+                        </div>
+                        <Users className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase">
+                                <tr className="border-b border-border">
+                                    <th className="px-3 py-2.5">Account</th>
+                                    <th className="px-3 py-2.5 text-center">Total Leads</th>
+                                    <th className="px-3 py-2.5 text-center">Connected</th>
+                                    <th className="px-3 py-2.5 text-center">Not Connected</th>
+                                    <th className="px-3 py-2.5 text-center">Conversations</th>
+                                    <th className="px-3 py-2.5 text-center">Messages</th>
+                                    <th className="px-3 py-2.5 text-center">Daily Cap</th>
+                                    <th className="px-3 py-2.5 text-center">Sent Today</th>
+                                    <th className="px-3 py-2.5 text-center">Remaining</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {(stats?.accountBreakdown ?? []).map(row => (
+                                    <tr key={row.accountId} className={cn("transition-colors", accountColorClasses(row.color).split(' ')[0])}>
+                                        <td className="px-3 py-2.5"><LinkedInAccountBadge accountId={row.accountId} /></td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-slate-700">{row.totalLeads}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-emerald-700">{row.connectedLeads}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-rose-600">{row.notConnectedLeads}</td>
+                                        <td className="px-3 py-2.5 text-center text-slate-600">{row.conversations}</td>
+                                        <td className="px-3 py-2.5 text-center text-slate-600">{row.messages}</td>
+                                        <td className="px-3 py-2.5 text-center text-slate-600">{row.quota.dailyCap}</td>
+                                        <td className="px-3 py-2.5 text-center text-slate-600">{row.quota.sentCount}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-slate-900">{row.quota.remaining}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </CardContent>
             </Card>
