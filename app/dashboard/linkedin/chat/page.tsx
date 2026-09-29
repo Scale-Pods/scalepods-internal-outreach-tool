@@ -52,7 +52,7 @@ export default function LinkedInChatPage() {
         return threads.filter(t => {
             if (accountFilter.length > 0 && !accountFilter.includes(t.accountId.trim())) return false;
             if (!q) return true;
-            const name = t.lead?.companyName || t.personId;
+            const name = t.lead?.fullName || t.personId;
             const haystack = `${name} ${t.lead?.title || ''} ${t.messages.map(m => m.message).join(' ')}`.toLowerCase();
             return haystack.includes(q);
         });
@@ -117,7 +117,7 @@ export default function LinkedInChatPage() {
                                         </td>
                                         <td className="px-4 py-3">
                                             <div className="font-bold text-slate-900 group-hover:text-blue-700">
-                                                {thread.lead?.companyName || thread.personId}
+                                                {thread.lead?.fullName || thread.personId}
                                             </div>
                                             <div className="text-xs text-slate-500">{thread.lead?.title || thread.providerId}</div>
                                         </td>
@@ -150,9 +150,9 @@ function LinkedInChatDetail({ thread }: { thread: LinkedInConversationThread }) 
         <div className="space-y-6 flex flex-col h-full overflow-hidden max-h-[85vh]">
             <div className="flex items-center justify-between shrink-0 pr-12">
                 <div>
-                    <h2 className="text-xl font-bold text-slate-900">{lead?.companyName || thread.personId}</h2>
+                    <h2 className="text-xl font-bold text-slate-900">{lead?.fullName || thread.personId}</h2>
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                        <span>{lead?.title || thread.providerId}</span>
+                        <span>{[lead?.title, lead?.companyName].filter(Boolean).join(" @ ") || thread.providerId}</span>
                         <LinkedInAccountBadge accountId={thread.accountId} />
                     </div>
                 </div>

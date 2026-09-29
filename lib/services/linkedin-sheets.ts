@@ -33,6 +33,7 @@ export function getAccountMeta(accountId: string | null | undefined): { name: st
 }
 
 export interface LinkedInLead {
+    fullName: string;
     companyName: string;
     companyWebsite: string;
     email: string;
@@ -74,6 +75,7 @@ export interface LinkedInQuota {
 }
 
 const LEADS_COLUMNS: Record<string, keyof LinkedInLead> = {
+    'Full Name': 'fullName',
     'Company Name': 'companyName',
     'Company Website': 'companyWebsite',
     'Email': 'email',
