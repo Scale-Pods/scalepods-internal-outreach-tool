@@ -23,15 +23,12 @@ export async function GET() {
 
         const threads = buildConversationThreads(messages, leads);
 
-        // Per-account bifurcation across Leads, Conversations & Quota Tracker,
-        // keyed by the known Account IDs (falls back to "Unassigned" for blanks/unknowns).
-        const accountIds = new Set<string>([
-            ...LINKEDIN_ACCOUNTS.map(a => a.accountId),
-            ...leads.map(l => l.accountId).filter(Boolean),
-            ...quota.map(q => q.accountId).filter(Boolean),
-        ]);
+        // Per-account bifurcation across Leads, Conversations & Quota Tracker.
+        // Restricted to the known LinkedIn sender accounts only — stray/unknown
+        // Account IDs picked up from the sheet (e.g. test rows) are excluded.
+        const accountIds = LINKEDIN_ACCOUNTS.map(a => a.accountId);
 
-        const accountBreakdown = Array.from(accountIds).map(accountId => {
+        const accountBreakdown = accountIds.map(accountId => {
             const meta = getAccountMeta(accountId);
             const accountLeads = leads.filter(l => l.accountId === accountId);
             const accountConnected = accountLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
@@ -66,6 +63,9 @@ export async function GET() {
                 sentCount: totalSentToday,
                 remaining: totalRemaining,
             },
+            // Connection rate = accepted/connected leads ÷ connection requests sent
+            // (Quota Tracker "Sent Count"), not ÷ total leads.
+            requestsSent: totalSentToday,
             accountBreakdown,
         });
     } catch (error: any) {

@@ -38,6 +38,7 @@ interface DashboardStats {
         sentCount: number;
         remaining: number;
     };
+    requestsSent: number;
     accountBreakdown: AccountBreakdown[];
 }
 
@@ -63,8 +64,8 @@ export default function LinkedInDashboardPage() {
         fetchData();
     }, []);
 
-    const connectionRate = stats && stats.totalLeads > 0
-        ? ((stats.connectedLeads / stats.totalLeads) * 100).toFixed(1)
+    const connectionRate = stats && stats.requestsSent > 0
+        ? ((stats.connectedLeads / stats.requestsSent) * 100).toFixed(1)
         : "0.0";
 
     const quotaUsedPct = stats && stats.quota.dailyCap > 0

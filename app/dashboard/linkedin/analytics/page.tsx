@@ -54,7 +54,7 @@ export default function LinkedInAnalyticsPage() {
         const totalCap = quota.reduce((sum, q) => sum + q.dailyCap, 0);
         const totalRemaining = quota.reduce((sum, q) => sum + q.remainingQuota, 0);
         const connected = leads.filter(l => l.connectionStatus.toLowerCase().includes('connect')).length;
-        const connectionRate = leads.length > 0 ? ((connected / leads.length) * 100).toFixed(1) + "%" : "0%";
+        const connectionRate = totalSent > 0 ? ((connected / totalSent) * 100).toFixed(1) + "%" : "0%";
 
         const statusCounts: Record<string, number> = {};
         leads.forEach(l => {
@@ -84,12 +84,10 @@ export default function LinkedInAnalyticsPage() {
     const threads = useMemo(() => buildConversationThreads(messages, leads), [messages, leads]);
 
     const accountBreakdown = useMemo(() => {
-        const ids = new Set<string>([
-            ...LINKEDIN_ACCOUNTS.map(a => a.accountId),
-            ...leads.map(l => l.accountId).filter(Boolean),
-            ...quota.map(q => q.accountId).filter(Boolean),
-        ]);
-        return Array.from(ids).map(accountId => {
+        // Restricted to the known LinkedIn sender accounts only — stray/unknown
+        // Account IDs picked up from the sheet (e.g. test rows) are excluded.
+        const ids = LINKEDIN_ACCOUNTS.map(a => a.accountId);
+        return ids.map(accountId => {
             const meta = getAccountMeta(accountId);
             const accountLeads = leads.filter(l => l.accountId === accountId);
             const accountConnected = accountLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
