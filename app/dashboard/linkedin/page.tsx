@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import {
-    Users, MessageCircle, Send, Percent, Gauge, RefreshCw, CheckCircle2, XCircle,
+    Users, MessageCircle, Send, Percent, Gauge, RefreshCw, CheckCircle2, XCircle, Reply,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
@@ -18,6 +18,7 @@ interface AccountBreakdown {
     totalLeads: number;
     connectedLeads: number;
     notConnectedLeads: number;
+    repliedLeads: number;
     conversations: number;
     messages: number;
     quota: {
@@ -27,10 +28,21 @@ interface AccountBreakdown {
     };
 }
 
+interface LinkedInReply {
+    personId: string;
+    fullName: string;
+    companyName: string;
+    accountId: string;
+    accountName: string;
+    replyText: string;
+    lastActionSentAt: string;
+}
+
 interface DashboardStats {
     totalLeads: number;
     connectedLeads: number;
     notConnectedLeads: number;
+    repliedLeads: number;
     totalMessages: number;
     uniqueConversations: number;
     quota: {
@@ -40,6 +52,7 @@ interface DashboardStats {
     };
     requestsSent: number;
     accountBreakdown: AccountBreakdown[];
+    replies: LinkedInReply[];
 }
 
 export default function LinkedInDashboardPage() {
@@ -88,7 +101,7 @@ export default function LinkedInDashboardPage() {
                 </Button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
                 <MetricCard
                     title="Total Leads"
                     value={stats?.totalLeads ?? "..."}
@@ -109,6 +122,13 @@ export default function LinkedInDashboardPage() {
                     icon={<XCircle className="h-5 w-5" />}
                     iconBg="bg-rose-50 text-rose-600"
                     onClick={() => router.push('/dashboard/linkedin/leads')}
+                />
+                <MetricCard
+                    title="Replied"
+                    value={stats?.repliedLeads ?? "..."}
+                    icon={<Reply className="h-5 w-5" />}
+                    iconBg="bg-cyan-50 text-cyan-600"
+                    onClick={() => document.getElementById('linkedin-replies')?.scrollIntoView({ behavior: 'smooth' })}
                 />
                 <MetricCard
                     title="Connection Rate"
@@ -168,6 +188,7 @@ export default function LinkedInDashboardPage() {
                                     <th className="px-3 py-2.5 text-center">Total Leads</th>
                                     <th className="px-3 py-2.5 text-center">Connected</th>
                                     <th className="px-3 py-2.5 text-center">Not Connected</th>
+                                    <th className="px-3 py-2.5 text-center">Replied</th>
                                     <th className="px-3 py-2.5 text-center">Conversations</th>
                                     <th className="px-3 py-2.5 text-center">Messages</th>
                                     <th className="px-3 py-2.5 text-center">Daily Cap</th>
@@ -182,6 +203,7 @@ export default function LinkedInDashboardPage() {
                                         <td className="px-3 py-2.5 text-center font-bold text-slate-700">{row.totalLeads}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-emerald-700">{row.connectedLeads}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-rose-600">{row.notConnectedLeads}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-cyan-700">{row.repliedLeads}</td>
                                         <td className="px-3 py-2.5 text-center text-slate-600">{row.conversations}</td>
                                         <td className="px-3 py-2.5 text-center text-slate-600">{row.messages}</td>
                                         <td className="px-3 py-2.5 text-center text-slate-600">{row.quota.dailyCap}</td>
@@ -192,6 +214,38 @@ export default function LinkedInDashboardPage() {
                             </tbody>
                         </table>
                     </div>
+                </CardContent>
+            </Card>
+
+            <Card id="linkedin-replies" className="bg-white border-border shadow-sm scroll-mt-6">
+                <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-5">
+                        <div>
+                            <h3 className="text-base font-bold text-slate-900">Replies</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">Actual reply content, from the Reply Text column in the Leads sheet</p>
+                        </div>
+                        <Reply className="h-4 w-4 text-slate-400" />
+                    </div>
+                    {(!stats || stats.replies.length === 0) ? (
+                        <p className="text-sm text-slate-400 py-6 text-center">
+                            {loading ? "Loading..." : "No replies yet"}
+                        </p>
+                    ) : (
+                        <div className="space-y-3">
+                            {stats.replies.map(r => (
+                                <div key={r.personId} className="rounded-lg border border-border bg-slate-50/60 p-4">
+                                    <div className="flex items-start justify-between gap-3 mb-2">
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-bold text-slate-900 truncate">{r.fullName}</p>
+                                            <p className="text-xs text-slate-500 truncate">{r.companyName}</p>
+                                        </div>
+                                        <LinkedInAccountBadge accountId={r.accountId} />
+                                    </div>
+                                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{r.replyText}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 

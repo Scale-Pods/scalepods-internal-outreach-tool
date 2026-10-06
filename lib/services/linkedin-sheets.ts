@@ -51,6 +51,7 @@ export interface LinkedInLead {
     sequenceStep: string;
     nextActionDue: string;
     lastActionSentAt: string;
+    replyText: string;
 }
 
 export interface LinkedInMessage {
@@ -93,6 +94,7 @@ const LEADS_COLUMNS: Record<string, keyof LinkedInLead> = {
     'Sequence Step': 'sequenceStep',
     'Next Action Due': 'nextActionDue',
     'Last Action Sent At': 'lastActionSentAt',
+    'Reply Text': 'replyText',
 };
 
 const CONVERSATIONS_COLUMNS: Record<string, keyof LinkedInMessage> = {

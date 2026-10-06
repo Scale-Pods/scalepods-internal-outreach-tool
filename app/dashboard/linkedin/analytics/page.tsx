@@ -6,7 +6,7 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     AreaChart, Area, BarChart, Bar, Cell
 } from "recharts";
-import { TrendingUp, Users, MessageSquare, Send, RefreshCw, Gauge } from "lucide-react";
+import { TrendingUp, Users, MessageSquare, Send, RefreshCw, Gauge, Reply } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SPLoader } from "@/components/sp-loader";
 import { cn } from "@/lib/utils";
@@ -56,6 +56,9 @@ export default function LinkedInAnalyticsPage() {
         const connected = leads.filter(l => l.connectionStatus.toLowerCase().includes('connect')).length;
         const connectionRate = totalSent > 0 ? ((connected / totalSent) * 100).toFixed(1) + "%" : "0%";
 
+        // Replies — leads with content in the Reply Text column from the Leads sheet.
+        const repliedLeads = leads.filter(l => l.replyText.trim());
+
         const statusCounts: Record<string, number> = {};
         leads.forEach(l => {
             const key = (l.connectionStatus || 'Unknown').trim() || 'Unknown';
@@ -66,6 +69,17 @@ export default function LinkedInAnalyticsPage() {
             totalSent, totalCap, totalRemaining, connected, connectionRate,
             totalMessages: messages.length,
             statusData: Object.entries(statusCounts).map(([name, value]) => ({ name, value })),
+            replied: repliedLeads.length,
+            replies: repliedLeads
+                .map(l => ({
+                    personId: l.personId,
+                    fullName: l.fullName,
+                    companyName: l.companyName,
+                    accountId: l.accountId,
+                    replyText: l.replyText,
+                    lastActionSentAt: l.lastActionSentAt,
+                }))
+                .sort((a, b) => new Date(b.lastActionSentAt).getTime() - new Date(a.lastActionSentAt).getTime()),
         };
     }, [quota, leads, messages]);
 
@@ -91,6 +105,7 @@ export default function LinkedInAnalyticsPage() {
             const meta = getAccountMeta(accountId);
             const accountLeads = leads.filter(l => l.accountId === accountId);
             const accountConnected = accountLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
+            const accountReplied = accountLeads.filter(l => l.replyText.trim()).length;
             const accountThreads = threads.filter(t => t.accountId === accountId);
             const accountQuota = quota.filter(q => q.accountId === accountId);
             return {
@@ -100,6 +115,7 @@ export default function LinkedInAnalyticsPage() {
                 totalLeads: accountLeads.length,
                 connected: accountConnected,
                 notConnected: accountLeads.length - accountConnected,
+                replied: accountReplied,
                 conversations: accountThreads.length,
                 messages: accountThreads.reduce((sum, t) => sum + t.messages.length, 0),
                 dailyCap: accountQuota.reduce((sum, q) => sum + q.dailyCap, 0),
@@ -123,10 +139,11 @@ export default function LinkedInAnalyticsPage() {
                 </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <EnhancedAnalyticCard title="Outbound Pulses" value={stats.totalSent.toLocaleString()} label="Total Invites/Msgs Sent" icon={Send} color="text-blue-600" bg="bg-blue-50" />
                 <EnhancedAnalyticCard title="Quota Remaining" value={stats.totalRemaining.toLocaleString()} label={`Of ${stats.totalCap.toLocaleString()} daily cap`} icon={Gauge} color="text-amber-600" bg="bg-amber-50" />
                 <EnhancedAnalyticCard title="Connection Rate" value={stats.connectionRate} label={`${stats.connected} connected leads`} icon={TrendingUp} color="text-indigo-600" bg="bg-indigo-50" />
+                <EnhancedAnalyticCard title="Replied" value={stats.replied.toLocaleString()} label="Leads with a reply" icon={Reply} color="text-cyan-600" bg="bg-cyan-50" />
                 <EnhancedAnalyticCard title="Total Messages" value={stats.totalMessages.toLocaleString()} label="Across all conversations" icon={MessageSquare} color="text-emerald-600" bg="bg-emerald-50" />
             </div>
 
@@ -229,6 +246,7 @@ export default function LinkedInAnalyticsPage() {
                                     <th className="px-3 py-2.5 text-center">Total Leads</th>
                                     <th className="px-3 py-2.5 text-center">Connected</th>
                                     <th className="px-3 py-2.5 text-center">Not Connected</th>
+                                    <th className="px-3 py-2.5 text-center">Replied</th>
                                     <th className="px-3 py-2.5 text-center">Conversations</th>
                                     <th className="px-3 py-2.5 text-center">Messages</th>
                                     <th className="px-3 py-2.5 text-center">Daily Cap</th>
@@ -243,6 +261,7 @@ export default function LinkedInAnalyticsPage() {
                                         <td className="px-3 py-2.5 text-center font-bold text-slate-700">{row.totalLeads}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-emerald-700">{row.connected}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-rose-600">{row.notConnected}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-cyan-700">{row.replied}</td>
                                         <td className="px-3 py-2.5 text-center text-slate-600">{row.conversations}</td>
                                         <td className="px-3 py-2.5 text-center text-slate-600">{row.messages}</td>
                                         <td className="px-3 py-2.5 text-center text-slate-600">{row.dailyCap}</td>
@@ -253,6 +272,33 @@ export default function LinkedInAnalyticsPage() {
                             </tbody>
                         </table>
                     </div>
+                </CardContent>
+            </Card>
+
+            <Card className="border-slate-200/60 shadow-sm bg-white overflow-hidden">
+                <CardHeader className="px-6 py-4 border-b border-slate-50">
+                    <CardTitle className="text-sm font-bold text-slate-800">Replies</CardTitle>
+                    <CardDescription className="text-[11px]">Actual reply content, from the Reply Text column in the Leads sheet</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6">
+                    {stats.replies.length === 0 ? (
+                        <p className="text-sm text-slate-400 py-6 text-center">{loading ? "Loading..." : "No replies yet"}</p>
+                    ) : (
+                        <div className="space-y-3">
+                            {stats.replies.map(r => (
+                                <div key={r.personId} className="rounded-lg border border-border bg-slate-50/60 p-4">
+                                    <div className="flex items-start justify-between gap-3 mb-2">
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-bold text-slate-900 truncate">{r.fullName}</p>
+                                            <p className="text-xs text-slate-500 truncate">{r.companyName}</p>
+                                        </div>
+                                        <LinkedInAccountBadge accountId={r.accountId} />
+                                    </div>
+                                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{r.replyText}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>
