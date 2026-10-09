@@ -3,8 +3,9 @@
 import { useState, useRef, useEffect } from 'react';
 import {
     Phone, PhoneOff, Mic, MicOff,
-    Delete, X, Loader2, PhoneCall,
+    Delete, X, Loader2, PhoneCall, ChevronDown, Check,
 } from 'lucide-react';
+import { CALLER_NUMBERS, DEFAULT_CALLER_NUMBER } from '@/lib/services/caller-numbers';
 
 type Status = 'idle' | 'loading' | 'ready' | 'calling' | 'connected' | 'error';
 
@@ -59,6 +60,22 @@ export function TwilioDialer({ renderTrigger }: TwilioDialerProps = {}) {
     const [statusMsg, setStatusMsg] = useState('');
     const [isMuted, setIsMuted] = useState(false);
     const [duration, setDuration] = useState(0);
+    const [callerNumber, setCallerNumberState] = useState(DEFAULT_CALLER_NUMBER);
+    const [pickerOpen, setPickerOpen] = useState(false);
+
+    // Remember the last-used caller number per browser so reps don't have to
+    // re-pick it every time they open the dialer.
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('dialer_caller_number');
+            if (saved && CALLER_NUMBERS.some(c => c.number === saved)) setCallerNumberState(saved);
+        } catch { /* noop */ }
+    }, []);
+
+    function setCallerNumber(number: string) {
+        setCallerNumberState(number);
+        try { localStorage.setItem('dialer_caller_number', number); } catch { /* noop */ }
+    }
 
     const deviceRef = useRef<any>(null);
     const callRef = useRef<any>(null);
@@ -115,6 +132,7 @@ export function TwilioDialer({ renderTrigger }: TwilioDialerProps = {}) {
             setStatusMsg('');
             setDuration(0);
             setIsMuted(false);
+            setPickerOpen(false);
         };
     }, [isOpen]);
 
@@ -126,7 +144,7 @@ export function TwilioDialer({ renderTrigger }: TwilioDialerProps = {}) {
 
         try {
             const call = await deviceRef.current.connect({
-                params: { To: phoneNumber.trim() },
+                params: { To: phoneNumber.trim(), CallerId: callerNumber },
             });
             callRef.current = call;
 
@@ -250,6 +268,41 @@ export function TwilioDialer({ renderTrigger }: TwilioDialerProps = {}) {
                                     </span>
                                 ) : (
                                     statusMsg
+                                )}
+                            </div>
+
+                            {/* Caller ID picker — which of our numbers to call from */}
+                            <div className="relative mb-3">
+                                <button
+                                    onClick={() => !isInCall && setPickerOpen(o => !o)}
+                                    disabled={isInCall}
+                                    className="w-full flex items-center justify-between gap-2 bg-zinc-900 border border-white/5 hover:border-white/10 rounded-xl px-3.5 py-2.5 text-left transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold shrink-0">Call from</span>
+                                    <span className="flex-1 text-right text-sm text-white font-mono truncate">
+                                        {CALLER_NUMBERS.find(c => c.number === callerNumber)?.display ?? callerNumber}
+                                    </span>
+                                    {!isInCall && (
+                                        <ChevronDown className={`h-3.5 w-3.5 text-zinc-500 shrink-0 transition-transform ${pickerOpen ? 'rotate-180' : ''}`} />
+                                    )}
+                                </button>
+
+                                {pickerOpen && !isInCall && (
+                                    <div className="absolute top-full left-0 right-0 mt-1.5 bg-zinc-900 border border-white/10 rounded-xl shadow-[0_15px_35px_-10px_rgba(0,0,0,0.7)] overflow-hidden z-10">
+                                        {CALLER_NUMBERS.map(c => (
+                                            <button
+                                                key={c.number}
+                                                onClick={() => { setCallerNumber(c.number); setPickerOpen(false); }}
+                                                className="w-full flex items-center justify-between gap-2 px-3.5 py-2.5 text-left hover:bg-zinc-800 transition-colors"
+                                            >
+                                                <span>
+                                                    <span className="text-xs font-semibold text-white">{c.label}</span>
+                                                    <span className="ml-2 text-xs text-zinc-500 font-mono">{c.display}</span>
+                                                </span>
+                                                {callerNumber === c.number && <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />}
+                                            </button>
+                                        ))}
+                                    </div>
                                 )}
                             </div>
 

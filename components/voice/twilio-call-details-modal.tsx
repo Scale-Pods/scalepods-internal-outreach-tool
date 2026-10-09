@@ -9,6 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Phone, Clock, Calendar, ArrowRight, FileText } from "lucide-react";
 import { formatDuration } from "@/lib/utils";
+import { getCallerNumberMeta } from "@/lib/services/caller-numbers";
 
 interface TwilioCallDetailsModalProps {
     open: boolean;
@@ -21,6 +22,7 @@ export function TwilioCallDetailsModal({ open, onOpenChange, call }: TwilioCallD
 
     const isInbound = (call.direction || '').toLowerCase().includes('inbound');
     const audioUrl = call.recordingUrl || call.audio_url;
+    const fromMeta = getCallerNumberMeta(call.from);
     const startedAtDisplay = call.startedAt || call.createdAt
         ? new Date(call.startedAt || call.createdAt).toLocaleString()
         : 'N/A';
@@ -62,7 +64,14 @@ export function TwilioCallDetailsModal({ open, onOpenChange, call }: TwilioCallD
                             <div className="p-5 border border-border rounded-xl bg-white shadow-sm flex items-center justify-between gap-4">
                                 <div className="flex-1 font-semibold text-slate-900 border border-border bg-slate-50/50 rounded-lg px-4 py-3">
                                     <span className="block text-xs text-slate-500 uppercase tracking-wider mb-1">From</span>
-                                    <span className="block text-sm">{call.from || 'Unknown'}</span>
+                                    <span className="flex items-center gap-1.5 text-sm">
+                                        {fromMeta && (
+                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-indigo-200 text-indigo-600 bg-indigo-50">
+                                                {fromMeta.label}
+                                            </Badge>
+                                        )}
+                                        {call.from || 'Unknown'}
+                                    </span>
                                 </div>
                                 <div className="flex flex-col items-center px-2 shrink-0">
                                     <span className="text-[10px] uppercase font-bold text-blue-600 tracking-widest mb-2">{isInbound ? "INBOUND" : "OUTBOUND"}</span>

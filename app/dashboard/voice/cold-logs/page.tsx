@@ -11,6 +11,7 @@ import { format, subDays } from "date-fns";
 import { formatDuration, cn } from "@/lib/utils";
 import React, { useState, useEffect, useCallback } from "react";
 import { TwilioCallDetailsModal } from "@/components/voice/twilio-call-details-modal";
+import { getCallerNumberMeta } from "@/lib/services/caller-numbers";
 
 export default function ColdCallLogsPage() {
     const [calls, setCalls] = useState<any[]>([]);
@@ -69,7 +70,7 @@ export default function ColdCallLogsPage() {
                     <div>
                         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Cold Call Logs</h1>
                         <p className="text-slate-500 text-sm mt-1">
-                            Manual calls placed from the dialer (+1 447 288 1677) — recordings &amp; transcripts via Twilio
+                            Manual calls placed from the dialer (US +1 447 288 1677 or UK +44 7462 179561) — recordings &amp; transcripts via Twilio
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
@@ -114,6 +115,7 @@ export default function ColdCallLogsPage() {
                             ) : (
                                 calls.map((call) => {
                                     const isInbound = (call.direction || '').toLowerCase().includes('inbound');
+                                    const fromMeta = getCallerNumberMeta(call.from);
                                     return (
                                         <TableRow
                                             key={call.id}
@@ -126,7 +128,16 @@ export default function ColdCallLogsPage() {
                                                     {isInbound ? 'Inbound' : 'Outbound'}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="font-medium text-slate-800">{call.from || 'Unknown'}</TableCell>
+                                            <TableCell className="font-medium text-slate-800">
+                                                <div className="flex items-center gap-1.5">
+                                                    {fromMeta && (
+                                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-indigo-200 text-indigo-600 bg-indigo-50">
+                                                            {fromMeta.label}
+                                                        </Badge>
+                                                    )}
+                                                    <span>{call.from || 'Unknown'}</span>
+                                                </div>
+                                            </TableCell>
                                             <TableCell className="font-medium text-slate-800">{call.to || 'Unknown'}</TableCell>
                                             <TableCell className="text-slate-600 font-medium">{formatDuration(call.durationSeconds || 0)}</TableCell>
                                             <TableCell>

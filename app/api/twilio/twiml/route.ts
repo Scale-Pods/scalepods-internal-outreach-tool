@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAllowedCallerNumber } from '@/lib/services/caller-numbers';
 
 const xmlHeader = '<?xml version="1.0" encoding="UTF-8"?>';
 
@@ -9,13 +10,22 @@ function twimlResponse(body: string) {
 }
 
 export async function POST(req: NextRequest) {
-    const callerId = process.env.TWILIO_PHONE_NUMBER;
+    const defaultCallerId = process.env.TWILIO_PHONE_NUMBER;
 
-    if (!callerId) {
+    if (!defaultCallerId) {
         return twimlResponse('<Say>Service is not configured.</Say>');
     }
 
     const formData = await req.formData();
+
+    // The dialer sends which of our numbers to call from as "CallerId" (a
+    // custom Device.connect param — "From" is reserved by Twilio for the
+    // client identity, so we can't reuse it here). Only accept it if it's
+    // one of our known, voice-capable numbers — otherwise fall back to the
+    // default so a bad/missing value can't be used as caller ID.
+    const requestedFrom = (formData.get('CallerId') as string | null)?.trim() || '';
+    const callerId = isAllowedCallerNumber(requestedFrom) ? requestedFrom : defaultCallerId;
+
     const rawTo = (formData.get('To') as string | null) ?? '';
 
     // Strip all chars that aren't digits, +, spaces, dashes, parens — then re-check
