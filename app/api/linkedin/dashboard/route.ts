@@ -17,6 +17,12 @@ export async function GET() {
         const connected = leads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
         const notConnected = leads.length - connected;
 
+        // A connection request has gone out once Status is populated — this is the
+        // correct denominator for connection rate. (Quota Tracker's "Sent Count" is a
+        // daily-reset counter, not a cumulative total, so it can't be used here — it
+        // previously produced rates over 100%.)
+        const requestsSent = leads.filter(l => l.status.trim()).length;
+
         // A lead counts as "replied" when the Reply Text column has content.
         const repliedLeads = leads.filter(l => l.replyText.trim());
         const replied = repliedLeads.length;
@@ -71,8 +77,8 @@ export async function GET() {
                 remaining: totalRemaining,
             },
             // Connection rate = accepted/connected leads ÷ connection requests sent
-            // (Quota Tracker "Sent Count"), not ÷ total leads.
-            requestsSent: totalSentToday,
+            // (leads with a non-empty Status), not ÷ total leads.
+            requestsSent,
             accountBreakdown,
             // Actual reply content, from the Leads sheet "Reply Text" column.
             replies: repliedLeads
