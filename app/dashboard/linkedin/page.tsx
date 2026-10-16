@@ -9,7 +9,18 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SPLoader } from "@/components/sp-loader";
-import { LinkedInAccountBadge, accountColorClasses } from "@/components/dashboard/linkedin-account-badge";
+import { LinkedInAccountBadge, LinkedInBatchBadge, accountColorClasses, batchColorClasses } from "@/components/dashboard/linkedin-account-badge";
+import type { DataBatch } from "@/lib/services/linkedin-sheets";
+
+interface BatchBreakdown {
+    batch: DataBatch;
+    totalLeads: number;
+    connectedLeads: number;
+    notConnectedLeads: number;
+    repliedLeads: number;
+    conversations: number;
+    messages: number;
+}
 
 interface AccountBreakdown {
     accountId: string;
@@ -34,6 +45,7 @@ interface LinkedInReply {
     companyName: string;
     accountId: string;
     accountName: string;
+    batch: DataBatch;
     replyText: string;
     lastActionSentAt: string;
 }
@@ -52,6 +64,7 @@ interface DashboardStats {
     };
     requestsSent: number;
     accountBreakdown: AccountBreakdown[];
+    batchBreakdown: BatchBreakdown[];
     replies: LinkedInReply[];
 }
 
@@ -175,6 +188,46 @@ export default function LinkedInDashboardPage() {
                 <CardContent className="p-6">
                     <div className="flex items-center justify-between mb-5">
                         <div>
+                            <h3 className="text-base font-bold text-slate-900">Old vs New Data</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">&quot;Leads&quot;/&quot;Old Conversations&quot; (Old) vs &quot;New Leads&quot;/&quot;New Conversations&quot; (New) sheet tabs</p>
+                        </div>
+                        <Users className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase">
+                                <tr className="border-b border-border">
+                                    <th className="px-3 py-2.5">Batch</th>
+                                    <th className="px-3 py-2.5 text-center">Total Leads</th>
+                                    <th className="px-3 py-2.5 text-center">Connected</th>
+                                    <th className="px-3 py-2.5 text-center">Not Connected</th>
+                                    <th className="px-3 py-2.5 text-center">Replied</th>
+                                    <th className="px-3 py-2.5 text-center">Conversations</th>
+                                    <th className="px-3 py-2.5 text-center">Messages</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {(stats?.batchBreakdown ?? []).map(row => (
+                                    <tr key={row.batch} className={cn("transition-colors", batchColorClasses(row.batch).split(' ')[0])}>
+                                        <td className="px-3 py-2.5"><LinkedInBatchBadge batch={row.batch} /></td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-slate-700">{row.totalLeads}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-emerald-700">{row.connectedLeads}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-rose-600">{row.notConnectedLeads}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-cyan-700">{row.repliedLeads}</td>
+                                        <td className="px-3 py-2.5 text-center text-slate-600">{row.conversations}</td>
+                                        <td className="px-3 py-2.5 text-center text-slate-600">{row.messages}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card className="bg-white border-border shadow-sm">
+                <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-5">
+                        <div>
                             <h3 className="text-base font-bold text-slate-900">Bifurcation by Account</h3>
                             <p className="text-xs text-slate-500 mt-0.5">Leads, connections, conversations &amp; quota per LinkedIn sender account</p>
                         </div>
@@ -239,7 +292,10 @@ export default function LinkedInDashboardPage() {
                                             <p className="text-sm font-bold text-slate-900 truncate">{r.fullName}</p>
                                             <p className="text-xs text-slate-500 truncate">{r.companyName}</p>
                                         </div>
-                                        <LinkedInAccountBadge accountId={r.accountId} />
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <LinkedInAccountBadge accountId={r.accountId} />
+                                            <LinkedInBatchBadge batch={r.batch} />
+                                        </div>
                                     </div>
                                     <p className="text-sm text-slate-700 whitespace-pre-wrap">{r.replyText}</p>
                                 </div>

@@ -10,8 +10,13 @@ import { TrendingUp, Users, MessageSquare, Send, RefreshCw, Gauge, Reply } from 
 import { Button } from "@/components/ui/button";
 import { SPLoader } from "@/components/sp-loader";
 import { cn } from "@/lib/utils";
-import { LINKEDIN_ACCOUNTS, getAccountMeta, buildConversationThreads, type LinkedInQuota, type LinkedInLead, type LinkedInMessage } from "@/lib/services/linkedin-sheets";
-import { LinkedInAccountBadge, accountColorClasses } from "@/components/dashboard/linkedin-account-badge";
+import { LINKEDIN_ACCOUNTS, getAccountMeta, buildConversationThreads, type LinkedInQuota, type LinkedInLead, type LinkedInMessage, type DataBatch } from "@/lib/services/linkedin-sheets";
+import { LinkedInAccountBadge, LinkedInBatchBadge, accountColorClasses, batchColorClasses } from "@/components/dashboard/linkedin-account-badge";
+
+const BATCH_HEX: Record<DataBatch, string> = {
+    old: '#f59e0b',
+    new: '#14b8a6',
+};
 
 const ACCOUNT_HEX: Record<string, string> = {
     blue: '#3b82f6',
@@ -76,6 +81,7 @@ export default function LinkedInAnalyticsPage() {
                     fullName: l.fullName,
                     companyName: l.companyName,
                     accountId: l.accountId,
+                    batch: l.batch,
                     replyText: l.replyText,
                     lastActionSentAt: l.lastActionSentAt,
                 }))
@@ -96,6 +102,26 @@ export default function LinkedInAnalyticsPage() {
 
     // Bifurcation by LinkedIn sender Account ID, joined across Leads, Conversations & Quota Tracker.
     const threads = useMemo(() => buildConversationThreads(messages, leads), [messages, leads]);
+
+    // Old vs New bifurcation — "Leads"/"Old Conversations" (old) vs "New Leads"/"New
+    // Conversations" (new) sheet tabs. Quota Tracker has no old/new split.
+    const batchBreakdown = useMemo(() => {
+        return (['old', 'new'] as const).map(batch => {
+            const batchLeads = leads.filter(l => l.batch === batch);
+            const batchConnected = batchLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
+            const batchReplied = batchLeads.filter(l => l.replyText.trim()).length;
+            const batchThreads = threads.filter(t => t.batch === batch);
+            return {
+                batch,
+                totalLeads: batchLeads.length,
+                connected: batchConnected,
+                notConnected: batchLeads.length - batchConnected,
+                replied: batchReplied,
+                conversations: batchThreads.length,
+                messages: batchThreads.reduce((sum, t) => sum + t.messages.length, 0),
+            };
+        });
+    }, [leads, threads]);
 
     const accountBreakdown = useMemo(() => {
         // Restricted to the known LinkedIn sender accounts only — stray/unknown
@@ -214,6 +240,63 @@ export default function LinkedInAnalyticsPage() {
 
             <Card className="border-slate-200/60 shadow-sm bg-white overflow-hidden">
                 <CardHeader className="px-6 py-4 border-b border-slate-50">
+                    <CardTitle className="text-sm font-bold text-slate-800">Old vs New Data</CardTitle>
+                    <CardDescription className="text-[11px]">&quot;Leads&quot;/&quot;Old Conversations&quot; (Old) vs &quot;New Leads&quot;/&quot;New Conversations&quot; (New) sheet tabs</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 space-y-6">
+                    <div className="h-[220px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={batchBreakdown} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="batch" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} dy={10} tickFormatter={(v) => v === 'new' ? 'New' : 'Old'} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} width={35} />
+                                <Tooltip
+                                    cursor={{ fill: '#f8fafc' }}
+                                    contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontSize: '12px', padding: '8px 12px' }}
+                                />
+                                <Bar dataKey="connected" name="Connected" stackId="a" radius={[0, 0, 0, 0]}>
+                                    {batchBreakdown.map((row, index) => (
+                                        <Cell key={`connected-${index}`} fill={BATCH_HEX[row.batch]} />
+                                    ))}
+                                </Bar>
+                                <Bar dataKey="notConnected" name="Not Connected" stackId="a" radius={[6, 6, 0, 0]} fill="#fca5a5" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase">
+                                <tr className="border-b border-border">
+                                    <th className="px-3 py-2.5">Batch</th>
+                                    <th className="px-3 py-2.5 text-center">Total Leads</th>
+                                    <th className="px-3 py-2.5 text-center">Connected</th>
+                                    <th className="px-3 py-2.5 text-center">Not Connected</th>
+                                    <th className="px-3 py-2.5 text-center">Replied</th>
+                                    <th className="px-3 py-2.5 text-center">Conversations</th>
+                                    <th className="px-3 py-2.5 text-center">Messages</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {batchBreakdown.map(row => (
+                                    <tr key={row.batch} className={cn("transition-colors", batchColorClasses(row.batch).split(' ')[0])}>
+                                        <td className="px-3 py-2.5"><LinkedInBatchBadge batch={row.batch} /></td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-slate-700">{row.totalLeads}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-emerald-700">{row.connected}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-rose-600">{row.notConnected}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-cyan-700">{row.replied}</td>
+                                        <td className="px-3 py-2.5 text-center text-slate-600">{row.conversations}</td>
+                                        <td className="px-3 py-2.5 text-center text-slate-600">{row.messages}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card className="border-slate-200/60 shadow-sm bg-white overflow-hidden">
+                <CardHeader className="px-6 py-4 border-b border-slate-50">
                     <CardTitle className="text-sm font-bold text-slate-800">Bifurcation by Account</CardTitle>
                     <CardDescription className="text-[11px]">Leads, connections, conversations &amp; quota split across the three LinkedIn sender accounts</CardDescription>
                 </CardHeader>
@@ -292,7 +375,10 @@ export default function LinkedInAnalyticsPage() {
                                             <p className="text-sm font-bold text-slate-900 truncate">{r.fullName}</p>
                                             <p className="text-xs text-slate-500 truncate">{r.companyName}</p>
                                         </div>
-                                        <LinkedInAccountBadge accountId={r.accountId} />
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <LinkedInAccountBadge accountId={r.accountId} />
+                                            <LinkedInBatchBadge batch={r.batch} />
+                                        </div>
                                     </div>
                                     <p className="text-sm text-slate-700 whitespace-pre-wrap">{r.replyText}</p>
                                 </div>

@@ -15,8 +15,8 @@ import {
     Search, RefreshCw, MessageSquare, User, Send, ExternalLink,
 } from "lucide-react";
 import { SPLoader } from "@/components/sp-loader";
-import { LINKEDIN_ACCOUNTS, type LinkedInConversationThread } from "@/lib/services/linkedin-sheets";
-import { LinkedInAccountBadge } from "@/components/dashboard/linkedin-account-badge";
+import { LINKEDIN_ACCOUNTS, type LinkedInConversationThread, type DataBatch } from "@/lib/services/linkedin-sheets";
+import { LinkedInAccountBadge, LinkedInBatchBadge } from "@/components/dashboard/linkedin-account-badge";
 
 export default function LinkedInChatPage() {
     const [threads, setThreads] = useState<LinkedInConversationThread[]>([]);
@@ -24,6 +24,7 @@ export default function LinkedInChatPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedThread, setSelectedThread] = useState<LinkedInConversationThread | null>(null);
     const [accountFilter, setAccountFilter] = useState<string[]>([]);
+    const [batchFilter, setBatchFilter] = useState<DataBatch[]>([]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -47,16 +48,21 @@ export default function LinkedInChatPage() {
         setAccountFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
     };
 
+    const toggleBatchFilter = (value: DataBatch) => {
+        setBatchFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+    };
+
     const filteredThreads = useMemo(() => {
         const q = searchQuery.toLowerCase();
         return threads.filter(t => {
             if (accountFilter.length > 0 && !accountFilter.includes(t.accountId.trim())) return false;
+            if (batchFilter.length > 0 && !batchFilter.includes(t.batch)) return false;
             if (!q) return true;
             const name = t.lead?.fullName || t.personId;
             const haystack = `${name} ${t.lead?.title || ''} ${t.messages.map(m => m.message).join(' ')}`.toLowerCase();
             return haystack.includes(q);
         });
-    }, [threads, searchQuery, accountFilter]);
+    }, [threads, searchQuery, accountFilter, batchFilter]);
 
     if (loading) return <SPLoader />;
 
@@ -65,7 +71,7 @@ export default function LinkedInChatPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">LinkedIn Chats</h1>
-                    <p className="text-slate-500 text-sm mt-1">Conversations synced from the &quot;Conversations&quot; Google Sheet</p>
+                    <p className="text-slate-500 text-sm mt-1">Conversations synced from the &quot;Old Conversations&quot; &amp; &quot;New Conversations&quot; Google Sheet tabs</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={fetchData} className="gap-2 h-10 px-4">
                     <RefreshCw className="h-4 w-4" /> Refresh Chat
@@ -76,6 +82,26 @@ export default function LinkedInChatPage() {
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <Input className="pl-10 bg-white" placeholder="Search by company, title, or message..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                </div>
+                <div className="flex items-center bg-slate-100 rounded-lg p-1 gap-0.5">
+                    <button
+                        onClick={() => setBatchFilter([])}
+                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${batchFilter.length === 0 ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        All
+                    </button>
+                    <button
+                        onClick={() => toggleBatchFilter('old')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${batchFilter.includes('old') ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        Old
+                    </button>
+                    <button
+                        onClick={() => toggleBatchFilter('new')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${batchFilter.includes('new') ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        New
+                    </button>
                 </div>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -100,6 +126,7 @@ export default function LinkedInChatPage() {
                     <table className="w-full text-left text-sm">
                         <thead className="bg-slate-50 text-slate-500 font-bold border-b border-border">
                             <tr>
+                                <th className="px-4 py-3">Batch</th>
                                 <th className="px-4 py-3">Account</th>
                                 <th className="px-4 py-3">Lead</th>
                                 <th className="px-4 py-3 text-center">Messages</th>
@@ -111,7 +138,10 @@ export default function LinkedInChatPage() {
                             {filteredThreads.map((thread, idx) => {
                                 const lastMsg = thread.messages[thread.messages.length - 1];
                                 return (
-                                    <tr key={`${thread.chatId}-${idx}`} className="hover:bg-slate-50 transition-colors cursor-pointer group" onClick={() => setSelectedThread(thread)}>
+                                    <tr key={`${thread.batch}-${thread.chatId}-${idx}`} className="hover:bg-slate-50 transition-colors cursor-pointer group" onClick={() => setSelectedThread(thread)}>
+                                        <td className="px-4 py-3">
+                                            <LinkedInBatchBadge batch={thread.batch} />
+                                        </td>
                                         <td className="px-4 py-3">
                                             <LinkedInAccountBadge accountId={thread.accountId} />
                                         </td>
@@ -154,6 +184,7 @@ function LinkedInChatDetail({ thread }: { thread: LinkedInConversationThread }) 
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
                         <span>{[lead?.title, lead?.companyName].filter(Boolean).join(" @ ") || thread.providerId}</span>
                         <LinkedInAccountBadge accountId={thread.accountId} />
+                        <LinkedInBatchBadge batch={thread.batch} />
                     </div>
                 </div>
                 {lead?.linkedIn && (

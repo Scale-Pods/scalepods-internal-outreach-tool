@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { getAccountMeta } from "@/lib/services/linkedin-sheets";
+import { getAccountMeta, type DataBatch } from "@/lib/services/linkedin-sheets";
 
 const COLOR_CLASSES: Record<string, string> = {
     blue: "bg-blue-50 text-blue-700 border-blue-200",
@@ -17,6 +17,23 @@ export function LinkedInAccountBadge({ accountId, className = "" }: { accountId:
     return (
         <Badge variant="outline" className={`text-[9px] font-bold px-1.5 py-0.5 whitespace-nowrap ${accountColorClasses(meta.color)} ${className}`}>
             {meta.name}
+        </Badge>
+    );
+}
+
+const BATCH_CLASSES: Record<DataBatch, string> = {
+    old: "bg-amber-50 text-amber-700 border-amber-200",
+    new: "bg-teal-50 text-teal-700 border-teal-200",
+};
+
+export function batchColorClasses(batch: DataBatch) {
+    return BATCH_CLASSES[batch];
+}
+
+export function LinkedInBatchBadge({ batch, className = "" }: { batch: DataBatch; className?: string }) {
+    return (
+        <Badge variant="outline" className={`text-[9px] font-bold uppercase px-1.5 py-0.5 whitespace-nowrap ${batchColorClasses(batch)} ${className}`}>
+            {batch === 'new' ? 'New' : 'Old'}
         </Badge>
     );
 }

@@ -4,9 +4,16 @@
 
 const SHEET_ID = process.env.LINKEDIN_SHEET_ID || '1JYPKybN07Ee41-LpQzIj6axwHj5MmWKeLhX_pLYoQfk';
 
-const LEADS_SHEET_NAME = 'Leads';
-const CONVERSATIONS_SHEET_NAME = 'Conversations';
+// The sheet now splits Leads and Conversations into an "Old" and "New" tab each
+// (the original "Leads"/"Conversations" tabs hold the old data; "New Leads" and
+// "New Conversations" hold the new batch). Quota Tracker is unchanged.
+const OLD_LEADS_SHEET_NAME = 'Leads';
+const NEW_LEADS_SHEET_NAME = 'New Leads';
+const OLD_CONVERSATIONS_SHEET_NAME = 'Old Conversations';
+const NEW_CONVERSATIONS_SHEET_NAME = 'New Conversations';
 const QUOTA_SHEET_NAME = 'Quota Tracker';
+
+export type DataBatch = 'old' | 'new';
 
 // Known LinkedIn sender accounts (Account ID -> display name), shared across
 // Dashboard / Chat / Leads / Analytics so every page bifurcates data the same way.
@@ -33,6 +40,7 @@ export function getAccountMeta(accountId: string | null | undefined): { name: st
 }
 
 export interface LinkedInLead {
+    batch: DataBatch;
     fullName: string;
     companyName: string;
     companyWebsite: string;
@@ -55,6 +63,7 @@ export interface LinkedInLead {
 }
 
 export interface LinkedInMessage {
+    batch: DataBatch;
     personId: string;
     providerId: string;
     message: string;
@@ -158,7 +167,7 @@ async function fetchSheetRows(sheetName: string): Promise<string[][]> {
     return parseCsv(text);
 }
 
-function rowsToObjects<T>(rows: string[][], columnMap: Record<string, keyof T>): T[] {
+function rowsToObjects<T>(rows: string[][], columnMap: Record<string, keyof T>, batch?: DataBatch): T[] {
     if (rows.length === 0) return [];
     const header = rows[0];
     const indexMap: Partial<Record<keyof T, number>> = {};
@@ -168,7 +177,7 @@ function rowsToObjects<T>(rows: string[][], columnMap: Record<string, keyof T>):
     });
 
     return rows.slice(1).map(row => {
-        const obj: any = {};
+        const obj: any = batch ? { batch } : {};
         for (const key of Object.keys(columnMap) as (keyof typeof columnMap)[]) {
             const mappedKey = columnMap[key];
             const idx = indexMap[mappedKey];
@@ -178,14 +187,28 @@ function rowsToObjects<T>(rows: string[][], columnMap: Record<string, keyof T>):
     });
 }
 
+/** Fetches both the "Leads" (old) and "New Leads" tabs and merges them, each row tagged with its batch. */
 export async function getLinkedInLeads(): Promise<LinkedInLead[]> {
-    const rows = await fetchSheetRows(LEADS_SHEET_NAME);
-    return rowsToObjects<LinkedInLead>(rows, LEADS_COLUMNS);
+    const [oldRows, newRows] = await Promise.all([
+        fetchSheetRows(OLD_LEADS_SHEET_NAME),
+        fetchSheetRows(NEW_LEADS_SHEET_NAME),
+    ]);
+    return [
+        ...rowsToObjects<LinkedInLead>(oldRows, LEADS_COLUMNS, 'old'),
+        ...rowsToObjects<LinkedInLead>(newRows, LEADS_COLUMNS, 'new'),
+    ];
 }
 
+/** Fetches both the "Old Conversations" and "New Conversations" tabs and merges them, each row tagged with its batch. */
 export async function getLinkedInConversations(): Promise<LinkedInMessage[]> {
-    const rows = await fetchSheetRows(CONVERSATIONS_SHEET_NAME);
-    return rowsToObjects<LinkedInMessage>(rows, CONVERSATIONS_COLUMNS);
+    const [oldRows, newRows] = await Promise.all([
+        fetchSheetRows(OLD_CONVERSATIONS_SHEET_NAME),
+        fetchSheetRows(NEW_CONVERSATIONS_SHEET_NAME),
+    ]);
+    return [
+        ...rowsToObjects<LinkedInMessage>(oldRows, CONVERSATIONS_COLUMNS, 'old'),
+        ...rowsToObjects<LinkedInMessage>(newRows, CONVERSATIONS_COLUMNS, 'new'),
+    ];
 }
 
 export async function getLinkedInQuota(): Promise<LinkedInQuota[]> {
@@ -200,6 +223,7 @@ export async function getLinkedInQuota(): Promise<LinkedInQuota[]> {
 }
 
 export interface LinkedInConversationThread {
+    batch: DataBatch;
     chatId: string;
     personId: string;
     providerId: string;
@@ -218,12 +242,13 @@ export function buildConversationThreads(
     const threads = new Map<string, LinkedInConversationThread>();
 
     for (const msg of messages) {
-        const key = msg.chatId || msg.personId;
-        if (!key) continue;
+        const key = `${msg.batch}:${msg.chatId || msg.personId}`;
+        if (!msg.chatId && !msg.personId) continue;
         let thread = threads.get(key);
         if (!thread) {
             const lead = leadsByPersonId.get(msg.personId) || null;
             thread = {
+                batch: msg.batch,
                 chatId: msg.chatId,
                 personId: msg.personId,
                 providerId: msg.providerId,

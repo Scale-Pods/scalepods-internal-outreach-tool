@@ -33,6 +33,26 @@ export async function GET() {
 
         const threads = buildConversationThreads(messages, leads);
 
+        // Old vs New bifurcation — the sheet splits Leads into "Leads" (old) / "New
+        // Leads" (new) and Conversations into "Old Conversations" / "New Conversations".
+        // Quota Tracker has no old/new split, so it's left out of this breakdown.
+        const batchBreakdown = (['old', 'new'] as const).map(batch => {
+            const batchLeads = leads.filter(l => l.batch === batch);
+            const batchConnected = batchLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
+            const batchReplied = batchLeads.filter(l => l.replyText.trim()).length;
+            const batchThreads = threads.filter(t => t.batch === batch);
+
+            return {
+                batch,
+                totalLeads: batchLeads.length,
+                connectedLeads: batchConnected,
+                notConnectedLeads: batchLeads.length - batchConnected,
+                repliedLeads: batchReplied,
+                conversations: batchThreads.length,
+                messages: batchThreads.reduce((sum, t) => sum + t.messages.length, 0),
+            };
+        });
+
         // Per-account bifurcation across Leads, Conversations & Quota Tracker.
         // Restricted to the known LinkedIn sender accounts only — stray/unknown
         // Account IDs picked up from the sheet (e.g. test rows) are excluded.
@@ -80,6 +100,7 @@ export async function GET() {
             // (leads with a non-empty Status), not ÷ total leads.
             requestsSent,
             accountBreakdown,
+            batchBreakdown,
             // Actual reply content, from the Leads sheet "Reply Text" column.
             replies: repliedLeads
                 .map(l => ({
@@ -88,6 +109,7 @@ export async function GET() {
                     companyName: l.companyName,
                     accountId: l.accountId,
                     accountName: getAccountMeta(l.accountId).name,
+                    batch: l.batch,
                     replyText: l.replyText,
                     lastActionSentAt: l.lastActionSentAt,
                 }))

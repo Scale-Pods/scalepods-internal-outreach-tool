@@ -12,8 +12,8 @@ import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SPLoader } from "@/components/sp-loader";
-import { LINKEDIN_ACCOUNTS, getAccountMeta, type LinkedInLead } from "@/lib/services/linkedin-sheets";
-import { LinkedInAccountBadge } from "@/components/dashboard/linkedin-account-badge";
+import { LINKEDIN_ACCOUNTS, getAccountMeta, type LinkedInLead, type DataBatch } from "@/lib/services/linkedin-sheets";
+import { LinkedInAccountBadge, LinkedInBatchBadge } from "@/components/dashboard/linkedin-account-badge";
 
 const STATUS_STYLES: Record<string, string> = {
     connected: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -40,6 +40,7 @@ export default function LinkedInLeadsPage() {
     const leadsPerPage = 15;
     const [connectionFilter, setConnectionFilter] = useState<string[]>([]);
     const [accountFilter, setAccountFilter] = useState<string[]>([]);
+    const [batchFilter, setBatchFilter] = useState<DataBatch[]>([]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -73,11 +74,16 @@ export default function LinkedInLeadsPage() {
         setAccountFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
     };
 
-    const hasActiveFilters = connectionFilter.length > 0 || accountFilter.length > 0 || !!searchQuery;
+    const toggleBatchFilter = (value: DataBatch) => {
+        setBatchFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+    };
+
+    const hasActiveFilters = connectionFilter.length > 0 || accountFilter.length > 0 || batchFilter.length > 0 || !!searchQuery;
 
     const resetFilters = () => {
         setConnectionFilter([]);
         setAccountFilter([]);
+        setBatchFilter([]);
         setSearchQuery("");
     };
 
@@ -90,11 +96,12 @@ export default function LinkedInLeadsPage() {
             }
             if (connectionFilter.length > 0 && !connectionFilter.includes(lead.connectionStatus.trim())) return false;
             if (accountFilter.length > 0 && !accountFilter.includes(lead.accountId.trim())) return false;
+            if (batchFilter.length > 0 && !batchFilter.includes(lead.batch)) return false;
             return true;
         });
-    }, [leads, searchQuery, connectionFilter, accountFilter]);
+    }, [leads, searchQuery, connectionFilter, accountFilter, batchFilter]);
 
-    useEffect(() => { setCurrentPage(1); }, [searchQuery, connectionFilter, accountFilter]);
+    useEffect(() => { setCurrentPage(1); }, [searchQuery, connectionFilter, accountFilter, batchFilter]);
 
     const totalPages = Math.ceil(filteredLeads.length / leadsPerPage) || 1;
     const paginatedLeads = filteredLeads.slice((currentPage - 1) * leadsPerPage, currentPage * leadsPerPage);
@@ -106,7 +113,7 @@ export default function LinkedInLeadsPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0">
                 <div>
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight">LinkedIn Leads</h1>
-                    <p className="text-slate-500 text-xs">Synced from the &quot;Leads&quot; Google Sheet</p>
+                    <p className="text-slate-500 text-xs">Synced from the &quot;Leads&quot; (Old) &amp; &quot;New Leads&quot; (New) Google Sheet tabs</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500">
@@ -123,6 +130,27 @@ export default function LinkedInLeadsPage() {
                 <div className="relative flex-1 min-w-[200px]">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                     <Input className="pl-8 h-8 text-sm bg-white border-border" placeholder="Search by company, email, title, location..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                </div>
+
+                <div className="flex items-center bg-slate-100 rounded-lg p-1 gap-0.5">
+                    <button
+                        onClick={() => setBatchFilter([])}
+                        className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${batchFilter.length === 0 ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        All
+                    </button>
+                    <button
+                        onClick={() => toggleBatchFilter('old')}
+                        className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${batchFilter.includes('old') ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        Old
+                    </button>
+                    <button
+                        onClick={() => toggleBatchFilter('new')}
+                        className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${batchFilter.includes('new') ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        New
+                    </button>
                 </div>
 
                 <DropdownMenu>
@@ -170,6 +198,7 @@ export default function LinkedInLeadsPage() {
                         <table className="w-full text-left text-sm">
                             <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase sticky top-0 z-10">
                                 <tr className="border-b border-border">
+                                    <th className="px-3 py-2.5">Batch</th>
                                     <th className="px-3 py-2.5">Account</th>
                                     <th className="px-3 py-2.5">Company Name</th>
                                     <th className="px-3 py-2.5">Company Website</th>
@@ -191,15 +220,18 @@ export default function LinkedInLeadsPage() {
                             </thead>
                             <tbody className="divide-y divide-border">
                                 {filteredLeads.length === 0 ? (
-                                    <tr><td colSpan={17} className="px-3 py-12 text-center text-slate-400 text-sm">No leads found.</td></tr>
+                                    <tr><td colSpan={18} className="px-3 py-12 text-center text-slate-400 text-sm">No leads found.</td></tr>
                                 ) : (
                                     paginatedLeads.map((lead, index) => {
                                     const accepted = isAcceptedConnection(lead);
                                     return (
                                         <tr
-                                            key={`${lead.personId}-${index}`}
+                                            key={`${lead.batch}-${lead.personId}-${index}`}
                                             className={`transition-colors ${accepted ? 'bg-emerald-50 hover:bg-emerald-100/70' : 'bg-rose-50 hover:bg-rose-100/70'}`}
                                         >
+                                            <td className="px-3 py-2">
+                                                <LinkedInBatchBadge batch={lead.batch} />
+                                            </td>
                                             <td className="px-3 py-2">
                                                 <LinkedInAccountBadge accountId={lead.accountId} />
                                             </td>
