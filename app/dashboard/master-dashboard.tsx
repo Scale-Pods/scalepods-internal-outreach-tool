@@ -18,7 +18,12 @@ import {
     X,
     Expand,
     Wallet,
-    Info
+    Info,
+    Megaphone,
+    Send,
+    Reply,
+    UserMinus,
+    AlertCircle,
 } from "lucide-react";
 import {
     Tooltip,
@@ -45,10 +50,23 @@ import { format, startOfDay, subDays } from "date-fns";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SPLoader } from "@/components/sp-loader";
 import { useData } from "@/context/DataContext";
+
+interface CampaignDashboardStats {
+    totalLeads: number;
+    totalCampaigns: number;
+    emailSent: number;
+    emailReplied: number;
+    unsubscribed: number;
+    bounced: number;
+    whatsappActive: number;
+    voiceActive: number;
+    contacted: number;
+    newLeads: number;
+}
 
 interface RepliedLead {
     id: string;
@@ -86,6 +104,24 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
     const searchParams = useSearchParams();
     const [repliesModal, setRepliesModal] = useState<{ open: boolean; scope: 'cold' | 'hot' }>({ open: false, scope: 'cold' });
     const [dateLabel, setDateLabel] = useState("Last 7 days");
+    const [campaignStats, setCampaignStats] = useState<CampaignDashboardStats | null>(null);
+    const [campaignStatsLoading, setCampaignStatsLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch("/api/campaigns/dashboard");
+                const json = await res.json();
+                if (!cancelled) setCampaignStats(json);
+            } catch (err) {
+                console.error("Failed to fetch campaign stats for master dashboard:", err);
+            } finally {
+                if (!cancelled) setCampaignStatsLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
     const handleDateUpdate = (values: any) => {
         if (values.range?.from) {
             const from = new Date(values.range.from);
@@ -250,7 +286,77 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                 </div>
             </div>
 
-
+            {/* Campaigns Section */}
+            <div className="mb-8 mt-8">
+                <h2 className="text-xl font-bold text-slate-800 mb-4">Campaigns</h2>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                    <MetricCard
+                        title="Active Campaigns"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.totalCampaigns ?? 0).toLocaleString()}
+                        change="Real-time"
+                        isUp={true}
+                        icon={<Megaphone className="h-6 w-6" />}
+                        color="text-violet-600"
+                        bg="bg-violet-50"
+                        border="border-violet-100"
+                        onClick={() => router.push('/dashboard/campaigns')}
+                    />
+                    <MetricCard
+                        title="Total Leads"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.totalLeads ?? 0).toLocaleString()}
+                        change="Real-time"
+                        isUp={true}
+                        icon={<Users className="h-6 w-6" />}
+                        color="text-indigo-600"
+                        bg="bg-indigo-50"
+                        border="border-indigo-100"
+                        onClick={() => router.push('/dashboard/campaigns/leads')}
+                        subtitle={`New: ${campaignStats?.newLeads ?? 0} | Contacted: ${campaignStats?.contacted ?? 0}`}
+                    />
+                    <MetricCard
+                        title="Emails Sent"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.emailSent ?? 0).toLocaleString()}
+                        change="Real-time"
+                        isUp={true}
+                        icon={<Send className="h-6 w-6" />}
+                        color="text-blue-600"
+                        bg="bg-blue-50"
+                        border="border-blue-100"
+                        onClick={() => router.push('/dashboard/campaigns/email')}
+                    />
+                    <MetricCard
+                        title="Replied"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.emailReplied ?? 0).toLocaleString()}
+                        change={`${campaignStats && campaignStats.emailSent > 0 ? ((campaignStats.emailReplied / campaignStats.emailSent) * 100).toFixed(1) : 0}% Rate`}
+                        isUp={true}
+                        icon={<Reply className="h-6 w-6" />}
+                        color="text-cyan-600"
+                        bg="bg-cyan-50"
+                        border="border-cyan-100"
+                        onClick={() => router.push('/dashboard/campaigns/email')}
+                    />
+                    <MetricCard
+                        title="Unsubscribed"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.unsubscribed ?? 0).toLocaleString()}
+                        change="Real-time"
+                        isUp={false}
+                        icon={<UserMinus className="h-6 w-6" />}
+                        color="text-rose-600"
+                        bg="bg-rose-50"
+                        border="border-rose-100"
+                    />
+                    <MetricCard
+                        title="Bounced"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.bounced ?? 0).toLocaleString()}
+                        change="Real-time"
+                        isUp={false}
+                        icon={<AlertCircle className="h-6 w-6" />}
+                        color="text-amber-600"
+                        bg="bg-amber-50"
+                        border="border-amber-100"
+                    />
+                </div>
+            </div>
 
             {/* Charts Row 1: Lead Acquisition & Service Distribution */}
             <div className="grid gap-6 lg:grid-cols-3">

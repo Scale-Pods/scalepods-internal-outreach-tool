@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity, Building2, Phone, Menu, X, Linkedin, Gauge } from "lucide-react";
+import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity, Building2, Phone, Menu, X, Linkedin, Gauge, Megaphone, UploadCloud, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import {
@@ -44,6 +44,11 @@ const sidebarItems = [
         title: "LinkedIn",
         href: "/dashboard/linkedin",
         icon: Linkedin,
+    },
+    {
+        title: "Campaigns",
+        href: "/dashboard/campaigns",
+        icon: Megaphone,
     },
 ];
 
@@ -252,6 +257,7 @@ function DashboardContent({
                 { title: "WhatsApp CRM", href: "/dashboard/whatsapp", icon: MessageCircle },
                 { title: "Voice Agent", href: "/dashboard/voice", icon: Mic },
                 { title: "LinkedIn", href: "/dashboard/linkedin", icon: Linkedin },
+                { title: "Campaigns", href: "/dashboard/campaigns", icon: Megaphone },
                 { title: "Lead Scrapper", href: "/dashboard/lead-scrapper", icon: Search },
                 { title: "Leads", href: "/dashboard/leads", icon: Users },
 
@@ -300,6 +306,19 @@ function DashboardContent({
                 { title: "Leads", href: "/dashboard/linkedin/leads", icon: Users },
                 { title: "Analytics", href: "/dashboard/linkedin/analytics", icon: BarChart2 },
             ]
+        },
+        campaigns: {
+            label: "Campaigns",
+            icon: Megaphone,
+            items: [
+                { title: "Dashboard", href: "/dashboard/campaigns", icon: LayoutDashboard },
+                { title: "Upload Leads", href: "/dashboard/campaigns/upload", icon: UploadCloud },
+                { title: "Assign Person", href: "/dashboard/campaigns/assign-person", icon: UserPlus },
+                { title: "Leads", href: "/dashboard/campaigns/leads", icon: Users },
+                { title: "Email", href: "/dashboard/campaigns/email", icon: Mail },
+                { title: "WhatsApp", href: "/dashboard/campaigns/whatsapp", icon: MessageCircle },
+                { title: "Voice", href: "/dashboard/campaigns/voice", icon: Mic },
+            ]
         }
     };
 
@@ -309,6 +328,7 @@ function DashboardContent({
     else if (pathname.startsWith("/dashboard/whatsapp")) currentContext = "whatsapp";
     else if (pathname.startsWith("/dashboard/voice")) currentContext = "voice";
     else if (pathname.startsWith("/dashboard/linkedin")) currentContext = "linkedin";
+    else if (pathname.startsWith("/dashboard/campaigns")) currentContext = "campaigns";
 
     const activeConfig = (dashboardConfig as any)[currentContext];
 
@@ -423,6 +443,9 @@ function DashboardContent({
                                 </DropdownMenuItem>
                                 <DropdownMenuItem className="hover:bg-cyan-50 hover:text-cyan-600 cursor-pointer" onClick={() => router.push("/dashboard/linkedin")}>
                                     <Linkedin className="mr-2 h-4 w-4" /> LinkedIn
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="hover:bg-cyan-50 hover:text-cyan-600 cursor-pointer" onClick={() => router.push("/dashboard/campaigns")}>
+                                    <Megaphone className="mr-2 h-4 w-4" /> Campaigns
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
