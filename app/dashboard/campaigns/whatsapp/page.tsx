@@ -5,13 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Search, ChevronLeft, ChevronRight, RefreshCw, MessageCircle, X } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SPLoader } from "@/components/sp-loader";
 import { CampaignBadge, campaignColorClasses } from "@/components/dashboard/campaign-badge";
-import { campaignColor, type OutreachLead } from "@/lib/services/campaigns";
+import { campaignColor, type OutreachLeadListItem, type ChannelStats } from "@/lib/services/campaigns";
 
 function statusBadgeClass(status: string | null | undefined) {
     const s = (status || '').toLowerCase();
@@ -21,95 +21,92 @@ function statusBadgeClass(status: string | null | undefined) {
     return 'bg-slate-100 text-slate-500 border-slate-200';
 }
 
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+    const [debounced, setDebounced] = useState(value);
+    useEffect(() => {
+        const t = setTimeout(() => setDebounced(value), delayMs);
+        return () => clearTimeout(t);
+    }, [value, delayMs]);
+    return debounced;
+}
+
+const LEADS_PER_PAGE = 15;
+
 export default function CampaignWhatsAppPage() {
-    const [leads, setLeads] = useState<OutreachLead[]>([]);
+    const [leads, setLeads] = useState<OutreachLeadListItem[]>([]);
+    const [totalCount, setTotalCount] = useState(0);
+    const [stats, setStats] = useState<ChannelStats | null>(null);
+    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string }[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState("");
+    const [searchInput, setSearchInput] = useState("");
+    const searchQuery = useDebouncedValue(searchInput, 350);
     const [currentPage, setCurrentPage] = useState(1);
-    const leadsPerPage = 15;
     const [campaignFilter, setCampaignFilter] = useState<string[]>([]);
     const [scope, setScope] = useState<'enrolled' | 'active'>('enrolled');
 
-    const fetchData = async () => {
+    const fetchLeads = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await fetch("/api/campaigns/leads");
+            const params = new URLSearchParams();
+            params.set('page', String(currentPage));
+            params.set('pageSize', String(LEADS_PER_PAGE));
+            params.set('channel', 'whatsapp');
+            if (scope === 'active') params.set('activeOnly', 'true');
+            if (searchQuery) params.set('search', searchQuery);
+            campaignFilter.forEach(id => params.append('campaignId', id));
+
+            const res = await fetch(`/api/campaigns/leads?${params.toString()}`);
             if (!res.ok) throw new Error("Failed to fetch");
             const json = await res.json();
             setLeads(json.data || []);
+            setTotalCount(json.totalCount || 0);
         } catch (err) {
             console.error("Failed to fetch campaign WhatsApp data:", err);
         } finally {
             setLoading(false);
         }
-    };
+    }, [currentPage, searchQuery, campaignFilter, scope]);
+
+    useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
     useEffect(() => {
-        fetchData();
+        fetch('/api/campaigns/channel-stats?channel=whatsapp').then(r => r.json()).then(json => {
+            setStats(json.stats || null);
+            setCampaignOptions(json.campaignOptions || []);
+        }).catch(err => console.error("Failed to fetch WhatsApp channel stats:", err));
     }, []);
-
-    const waLeads = useMemo(() => leads.filter(l => l.outreachChannels.includes('whatsapp')), [leads]);
-
-    const stats = useMemo(() => {
-        const active = waLeads.filter(l => !!l.whatsappStatus).length;
-        return { enrolled: waLeads.length, active, notStarted: waLeads.length - active };
-    }, [waLeads]);
-
-    const campaignOptions = useMemo(() => {
-        const map = new Map<string, string>();
-        waLeads.forEach(l => {
-            const key = String(l.campaignId ?? 'unknown');
-            if (!map.has(key)) map.set(key, l.campaignName || `Campaign ${key}`);
-        });
-        return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-    }, [waLeads]);
 
     const toggleCampaignFilter = (value: string) => {
         setCampaignFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
     };
 
-    const hasActiveFilters = campaignFilter.length > 0 || !!searchQuery || scope === 'active';
-    const resetFilters = () => { setCampaignFilter([]); setSearchQuery(""); setScope('enrolled'); };
-
-    const filteredLeads = useMemo(() => {
-        return waLeads.filter(lead => {
-            const q = searchQuery.toLowerCase();
-            if (q) {
-                const haystack = `${lead.fullName} ${lead.mobileNumber} ${lead.companyName}`.toLowerCase();
-                if (!haystack.includes(q)) return false;
-            }
-            if (campaignFilter.length > 0 && !campaignFilter.includes(String(lead.campaignId ?? 'unknown'))) return false;
-            if (scope === 'active' && !lead.whatsappStatus) return false;
-            return true;
-        });
-    }, [waLeads, searchQuery, campaignFilter, scope]);
+    const hasActiveFilters = campaignFilter.length > 0 || !!searchInput || scope === 'active';
+    const resetFilters = () => { setCampaignFilter([]); setSearchInput(""); setScope('enrolled'); };
 
     useEffect(() => { setCurrentPage(1); }, [searchQuery, campaignFilter, scope]);
 
-    const totalPages = Math.ceil(filteredLeads.length / leadsPerPage) || 1;
-    const paginatedLeads = filteredLeads.slice((currentPage - 1) * leadsPerPage, currentPage * leadsPerPage);
-
-    if (loading) return <SPLoader />;
+    const totalPages = Math.ceil(totalCount / LEADS_PER_PAGE) || 1;
 
     return (
-        <div className="h-full flex flex-col overflow-hidden p-4 space-y-3">
+        <div className="h-full flex flex-col overflow-hidden p-4 space-y-3 relative min-h-[400px]">
+            {loading && <SPLoader />}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0">
                 <div>
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight">Campaign WhatsApp</h1>
                     <p className="text-slate-500 text-xs">WhatsApp channel activity across all campaigns, from &quot;outreach_leads&quot;</p>
                 </div>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={fetchData}>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={fetchLeads}>
                     <RefreshCw className="h-3 w-3" /> Refresh
                 </Button>
             </div>
 
             <div className="grid grid-cols-3 gap-2 shrink-0">
-                <StatBox label="Enrolled" value={stats.enrolled} color="indigo" />
-                <StatBox label="Active" value={stats.active} color="emerald" />
-                <StatBox label="Not Started" value={stats.notStarted} color="slate" />
+                <StatBox label="Enrolled" value={stats?.enrolled ?? 0} color="indigo" />
+                <StatBox label="Active" value={stats?.active ?? 0} color="emerald" />
+                <StatBox label="Not Started" value={stats?.notStarted ?? 0} color="slate" />
             </div>
 
-            {stats.active === 0 && (
+            {stats && stats.active === 0 && (
                 <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 shrink-0">
                     No WhatsApp activity recorded yet — leads are enrolled (<span className="font-bold">{stats.enrolled}</span>) but <code className="font-mono">whatsapp_status</code> hasn&apos;t started populating in the sheet/table.
                 </div>
@@ -118,7 +115,7 @@ export default function CampaignWhatsAppPage() {
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
                 <div className="relative flex-1 min-w-[200px]">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                    <Input className="pl-8 h-8 text-sm bg-white border-border" placeholder="Search by name, mobile, company..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                    <Input className="pl-8 h-8 text-sm bg-white border-border" placeholder="Search by name, mobile, company..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
                 </div>
 
                 <div className="flex items-center bg-slate-100 rounded-lg p-1 gap-0.5">
@@ -162,10 +159,10 @@ export default function CampaignWhatsAppPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
-                                {filteredLeads.length === 0 ? (
+                                {!loading && leads.length === 0 ? (
                                     <tr><td colSpan={5} className="px-3 py-12 text-center text-slate-400 text-sm">No leads found.</td></tr>
                                 ) : (
-                                    paginatedLeads.map((lead) => {
+                                    leads.map((lead) => {
                                         const color = campaignColor(lead.campaignId);
                                         return (
                                             <tr key={lead.id} className={`transition-colors ${campaignColorClasses(color).split(' ')[0]}`}>
@@ -186,7 +183,7 @@ export default function CampaignWhatsAppPage() {
                         </table>
                     </div>
                     <div className="px-3 py-2 border-t border-border bg-slate-50/50 flex items-center justify-between shrink-0">
-                        <p className="text-[11px] text-slate-500"><span className="font-bold text-slate-900">{filteredLeads.length}</span> leads</p>
+                        <p className="text-[11px] text-slate-500"><span className="font-bold text-slate-900">{totalCount.toLocaleString()}</span> leads</p>
                         {totalPages > 1 && (
                             <div className="flex items-center gap-1">
                                 <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="h-7 w-7 p-0"><ChevronLeft className="h-3.5 w-3.5" /></Button>

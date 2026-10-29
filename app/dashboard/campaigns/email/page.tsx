@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import {
     Search, ChevronLeft, ChevronRight, RefreshCw, Mail, Send, Reply, UserMinus, AlertCircle, X,
 } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -17,8 +17,8 @@ import {
 import { SPLoader } from "@/components/sp-loader";
 import { CampaignBadge, campaignColorClasses } from "@/components/dashboard/campaign-badge";
 import {
-    countEmailStepsSent, hasEmailReply, latestEmailStatus, campaignColor,
-    type OutreachLead,
+    countEmailStepsSent, latestEmailStatus, campaignColor,
+    type OutreachLead, type OutreachLeadListItem, type ChannelStats,
 } from "@/lib/services/campaigns";
 
 function statusBadgeClass(status: string | null | undefined) {
@@ -29,53 +29,61 @@ function statusBadgeClass(status: string | null | undefined) {
     return 'bg-slate-100 text-slate-500 border-slate-200';
 }
 
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+    const [debounced, setDebounced] = useState(value);
+    useEffect(() => {
+        const t = setTimeout(() => setDebounced(value), delayMs);
+        return () => clearTimeout(t);
+    }, [value, delayMs]);
+    return debounced;
+}
+
+const LEADS_PER_PAGE = 15;
+
 export default function CampaignEmailPage() {
-    const [leads, setLeads] = useState<OutreachLead[]>([]);
+    const [leads, setLeads] = useState<OutreachLeadListItem[]>([]);
+    const [totalCount, setTotalCount] = useState(0);
+    const [stats, setStats] = useState<ChannelStats | null>(null);
+    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string }[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState("");
+    const [searchInput, setSearchInput] = useState("");
+    const searchQuery = useDebouncedValue(searchInput, 350);
     const [currentPage, setCurrentPage] = useState(1);
-    const leadsPerPage = 15;
     const [campaignFilter, setCampaignFilter] = useState<string[]>([]);
     const [statusFilter, setStatusFilter] = useState<string[]>([]);
-    const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
+    const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
 
-    const fetchData = async () => {
+    const fetchLeads = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await fetch("/api/campaigns/leads");
+            const params = new URLSearchParams();
+            params.set('page', String(currentPage));
+            params.set('pageSize', String(LEADS_PER_PAGE));
+            params.set('channel', 'email');
+            if (searchQuery) params.set('search', searchQuery);
+            campaignFilter.forEach(id => params.append('campaignId', id));
+            statusFilter.forEach(s => params.append('status', s));
+
+            const res = await fetch(`/api/campaigns/leads?${params.toString()}`);
             if (!res.ok) throw new Error("Failed to fetch");
             const json = await res.json();
             setLeads(json.data || []);
+            setTotalCount(json.totalCount || 0);
         } catch (err) {
             console.error("Failed to fetch campaign email data:", err);
         } finally {
             setLoading(false);
         }
-    };
+    }, [currentPage, searchQuery, campaignFilter, statusFilter]);
+
+    useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
     useEffect(() => {
-        fetchData();
+        fetch('/api/campaigns/channel-stats?channel=email').then(r => r.json()).then(json => {
+            setStats(json.stats || null);
+            setCampaignOptions(json.campaignOptions || []);
+        }).catch(err => console.error("Failed to fetch email channel stats:", err));
     }, []);
-
-    // Email channel scope: leads enrolled in email outreach
-    const emailLeads = useMemo(() => leads.filter(l => l.outreachChannels.includes('email')), [leads]);
-
-    const stats = useMemo(() => {
-        const sent = emailLeads.filter(l => countEmailStepsSent(l) > 0).length;
-        const replied = emailLeads.filter(hasEmailReply).length;
-        const unsubscribed = emailLeads.filter(l => l.unsubscribed).length;
-        const bounced = emailLeads.filter(l => l.bounced).length;
-        return { sent, replied, unsubscribed, bounced, total: emailLeads.length };
-    }, [emailLeads]);
-
-    const campaignOptions = useMemo(() => {
-        const map = new Map<string, string>();
-        emailLeads.forEach(l => {
-            const key = String(l.campaignId ?? 'unknown');
-            if (!map.has(key)) map.set(key, l.campaignName || `Campaign ${key}`);
-        });
-        return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-    }, [emailLeads]);
 
     const toggleCampaignFilter = (value: string) => {
         setCampaignFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
@@ -84,63 +92,38 @@ export default function CampaignEmailPage() {
         setStatusFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
     };
 
-    const hasActiveFilters = campaignFilter.length > 0 || statusFilter.length > 0 || !!searchQuery;
-    const resetFilters = () => { setCampaignFilter([]); setStatusFilter([]); setSearchQuery(""); };
-
-    const filteredLeads = useMemo(() => {
-        return emailLeads.filter(lead => {
-            const q = searchQuery.toLowerCase();
-            if (q) {
-                const haystack = `${lead.fullName} ${lead.email} ${lead.companyName}`.toLowerCase();
-                if (!haystack.includes(q)) return false;
-            }
-            if (campaignFilter.length > 0 && !campaignFilter.includes(String(lead.campaignId ?? 'unknown'))) return false;
-            if (statusFilter.length > 0) {
-                const sentCount = countEmailStepsSent(lead);
-                const replied = hasEmailReply(lead);
-                const matches =
-                    (statusFilter.includes('Sent') && sentCount > 0) ||
-                    (statusFilter.includes('Replied') && replied) ||
-                    (statusFilter.includes('Unsubscribed') && lead.unsubscribed) ||
-                    (statusFilter.includes('Bounced') && lead.bounced) ||
-                    (statusFilter.includes('Not Sent') && sentCount === 0);
-                if (!matches) return false;
-            }
-            return true;
-        }).sort((a, b) => countEmailStepsSent(b) - countEmailStepsSent(a));
-    }, [emailLeads, searchQuery, campaignFilter, statusFilter]);
+    const hasActiveFilters = campaignFilter.length > 0 || statusFilter.length > 0 || !!searchInput;
+    const resetFilters = () => { setCampaignFilter([]); setStatusFilter([]); setSearchInput(""); };
 
     useEffect(() => { setCurrentPage(1); }, [searchQuery, campaignFilter, statusFilter]);
 
-    const totalPages = Math.ceil(filteredLeads.length / leadsPerPage) || 1;
-    const paginatedLeads = filteredLeads.slice((currentPage - 1) * leadsPerPage, currentPage * leadsPerPage);
-
-    if (loading) return <SPLoader />;
+    const totalPages = Math.ceil(totalCount / LEADS_PER_PAGE) || 1;
 
     return (
-        <div className="h-full flex flex-col overflow-hidden p-4 space-y-3">
+        <div className="h-full flex flex-col overflow-hidden p-4 space-y-3 relative min-h-[400px]">
+            {loading && <SPLoader />}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0">
                 <div>
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight">Campaign Emails</h1>
                     <p className="text-slate-500 text-xs">Email sequence activity across all campaigns, from &quot;outreach_leads&quot;</p>
                 </div>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={fetchData}>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={fetchLeads}>
                     <RefreshCw className="h-3 w-3" /> Refresh
                 </Button>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 shrink-0">
-                <StatBox label="Enrolled" value={stats.total} icon={Mail} color="indigo" />
-                <StatBox label="Sent" value={stats.sent} icon={Send} color="blue" />
-                <StatBox label="Replied" value={stats.replied} icon={Reply} color="cyan" />
-                <StatBox label="Unsubscribed" value={stats.unsubscribed} icon={UserMinus} color="rose" />
-                <StatBox label="Bounced" value={stats.bounced} icon={AlertCircle} color="amber" />
+                <StatBox label="Enrolled" value={stats?.enrolled ?? 0} icon={Mail} color="indigo" />
+                <StatBox label="Sent" value={stats?.emailSent ?? 0} icon={Send} color="blue" />
+                <StatBox label="Replied" value={stats?.emailReplied ?? 0} icon={Reply} color="cyan" />
+                <StatBox label="Unsubscribed" value={stats?.unsubscribed ?? 0} icon={UserMinus} color="rose" />
+                <StatBox label="Bounced" value={stats?.bounced ?? 0} icon={AlertCircle} color="amber" />
             </div>
 
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
                 <div className="relative flex-1 min-w-[200px]">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                    <Input className="pl-8 h-8 text-sm bg-white border-border" placeholder="Search by name, email, company..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                    <Input className="pl-8 h-8 text-sm bg-white border-border" placeholder="Search by name, email, company..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
                 </div>
 
                 <DropdownMenu>
@@ -197,19 +180,16 @@ export default function CampaignEmailPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
-                                {filteredLeads.length === 0 ? (
+                                {!loading && leads.length === 0 ? (
                                     <tr><td colSpan={8} className="px-3 py-12 text-center text-slate-400 text-sm">No leads found.</td></tr>
                                 ) : (
-                                    paginatedLeads.map((lead) => {
+                                    leads.map((lead) => {
                                         const color = campaignColor(lead.campaignId);
-                                        const sentCount = countEmailStepsSent(lead);
-                                        const replied = hasEmailReply(lead);
-                                        const latest = latestEmailStatus(lead);
                                         return (
                                             <tr
                                                 key={lead.id}
                                                 className={`transition-colors cursor-pointer hover:brightness-95 ${campaignColorClasses(color).split(' ')[0]}`}
-                                                onClick={() => setSelectedLead(lead)}
+                                                onClick={() => setSelectedLeadId(lead.id)}
                                             >
                                                 <td className="px-3 py-2"><CampaignBadge campaignId={lead.campaignId} campaignName={lead.campaignName} /></td>
                                                 <td className="px-3 py-2 font-semibold text-slate-900 text-xs whitespace-nowrap">{lead.fullName}</td>
@@ -217,14 +197,14 @@ export default function CampaignEmailPage() {
                                                 <td className="px-3 py-2">
                                                     <div className="flex items-center gap-2 justify-center">
                                                         <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(sentCount / 10) * 100}%` }} />
+                                                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(lead.emailSentCount / 10) * 100}%` }} />
                                                         </div>
-                                                        <span className="text-[11px] font-bold text-slate-600">{sentCount}/10</span>
+                                                        <span className="text-[11px] font-bold text-slate-600">{lead.emailSentCount}/10</span>
                                                     </div>
                                                 </td>
-                                                <td className="px-3 py-2 text-slate-500 text-[11px] max-w-[220px] truncate">{latest?.subject || "—"}</td>
+                                                <td className="px-3 py-2 text-slate-500 text-[11px] max-w-[220px] truncate">{lead.lastEmailSubject || "—"}</td>
                                                 <td className="px-3 py-2 text-center">
-                                                    {replied ? <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-100 border-none text-[9px] font-bold">YES ({lead.emailReplies.length})</Badge> : <span className="text-slate-300 text-[10px]">—</span>}
+                                                    {lead.emailReplied ? <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-100 border-none text-[9px] font-bold">YES ({lead.emailReplyCount})</Badge> : <span className="text-slate-300 text-[10px]">—</span>}
                                                 </td>
                                                 <td className="px-3 py-2 text-center">
                                                     {lead.unsubscribed ? <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 border-none text-[9px] font-bold">YES</Badge> : <span className="text-slate-300 text-[10px]">—</span>}
@@ -240,7 +220,7 @@ export default function CampaignEmailPage() {
                         </table>
                     </div>
                     <div className="px-3 py-2 border-t border-border bg-slate-50/50 flex items-center justify-between shrink-0">
-                        <p className="text-[11px] text-slate-500"><span className="font-bold text-slate-900">{filteredLeads.length}</span> leads</p>
+                        <p className="text-[11px] text-slate-500"><span className="font-bold text-slate-900">{totalCount.toLocaleString()}</span> leads</p>
                         {totalPages > 1 && (
                             <div className="flex items-center gap-1">
                                 <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="h-7 w-7 p-0"><ChevronLeft className="h-3.5 w-3.5" /></Button>
@@ -252,17 +232,35 @@ export default function CampaignEmailPage() {
                 </CardContent>
             </Card>
 
-            <Dialog open={!!selectedLead} onOpenChange={(open) => !open && setSelectedLead(null)}>
+            <Dialog open={!!selectedLeadId} onOpenChange={(open) => !open && setSelectedLeadId(null)}>
                 <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto p-6">
                     <DialogHeader className="sr-only"><DialogTitle>Email Detail</DialogTitle></DialogHeader>
-                    {selectedLead && <EmailDetail lead={selectedLead} />}
+                    {selectedLeadId && <EmailDetail leadId={selectedLeadId} />}
                 </DialogContent>
             </Dialog>
         </div>
     );
 }
 
-function EmailDetail({ lead }: { lead: OutreachLead }) {
+function EmailDetail({ leadId }: { leadId: string }) {
+    const [lead, setLead] = useState<OutreachLead | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        setLoading(true);
+        fetch(`/api/campaigns/leads/${leadId}`)
+            .then(r => r.json())
+            .then(json => { if (!cancelled) setLead(json.data || null); })
+            .catch(err => console.error("Failed to fetch lead detail:", err))
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [leadId]);
+
+    if (loading || !lead) {
+        return <div className="py-16 text-center text-sm text-slate-400">Loading lead…</div>;
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex items-start justify-between pr-8">

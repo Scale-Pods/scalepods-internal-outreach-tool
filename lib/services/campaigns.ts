@@ -56,6 +56,8 @@ export interface EmailReplyEntry {
 
 export type OutreachChannel = 'email' | 'whatsapp' | 'voice';
 
+/** Full per-lead shape, including every email body/status/reply — only ever
+ *  fetched for ONE lead at a time (the row-click detail modal), never for a list. */
 export interface OutreachLead {
     id: string;
     fullName: string;
@@ -95,7 +97,55 @@ export interface OutreachLead {
     updatedAt: string | null;
 }
 
-// ── Supabase row -> normalized shape ────────────────────────────────────────
+/** Thin per-lead shape for list pages — no email bodies, no reply text, no
+ *  raw_data/custom_fields. Backed by the get_campaigns_leads_page RPC, which
+ *  does search/filter/pagination in Postgres instead of shipping every row
+ *  to the client. */
+export interface OutreachLeadListItem {
+    id: string;
+    fullName: string;
+    email: string | null;
+    mobileNumber: string | null;
+    linkedinUrl: string | null;
+    companyName: string | null;
+    city: string | null;
+    country: string | null;
+    campaignId: number | null;
+    campaignKey: string | null;
+    campaignName: string | null;
+    outreachChannels: OutreachChannel[];
+    leadStatus: string | null;
+    whatsappStatus: string | null;
+    voiceStatus: string | null;
+    unsubscribed: boolean;
+    bounced: boolean;
+    emailSentCount: number;
+    emailReplied: boolean;
+    emailReplyCount: number;
+    lastEmailSubject: string | null;
+    lastContactedAt: string | null;
+    createdAt: string | null;
+}
+
+export interface OutreachLeadsPage {
+    data: OutreachLeadListItem[];
+    totalCount: number;
+    page: number;
+    pageSize: number;
+}
+
+export interface OutreachLeadsPageFilters {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    campaignIds?: string[];
+    channel?: OutreachChannel;
+    statusFilter?: string[];
+    /** Only leads with that channel's status populated (WhatsApp/Voice "Active Only" toggle). */
+    activeOnly?: boolean;
+}
+
+// ── Supabase row -> normalized shape (full detail only) ────────────────────
 
 function parseJsonField<T>(val: any): T | null {
     if (val === null || val === undefined) return null;
@@ -158,57 +208,87 @@ function normalizeLead(row: any): OutreachLead {
     };
 }
 
-const LEAD_SELECT = `
-    id, first_name, last_name, full_name, designation, email, personal_email,
-    mobile_number, linkedin_url, company_name, company_domain, city, state, country,
-    campaign_id, campaign_key, outreach_channels, lead_status, email_status,
-    whatsapp_status, voice_status, unsubscribed, bounced, last_contacted_at, last_replied_at,
-    created_at, updated_at, email_reply,
-    email_1, email_2, email_3, email_4, email_5, email_6, email_7, email_8, email_9, email_10,
-    email_status_1, email_status_2, email_status_3, email_status_4, email_status_5,
-    email_status_6, email_status_7, email_status_8, email_status_9, email_status_10
-`;
-
-/** Fetches every row from outreach_leads (paginated past Supabase's 1000-row cap), normalized. */
-export async function getOutreachLeads(): Promise<OutreachLead[]> {
-    const pageSize = 1000;
-    let from = 0;
-    let all: any[] = [];
-
-    while (true) {
-        const { data, error } = await supabaseAdmin
-            .from('outreach_leads')
-            .select(LEAD_SELECT)
-            .range(from, from + pageSize - 1)
-            .order('created_at', { ascending: false });
-
-        if (error) throw new Error(error.message);
-        if (!data || data.length === 0) break;
-
-        all = all.concat(data);
-        if (data.length < pageSize) break;
-        from += pageSize;
-    }
-
-    return all.map(normalizeLead);
+function normalizeLeadListItem(row: any): OutreachLeadListItem {
+    return {
+        id: row.id,
+        fullName: row.full_name || 'Unknown',
+        email: row.email,
+        mobileNumber: row.mobile_number,
+        linkedinUrl: row.linkedin_url,
+        companyName: row.company_name,
+        city: row.city,
+        country: row.country,
+        campaignId: row.campaign_id,
+        campaignKey: row.campaign_key,
+        campaignName: row.campaign_name,
+        outreachChannels: Array.isArray(row.outreach_channels) ? row.outreach_channels : [],
+        leadStatus: row.lead_status,
+        whatsappStatus: row.whatsapp_status,
+        voiceStatus: row.voice_status,
+        unsubscribed: !!row.unsubscribed,
+        bounced: !!row.bounced,
+        emailSentCount: row.email_sent_count ?? 0,
+        emailReplied: !!row.email_replied,
+        emailReplyCount: row.email_reply_count ?? 0,
+        lastEmailSubject: row.last_email_subject,
+        lastContactedAt: row.last_contacted_at,
+        createdAt: row.created_at,
+    };
 }
 
-// ── derived helpers ──────────────────────────────────────────────────────────
+// ── fetchers ─────────────────────────────────────────────────────────────────
 
-/** Count of email steps actually sent (status entry present with a non-empty status). */
-export function countEmailStepsSent(lead: OutreachLead): number {
-    return lead.emailStepStatuses.filter(s => s && s.status).length;
+/**
+ * Paginated, filtered, search-aware leads list — backed by the
+ * get_campaigns_leads_page Postgres RPC (see
+ * supabase/migrations/add_campaigns_module_rpcs.sql). Only ever pulls the
+ * current page's thin rows; no email bodies/replies leave the database.
+ */
+export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {}): Promise<OutreachLeadsPage> {
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? 15;
+
+    const { data, error } = await supabaseAdmin.rpc('get_campaigns_leads_page', {
+        p_page: page,
+        p_page_size: pageSize,
+        p_search: filters.search?.trim() || null,
+        p_campaign_ids: filters.campaignIds?.length ? filters.campaignIds : null,
+        p_channel: filters.channel || null,
+        p_status_filter: filters.statusFilter?.length ? filters.statusFilter : null,
+        p_active_only: filters.activeOnly ?? false,
+    });
+
+    if (error) throw new Error(error.message);
+
+    const rows = data || [];
+    return {
+        data: rows.map(normalizeLeadListItem),
+        totalCount: rows[0]?.total_count ?? 0,
+        page,
+        pageSize,
+    };
 }
 
-export function hasEmailReply(lead: OutreachLead): boolean {
-    return lead.emailReplies.length > 0;
+/** Full detail (email bodies, step statuses, replies) for exactly one lead —
+ *  used only by the row-click detail modal. */
+export async function getOutreachLeadDetail(id: string): Promise<OutreachLead | null> {
+    const { data, error } = await supabaseAdmin.rpc('get_campaign_lead_detail', { p_id: id });
+    if (error) throw new Error(error.message);
+    if (!data) return null;
+    return normalizeLead(data);
 }
 
-export function latestEmailStatus(lead: OutreachLead): EmailStatusEntry | null {
-    for (let i = lead.emailStepStatuses.length - 1; i >= 0; i--) {
-        if (lead.emailStepStatuses[i]) return lead.emailStepStatuses[i];
-    }
-    return null;
+export interface CampaignsDashboardStats {
+    totalLeads: number;
+    totalCampaigns: number;
+    emailSent: number;
+    emailReplied: number;
+    unsubscribed: number;
+    bounced: number;
+    whatsappActive: number;
+    voiceActive: number;
+    contacted: number;
+    newLeads: number;
 }
 
 export interface CampaignSummary {
@@ -226,34 +306,97 @@ export interface CampaignSummary {
     newLeads: number;
 }
 
-/** Groups leads by campaign and computes per-campaign, cross-channel stats. */
-export function buildCampaignSummaries(leads: OutreachLead[]): CampaignSummary[] {
-    const groups = new Map<string, OutreachLead[]>();
-    for (const lead of leads) {
-        const key = String(lead.campaignId ?? 'unknown');
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key)!.push(lead);
-    }
+/** Top-line dashboard counts — backed by the get_campaigns_dashboard_stats
+ *  RPC (a single aggregate query, no row data leaves Postgres). */
+export async function getCampaignsDashboardStats(): Promise<CampaignsDashboardStats> {
+    const { data, error } = await supabaseAdmin.rpc('get_campaigns_dashboard_stats');
+    if (error) throw new Error(error.message);
+    const row = data?.[0];
+    return {
+        totalLeads: row?.total_leads ?? 0,
+        totalCampaigns: row?.total_campaigns ?? 0,
+        emailSent: row?.email_sent ?? 0,
+        emailReplied: row?.email_replied ?? 0,
+        unsubscribed: row?.unsubscribed ?? 0,
+        bounced: row?.bounced ?? 0,
+        whatsappActive: row?.whatsapp_active ?? 0,
+        voiceActive: row?.voice_active ?? 0,
+        contacted: row?.contacted ?? 0,
+        newLeads: row?.new_leads ?? 0,
+    };
+}
 
-    return Array.from(groups.entries()).map(([key, groupLeads]) => {
-        const campaignId = groupLeads[0].campaignId ?? key;
-        // Prefer a real "ScalePods Internal Outreach N"-style name (sourced from
-        // email_status_N/email_reply) over the generic "Campaign N" fallback.
-        const namedLead = groupLeads.find(l => l.campaignName && !/^Campaign \d+$/.test(l.campaignName));
-        const campaignName = namedLead?.campaignName || groupLeads[0].campaignName || `Campaign ${key}`;
-        return {
-            campaignId,
-            campaignName,
-            color: campaignColor(campaignId),
-            totalLeads: groupLeads.length,
-            emailSent: groupLeads.filter(l => countEmailStepsSent(l) > 0).length,
-            emailReplied: groupLeads.filter(hasEmailReply).length,
-            unsubscribed: groupLeads.filter(l => l.unsubscribed).length,
-            bounced: groupLeads.filter(l => l.bounced).length,
-            whatsappActive: groupLeads.filter(l => !!l.whatsappStatus).length,
-            voiceActive: groupLeads.filter(l => !!l.voiceStatus).length,
-            contacted: groupLeads.filter(l => l.leadStatus === 'contacted').length,
-            newLeads: groupLeads.filter(l => l.leadStatus === 'new').length,
-        };
-    }).sort((a, b) => b.totalLeads - a.totalLeads);
+/** Per-campaign breakdown — backed by the get_campaigns_summary RPC (a
+ *  single GROUP BY query, no row data leaves Postgres). */
+export async function getCampaignsSummary(): Promise<CampaignSummary[]> {
+    const { data, error } = await supabaseAdmin.rpc('get_campaigns_summary');
+    if (error) throw new Error(error.message);
+    return (data || []).map((row: any) => ({
+        campaignId: row.campaign_id,
+        campaignName: row.campaign_name,
+        color: campaignColor(row.campaign_id),
+        totalLeads: row.total_leads ?? 0,
+        emailSent: row.email_sent ?? 0,
+        emailReplied: row.email_replied ?? 0,
+        unsubscribed: row.unsubscribed ?? 0,
+        bounced: row.bounced ?? 0,
+        whatsappActive: row.whatsapp_active ?? 0,
+        voiceActive: row.voice_active ?? 0,
+        contacted: row.contacted ?? 0,
+        newLeads: row.new_leads ?? 0,
+    }));
+}
+
+export interface ChannelStats {
+    enrolled: number;
+    active: number;
+    notStarted: number;
+    emailSent: number;
+    emailReplied: number;
+    unsubscribed: number;
+    bounced: number;
+}
+
+/** Stats scoped to one outreach channel — backs the Email/WhatsApp/Voice
+ *  campaign sub-pages (a single aggregate query per channel instead of
+ *  filtering the full in-memory lead list in JS). */
+export async function getChannelStats(channel: OutreachChannel): Promise<ChannelStats> {
+    const { data, error } = await supabaseAdmin.rpc('get_campaigns_channel_stats', { p_channel: channel });
+    if (error) throw new Error(error.message);
+    const row = data?.[0];
+    return {
+        enrolled: row?.enrolled ?? 0,
+        active: row?.active ?? 0,
+        notStarted: row?.not_started ?? 0,
+        emailSent: row?.email_sent ?? 0,
+        emailReplied: row?.email_replied ?? 0,
+        unsubscribed: row?.unsubscribed ?? 0,
+        bounced: row?.bounced ?? 0,
+    };
+}
+
+/** Distinct campaigns represented within one channel's enrolled leads —
+ *  backs the "Campaign" filter dropdown on the channel sub-pages. */
+export async function getChannelCampaignOptions(channel: OutreachChannel): Promise<{ id: string; name: string }[]> {
+    const { data, error } = await supabaseAdmin.rpc('get_campaigns_channel_campaign_options', { p_channel: channel });
+    if (error) throw new Error(error.message);
+    return (data || []).map((row: any) => ({ id: row.campaign_id, name: row.campaign_name }));
+}
+
+// ── derived helpers (still used by the full-detail modal) ──────────────────
+
+/** Count of email steps actually sent (status entry present with a non-empty status). */
+export function countEmailStepsSent(lead: OutreachLead): number {
+    return lead.emailStepStatuses.filter(s => s && s.status).length;
+}
+
+export function hasEmailReply(lead: OutreachLead): boolean {
+    return lead.emailReplies.length > 0;
+}
+
+export function latestEmailStatus(lead: OutreachLead): EmailStatusEntry | null {
+    for (let i = lead.emailStepStatuses.length - 1; i >= 0; i--) {
+        if (lead.emailStepStatuses[i]) return lead.emailStepStatuses[i];
+    }
+    return null;
 }
