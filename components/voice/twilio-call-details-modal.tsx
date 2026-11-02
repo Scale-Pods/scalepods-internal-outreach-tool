@@ -7,7 +7,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Phone, Clock, Calendar, ArrowRight, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Phone, Clock, Calendar, ArrowRight, FileText, Download } from "lucide-react";
 import { formatDuration } from "@/lib/utils";
 import { getCallerNumberMeta } from "@/lib/services/caller-numbers";
 
@@ -66,7 +67,7 @@ export function TwilioCallDetailsModal({ open, onOpenChange, call }: TwilioCallD
                                     <span className="block text-xs text-slate-500 uppercase tracking-wider mb-1">From</span>
                                     <span className="flex items-center gap-1.5 text-sm">
                                         {fromMeta && (
-                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-indigo-200 text-indigo-600 bg-indigo-50">
+                                             <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-indigo-200 text-indigo-600 bg-indigo-50">
                                                 {fromMeta.label}
                                             </Badge>
                                         )}
@@ -84,7 +85,26 @@ export function TwilioCallDetailsModal({ open, onOpenChange, call }: TwilioCallD
                             </div>
 
                             {audioUrl && (
-                                <div className="mt-6">
+                                <div className="mt-6 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Recording</p>
+                                        <Button
+                                            asChild
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-8 text-xs font-semibold gap-1.5 shadow-sm text-slate-700 hover:text-slate-900 border-slate-200"
+                                        >
+                                            <a
+                                                href={`/api/audio-proxy?url=${encodeURIComponent(audioUrl)}`}
+                                                download={`cold-call-recording-${call.id || 'audio'}.mp3`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                <Download className="h-3.5 w-3.5" />
+                                                Download Recording
+                                            </a>
+                                        </Button>
+                                    </div>
                                     <audio
                                         controls
                                         preload="metadata"

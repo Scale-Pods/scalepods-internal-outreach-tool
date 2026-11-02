@@ -4,18 +4,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { RefreshCw, Phone, PhoneIncoming, PhoneOutgoing } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { RefreshCw, Phone, PhoneIncoming, PhoneOutgoing, Search, Download } from "lucide-react";
 import { SPLoader } from "@/components/sp-loader";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { format, subDays } from "date-fns";
 import { formatDuration, cn } from "@/lib/utils";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { TwilioCallDetailsModal } from "@/components/voice/twilio-call-details-modal";
 import { getCallerNumberMeta } from "@/lib/services/caller-numbers";
 
 export default function ColdCallLogsPage() {
     const [calls, setCalls] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState("");
     const [selectedCall, setSelectedCall] = useState<any>(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [dateRange, setDateRange] = useState<any>({
@@ -62,6 +64,36 @@ export default function ColdCallLogsPage() {
         setModalOpen(true);
     };
 
+    const filteredCalls = useMemo(() => {
+        if (!searchQuery.trim()) return calls;
+        const q = searchQuery.toLowerCase().trim();
+        const cleanDigits = q.replace(/\D/g, '');
+
+        return calls.filter((call) => {
+            const from = (call.from || '').toLowerCase();
+            const to = (call.to || '').toLowerCase();
+            const fromDigits = from.replace(/\D/g, '');
+            const toDigits = to.replace(/\D/g, '');
+            const transcript = (call.transcript || '').toLowerCase();
+            const status = (call.status || '').toLowerCase();
+            const direction = (call.direction || '').toLowerCase();
+            const fromMeta = getCallerNumberMeta(call.from);
+            const metaLabel = (fromMeta?.label || '').toLowerCase();
+
+            const matchesText =
+                from.includes(q) ||
+                to.includes(q) ||
+                transcript.includes(q) ||
+                status.includes(q) ||
+                direction.includes(q) ||
+                metaLabel.includes(q);
+
+            const matchesDigits = cleanDigits && (fromDigits.includes(cleanDigits) || toDigits.includes(cleanDigits));
+
+            return matchesText || matchesDigits;
+        });
+    }, [calls, searchQuery]);
+
     return (
         <div className="space-y-6 pb-10 pt-6 relative min-h-[500px]">
             {loading && calls.length === 0 && <SPLoader />}
@@ -90,6 +122,25 @@ export default function ColdCallLogsPage() {
                         </Button>
                     </div>
                 </div>
+
+                {/* Search Bar */}
+                <div className="relative max-w-md w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                        placeholder="Search by phone number, status, label, or transcript..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9 h-10 bg-white shadow-sm border-slate-200 focus-visible:ring-indigo-500"
+                    />
+                    {searchQuery && (
+                        <button
+                            onClick={() => setSearchQuery("")}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 hover:text-slate-600"
+                        >
+                            Clear
+                        </button>
+                    )}
+                </div>
             </div>
 
             <Card className="border-border overflow-hidden shadow-sm bg-white">
@@ -104,18 +155,25 @@ export default function ColdCallLogsPage() {
                                 <TableHead>Status</TableHead>
                                 <TableHead>Recording</TableHead>
                                 <TableHead>Transcript</TableHead>
-                                <TableHead className="w-[200px]">Date &amp; Time</TableHead>
+                                <TableHead className="w-[180px]">Date &amp; Time</TableHead>
+                                <TableHead className="w-[100px] text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading && calls.length === 0 ? (
-                                <TableRow><TableCell colSpan={8} className="h-24 text-center">Loading calls...</TableCell></TableRow>
-                            ) : calls.length === 0 ? (
-                                <TableRow><TableCell colSpan={8} className="h-24 text-center text-slate-500">No cold calls in this range.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={9} className="h-24 text-center">Loading calls...</TableCell></TableRow>
+                            ) : filteredCalls.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={9} className="h-24 text-center text-slate-500">
+                                        {searchQuery ? `No cold calls matching "${searchQuery}".` : "No cold calls in this range."}
+                                    </TableCell>
+                                </TableRow>
                             ) : (
-                                calls.map((call) => {
+                                filteredCalls.map((call) => {
                                     const isInbound = (call.direction || '').toLowerCase().includes('inbound');
                                     const fromMeta = getCallerNumberMeta(call.from);
+                                    const audioUrl = call.recordingUrl || call.audio_url;
+
                                     return (
                                         <TableRow
                                             key={call.id}
@@ -149,8 +207,21 @@ export default function ColdCallLogsPage() {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell>
-                                                {call.recordingUrl ? (
-                                                    <Badge className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200" variant="outline">Available</Badge>
+                                                {audioUrl ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200" variant="outline">Available</Badge>
+                                                        <a
+                                                            href={`/api/audio-proxy?url=${encodeURIComponent(audioUrl)}`}
+                                                            download={`cold-call-${call.id || 'recording'}.mp3`}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            title="Download Recording"
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                                                        >
+                                                            <Download className="h-3.5 w-3.5" />
+                                                        </a>
+                                                    </div>
                                                 ) : (
                                                     <span className="text-xs text-slate-400">—</span>
                                                 )}
@@ -167,6 +238,29 @@ export default function ColdCallLogsPage() {
                                             <TableCell className="text-slate-500 text-xs">
                                                 {call.createdAt ? format(new Date(call.createdAt), 'PPp') : 'N/A'}
                                             </TableCell>
+                                            <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                                {audioUrl ? (
+                                                    <Button
+                                                        asChild
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-8 px-2 text-xs font-medium text-slate-600 hover:text-slate-900"
+                                                    >
+                                                        <a
+                                                            href={`/api/audio-proxy?url=${encodeURIComponent(audioUrl)}`}
+                                                            download={`cold-call-${call.id || 'recording'}.mp3`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            title="Download Recording"
+                                                        >
+                                                            <Download className="h-3.5 w-3.5 mr-1" />
+                                                            Download
+                                                        </a>
+                                                    </Button>
+                                                ) : (
+                                                    <span className="text-xs text-slate-400">—</span>
+                                                )}
+                                            </TableCell>
                                         </TableRow>
                                     );
                                 })
@@ -175,9 +269,9 @@ export default function ColdCallLogsPage() {
                     </Table>
                 </div>
 
-                <div className="px-6 py-4 border-t border-border bg-slate-50/50">
+                <div className="px-6 py-4 border-t border-border bg-slate-50/50 flex items-center justify-between">
                     <p className="text-sm text-slate-500">
-                        Showing <span className="font-bold text-slate-900">{calls.length}</span> cold calls
+                        Showing <span className="font-bold text-slate-900">{filteredCalls.length}</span> of <span className="font-bold text-slate-900">{calls.length}</span> cold calls
                     </p>
                 </div>
             </Card>
