@@ -24,16 +24,18 @@ export function LinkedInAccountBadge({ accountId, className = "" }: { accountId:
 const BATCH_CLASSES: Record<DataBatch, string> = {
     old: "bg-amber-50 text-amber-700 border-amber-200",
     new: "bg-teal-50 text-teal-700 border-teal-200",
+    new_1: "bg-indigo-50 text-indigo-700 border-indigo-200",
 };
 
 export function batchColorClasses(batch: DataBatch) {
-    return BATCH_CLASSES[batch];
+    return BATCH_CLASSES[batch] || BATCH_CLASSES.old;
 }
 
 export function LinkedInBatchBadge({ batch, className = "" }: { batch: DataBatch; className?: string }) {
+    const label = batch === 'new_1' ? 'New 1' : batch === 'new' ? 'New' : 'Old';
     return (
         <Badge variant="outline" className={`text-[9px] font-bold uppercase px-1.5 py-0.5 whitespace-nowrap ${batchColorClasses(batch)} ${className}`}>
-            {batch === 'new' ? 'New' : 'Old'}
+            {label}
         </Badge>
     );
 }

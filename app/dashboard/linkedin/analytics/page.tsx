@@ -16,6 +16,7 @@ import { LinkedInAccountBadge, LinkedInBatchBadge, accountColorClasses, batchCol
 const BATCH_HEX: Record<DataBatch, string> = {
     old: '#f59e0b',
     new: '#14b8a6',
+    new_1: '#6366f1',
 };
 
 const ACCOUNT_HEX: Record<string, string> = {
@@ -103,10 +104,10 @@ export default function LinkedInAnalyticsPage() {
     // Bifurcation by LinkedIn sender Account ID, joined across Leads, Conversations & Quota Tracker.
     const threads = useMemo(() => buildConversationThreads(messages, leads), [messages, leads]);
 
-    // Old vs New bifurcation — "Leads"/"Old Conversations" (old) vs "New Leads"/"New
-    // Conversations" (new) sheet tabs. Quota Tracker has no old/new split.
+    // Batch bifurcation — "Leads"/"Old Conversations" (Old) vs "New Leads"/"New Conversations" (New)
+    // vs "New Leads_1"/"New Conversations_1" (New 1) sheet tabs. Quota Tracker has no batch split.
     const batchBreakdown = useMemo(() => {
-        return (['old', 'new'] as const).map(batch => {
+        return (['old', 'new', 'new_1'] as const).map(batch => {
             const batchLeads = leads.filter(l => l.batch === batch);
             const batchConnected = batchLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
             const batchReplied = batchLeads.filter(l => l.replyText.trim()).length;
@@ -240,15 +241,15 @@ export default function LinkedInAnalyticsPage() {
 
             <Card className="border-slate-200/60 shadow-sm bg-white overflow-hidden">
                 <CardHeader className="px-6 py-4 border-b border-slate-50">
-                    <CardTitle className="text-sm font-bold text-slate-800">Old vs New Data</CardTitle>
-                    <CardDescription className="text-[11px]">&quot;Leads&quot;/&quot;Old Conversations&quot; (Old) vs &quot;New Leads&quot;/&quot;New Conversations&quot; (New) sheet tabs</CardDescription>
+                    <CardTitle className="text-sm font-bold text-slate-800">Data by Batch</CardTitle>
+                    <CardDescription className="text-[11px]">&quot;Leads&quot;/&quot;Old Conversations&quot; (Old) vs &quot;New Leads&quot;/&quot;New Conversations&quot; (New) vs &quot;New Leads_1&quot;/&quot;New Conversations_1&quot; (New 1) sheet tabs</CardDescription>
                 </CardHeader>
                 <CardContent className="p-6 space-y-6">
                     <div className="h-[220px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={batchBreakdown} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="batch" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} dy={10} tickFormatter={(v) => v === 'new' ? 'New' : 'Old'} />
+                                <XAxis dataKey="batch" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} dy={10} tickFormatter={(v) => v === 'new_1' ? 'New 1' : v === 'new' ? 'New' : 'Old'} />
                                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} width={35} />
                                 <Tooltip
                                     cursor={{ fill: '#f8fafc' }}

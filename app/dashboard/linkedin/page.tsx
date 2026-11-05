@@ -188,8 +188,8 @@ export default function LinkedInDashboardPage() {
                 <CardContent className="p-6">
                     <div className="flex items-center justify-between mb-5">
                         <div>
-                            <h3 className="text-base font-bold text-slate-900">Old vs New Data</h3>
-                            <p className="text-xs text-slate-500 mt-0.5">&quot;Leads&quot;/&quot;Old Conversations&quot; (Old) vs &quot;New Leads&quot;/&quot;New Conversations&quot; (New) sheet tabs</p>
+                            <h3 className="text-base font-bold text-slate-900">Data by Batch</h3>
+                            <p className="text-xs text-slate-500 mt-0.5">&quot;Leads&quot;/&quot;Old Conversations&quot; (Old) vs &quot;New Leads&quot;/&quot;New Conversations&quot; (New) vs &quot;New Leads_1&quot;/&quot;New Conversations_1&quot; (New 1) sheet tabs</p>
                         </div>
                         <Users className="h-4 w-4 text-slate-400" />
                     </div>

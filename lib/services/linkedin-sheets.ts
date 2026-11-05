@@ -4,16 +4,20 @@
 
 const SHEET_ID = process.env.LINKEDIN_SHEET_ID || '1JYPKybN07Ee41-LpQzIj6axwHj5MmWKeLhX_pLYoQfk';
 
-// The sheet now splits Leads and Conversations into an "Old" and "New" tab each
-// (the original "Leads"/"Conversations" tabs hold the old data; "New Leads" and
-// "New Conversations" hold the new batch). Quota Tracker is unchanged.
+// The sheet now splits Leads and Conversations into batches:
+// - "Leads" / "Old Conversations" (Old batch)
+// - "New Leads" / "New Conversations" (New batch)
+// - "New Leads_1" / "New Conversations_1" (New_1 batch)
+// Quota Tracker is unchanged.
 const OLD_LEADS_SHEET_NAME = 'Leads';
 const NEW_LEADS_SHEET_NAME = 'New Leads';
+const NEW_LEADS_1_SHEET_NAME = 'New Leads_1';
 const OLD_CONVERSATIONS_SHEET_NAME = 'Old Conversations';
 const NEW_CONVERSATIONS_SHEET_NAME = 'New Conversations';
+const NEW_CONVERSATIONS_1_SHEET_NAME = 'New Conversations_1';
 const QUOTA_SHEET_NAME = 'Quota Tracker';
 
-export type DataBatch = 'old' | 'new';
+export type DataBatch = 'old' | 'new' | 'new_1';
 
 // Known LinkedIn sender accounts (Account ID -> display name), shared across
 // Dashboard / Chat / Leads / Analytics so every page bifurcates data the same way.
@@ -159,12 +163,18 @@ function parseCsv(text: string): string[][] {
 
 async function fetchSheetRows(sheetName: string): Promise<string[][]> {
     const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) {
-        throw new Error(`Failed to fetch "${sheetName}" sheet (${res.status}). Make sure it is shared as "Anyone with the link can view".`);
+    try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) {
+            console.warn(`[LinkedIn Sheets] Failed to fetch "${sheetName}" sheet (${res.status}). Returning empty rows.`);
+            return [];
+        }
+        const text = await res.text();
+        return parseCsv(text);
+    } catch (err: any) {
+        console.error(`[LinkedIn Sheets] Network or fetch error for "${sheetName}":`, err?.message || err);
+        return [];
     }
-    const text = await res.text();
-    return parseCsv(text);
 }
 
 function rowsToObjects<T>(rows: string[][], columnMap: Record<string, keyof T>, batch?: DataBatch): T[] {
@@ -181,33 +191,37 @@ function rowsToObjects<T>(rows: string[][], columnMap: Record<string, keyof T>, 
         for (const key of Object.keys(columnMap) as (keyof typeof columnMap)[]) {
             const mappedKey = columnMap[key];
             const idx = indexMap[mappedKey];
-            obj[mappedKey] = idx !== undefined ? (row[idx] ?? '').trim() : '';
+            obj[mappedKey] = (idx !== undefined && row && row[idx] !== undefined && row[idx] !== null) ? String(row[idx]).trim() : '';
         }
         return obj as T;
     });
 }
 
-/** Fetches both the "Leads" (old) and "New Leads" tabs and merges them, each row tagged with its batch. */
+/** Fetches "Leads" (old), "New Leads" (new), and "New Leads_1" (new_1) tabs and merges them, each row tagged with its batch. */
 export async function getLinkedInLeads(): Promise<LinkedInLead[]> {
-    const [oldRows, newRows] = await Promise.all([
+    const [oldRows, newRows, new1Rows] = await Promise.all([
         fetchSheetRows(OLD_LEADS_SHEET_NAME),
         fetchSheetRows(NEW_LEADS_SHEET_NAME),
+        fetchSheetRows(NEW_LEADS_1_SHEET_NAME),
     ]);
     return [
         ...rowsToObjects<LinkedInLead>(oldRows, LEADS_COLUMNS, 'old'),
         ...rowsToObjects<LinkedInLead>(newRows, LEADS_COLUMNS, 'new'),
+        ...rowsToObjects<LinkedInLead>(new1Rows, LEADS_COLUMNS, 'new_1'),
     ];
 }
 
-/** Fetches both the "Old Conversations" and "New Conversations" tabs and merges them, each row tagged with its batch. */
+/** Fetches "Old Conversations", "New Conversations", and "New Conversations_1" tabs and merges them, each row tagged with its batch. */
 export async function getLinkedInConversations(): Promise<LinkedInMessage[]> {
-    const [oldRows, newRows] = await Promise.all([
+    const [oldRows, newRows, new1Rows] = await Promise.all([
         fetchSheetRows(OLD_CONVERSATIONS_SHEET_NAME),
         fetchSheetRows(NEW_CONVERSATIONS_SHEET_NAME),
+        fetchSheetRows(NEW_CONVERSATIONS_1_SHEET_NAME),
     ]);
     return [
         ...rowsToObjects<LinkedInMessage>(oldRows, CONVERSATIONS_COLUMNS, 'old'),
         ...rowsToObjects<LinkedInMessage>(newRows, CONVERSATIONS_COLUMNS, 'new'),
+        ...rowsToObjects<LinkedInMessage>(new1Rows, CONVERSATIONS_COLUMNS, 'new_1'),
     ];
 }
 
@@ -263,7 +277,11 @@ export function buildConversationThreads(
     }
 
     for (const thread of threads.values()) {
-        thread.messages.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime());
+        thread.messages.sort((a, b) => {
+            const timeA = a.sentAt ? new Date(a.sentAt).getTime() : 0;
+            const timeB = b.sentAt ? new Date(b.sentAt).getTime() : 0;
+            return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
+        });
         const last = thread.messages[thread.messages.length - 1];
         thread.lastMessageAt = last?.sentAt || null;
     }
@@ -271,6 +289,6 @@ export function buildConversationThreads(
     return Array.from(threads.values()).sort((a, b) => {
         const dateA = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
         const dateB = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
-        return dateB - dateA;
+        return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
     });
 }

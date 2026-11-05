@@ -33,10 +33,9 @@ export async function GET() {
 
         const threads = buildConversationThreads(messages, leads);
 
-        // Old vs New bifurcation — the sheet splits Leads into "Leads" (old) / "New
-        // Leads" (new) and Conversations into "Old Conversations" / "New Conversations".
-        // Quota Tracker has no old/new split, so it's left out of this breakdown.
-        const batchBreakdown = (['old', 'new'] as const).map(batch => {
+        // Batch bifurcation across Leads and Conversations ("Leads", "New Leads", "New Leads_1").
+        // Quota Tracker has no batch split, so it's left out of this breakdown.
+        const batchBreakdown = (['old', 'new', 'new_1'] as const).map(batch => {
             const batchLeads = leads.filter(l => l.batch === batch);
             const batchConnected = batchLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
             const batchReplied = batchLeads.filter(l => l.replyText.trim()).length;

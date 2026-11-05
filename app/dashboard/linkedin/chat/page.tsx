@@ -21,6 +21,7 @@ import { LinkedInAccountBadge, LinkedInBatchBadge } from "@/components/dashboard
 export default function LinkedInChatPage() {
     const [threads, setThreads] = useState<LinkedInConversationThread[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedThread, setSelectedThread] = useState<LinkedInConversationThread | null>(null);
     const [accountFilter, setAccountFilter] = useState<string[]>([]);
@@ -28,13 +29,20 @@ export default function LinkedInChatPage() {
 
     const fetchData = async () => {
         setLoading(true);
+        setError(null);
         try {
             const res = await fetch("/api/linkedin/conversations");
-            if (!res.ok) throw new Error("Failed to fetch");
             const json = await res.json();
+            if (!res.ok) {
+                throw new Error(json.error || `Server returned ${res.status}`);
+            }
+            if (json.error) {
+                console.warn("LinkedIn conversations API warning:", json.error);
+            }
             setThreads(json.threads || []);
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to fetch LinkedIn conversations:", err);
+            setError(err?.message || "Failed to fetch conversations");
         } finally {
             setLoading(false);
         }
@@ -71,7 +79,7 @@ export default function LinkedInChatPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">LinkedIn Chats</h1>
-                    <p className="text-slate-500 text-sm mt-1">Conversations synced from the &quot;Old Conversations&quot; &amp; &quot;New Conversations&quot; Google Sheet tabs</p>
+                    <p className="text-slate-500 text-sm mt-1">Conversations synced from the &quot;Old Conversations&quot;, &quot;New Conversations&quot; &amp; &quot;New Conversations_1&quot; Google Sheet tabs</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={fetchData} className="gap-2 h-10 px-4">
                     <RefreshCw className="h-4 w-4" /> Refresh Chat
@@ -102,6 +110,12 @@ export default function LinkedInChatPage() {
                     >
                         New
                     </button>
+                    <button
+                        onClick={() => toggleBatchFilter('new_1')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${batchFilter.includes('new_1') ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                        New 1
+                    </button>
                 </div>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -119,9 +133,18 @@ export default function LinkedInChatPage() {
                 </DropdownMenu>
             </div>
 
+            {error && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg text-sm flex items-center justify-between">
+                    <span>{error}</span>
+                    <Button variant="outline" size="sm" onClick={fetchData} className="text-xs h-7">Retry</Button>
+                </div>
+            )}
+
             <Card className="border-border shadow-sm bg-white overflow-hidden">
                 {filteredThreads.length === 0 ? (
-                    <div className="p-10 text-center text-slate-500">No LinkedIn conversations found.</div>
+                    <div className="p-10 text-center text-slate-500">
+                        {error ? "Failed to load conversations." : "No LinkedIn conversations found."}
+                    </div>
                 ) : (
                     <table className="w-full text-left text-sm">
                         <thead className="bg-slate-50 text-slate-500 font-bold border-b border-border">
