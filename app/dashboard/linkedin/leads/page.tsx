@@ -12,8 +12,10 @@ import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SPLoader } from "@/components/sp-loader";
-import { LINKEDIN_ACCOUNTS, getAccountMeta, type LinkedInLead, type DataBatch } from "@/lib/services/linkedin-sheets";
+import { LINKEDIN_ACCOUNTS, getAccountMeta, isDateInRange, type LinkedInLead, type DataBatch } from "@/lib/services/linkedin-sheets";
 import { LinkedInAccountBadge, LinkedInBatchBadge } from "@/components/dashboard/linkedin-account-badge";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import type { DateRange } from "react-day-picker";
 
 const STATUS_STYLES: Record<string, string> = {
     connected: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -41,6 +43,7 @@ export default function LinkedInLeadsPage() {
     const [connectionFilter, setConnectionFilter] = useState<string[]>([]);
     const [accountFilter, setAccountFilter] = useState<string[]>([]);
     const [batchFilter, setBatchFilter] = useState<DataBatch[]>([]);
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
     const fetchData = async () => {
         setLoading(true);
@@ -78,13 +81,14 @@ export default function LinkedInLeadsPage() {
         setBatchFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
     };
 
-    const hasActiveFilters = connectionFilter.length > 0 || accountFilter.length > 0 || batchFilter.length > 0 || !!searchQuery;
+    const hasActiveFilters = connectionFilter.length > 0 || accountFilter.length > 0 || batchFilter.length > 0 || !!searchQuery || !!dateRange?.from;
 
     const resetFilters = () => {
         setConnectionFilter([]);
         setAccountFilter([]);
         setBatchFilter([]);
         setSearchQuery("");
+        setDateRange(undefined);
     };
 
     const filteredLeads = useMemo(() => {
@@ -95,13 +99,28 @@ export default function LinkedInLeadsPage() {
                 if (!haystack.includes(q)) return false;
             }
             if (connectionFilter.length > 0 && !connectionFilter.includes(lead.connectionStatus.trim())) return false;
-            if (accountFilter.length > 0 && !accountFilter.includes(lead.accountId.trim())) return false;
+            if (accountFilter.length > 0) {
+                const leadAccId = lead.accountId.trim();
+                const matches = accountFilter.some(accId => {
+                    const acc = LINKEDIN_ACCOUNTS.find(a => a.accountId === accId);
+                    if (acc) return acc.accountIds.includes(leadAccId) || acc.accountId === leadAccId;
+                    return accId === leadAccId;
+                });
+                if (!matches) return false;
+            }
             if (batchFilter.length > 0 && !batchFilter.includes(lead.batch)) return false;
+            if (dateRange?.from) {
+                const from = new Date(dateRange.from);
+                from.setHours(0, 0, 0, 0);
+                const to = new Date(dateRange.to || dateRange.from);
+                to.setHours(23, 59, 59, 999);
+                if (!isDateInRange(lead.lastActionSentAt, from, to)) return false;
+            }
             return true;
         });
-    }, [leads, searchQuery, connectionFilter, accountFilter, batchFilter]);
+    }, [leads, searchQuery, connectionFilter, accountFilter, batchFilter, dateRange]);
 
-    useEffect(() => { setCurrentPage(1); }, [searchQuery, connectionFilter, accountFilter, batchFilter]);
+    useEffect(() => { setCurrentPage(1); }, [searchQuery, connectionFilter, accountFilter, batchFilter, dateRange]);
 
     const totalPages = Math.ceil(filteredLeads.length / leadsPerPage) || 1;
     const paginatedLeads = filteredLeads.slice((currentPage - 1) * leadsPerPage, currentPage * leadsPerPage);
@@ -190,6 +209,13 @@ export default function LinkedInLeadsPage() {
                         ))}
                     </DropdownMenuContent>
                 </DropdownMenu>
+
+                <DateRangePicker
+                    value={dateRange}
+                    placeholder="All Dates"
+                    onUpdate={(val) => setDateRange(val.range)}
+                    className="w-auto [&>button]:h-8 [&>button]:text-xs [&>button]:sm:w-[220px]"
+                />
 
                 {hasActiveFilters && (
                     <Button variant="ghost" size="sm" onClick={resetFilters} className="h-8 gap-1 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2">

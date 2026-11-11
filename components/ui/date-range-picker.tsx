@@ -16,27 +16,48 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export interface DateRangePickerProps extends React.HTMLAttributes<HTMLDivElement> {
+    value?: DateRange | undefined;
+    initialRange?: DateRange | undefined;
+    placeholder?: string;
     onUpdate?: (values: { range: DateRange | undefined, label?: string }) => void;
 }
 
 export function DateRangePicker({
     className,
+    value,
+    initialRange,
+    placeholder,
     onUpdate,
     ...props
 }: DateRangePickerProps) {
-    const [date, setDate] = React.useState<DateRange | undefined>({
-        from: subDays(new Date(), 7),
-        to: new Date(),
-    })
+    const isControlled = value !== undefined;
+    const [date, setDate] = React.useState<DateRange | undefined>(
+        value !== undefined ? value : (initialRange !== undefined ? initialRange : {
+            from: subDays(new Date(), 7),
+            to: new Date(),
+        })
+    )
 
     const [tempDate, setTempDate] = React.useState<DateRange | undefined>(date)
-    const [tempLabel, setTempLabel] = React.useState<string | undefined>("Last 7 days")
+    const [tempLabel, setTempLabel] = React.useState<string | undefined>(
+        date?.from ? "Custom Range" : undefined
+    )
     const [open, setOpen] = React.useState(false)
     const [isMounted, setIsMounted] = React.useState(false)
 
     React.useEffect(() => {
         setIsMounted(true)
     }, [])
+
+    React.useEffect(() => {
+        if (value !== undefined) {
+            setDate(value)
+            setTempDate(value)
+            if (!value?.from) {
+                setTempLabel(undefined)
+            }
+        }
+    }, [value])
 
     React.useEffect(() => {
         if (open) {
@@ -152,7 +173,7 @@ export function DateRangePicker({
                                 format(date.from, "LLL dd, y")
                             )
                         ) : (
-                            <span>Pick a date</span>
+                            <span>{placeholder || "Pick a date"}</span>
                         )}
                     </Button>
                 </PopoverTrigger>

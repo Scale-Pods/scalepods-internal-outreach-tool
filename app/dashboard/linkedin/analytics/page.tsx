@@ -10,8 +10,10 @@ import { TrendingUp, Users, MessageSquare, Send, RefreshCw, Gauge, Reply } from 
 import { Button } from "@/components/ui/button";
 import { SPLoader } from "@/components/sp-loader";
 import { cn } from "@/lib/utils";
-import { LINKEDIN_ACCOUNTS, getAccountMeta, buildConversationThreads, type LinkedInQuota, type LinkedInLead, type LinkedInMessage, type DataBatch } from "@/lib/services/linkedin-sheets";
+import { LINKEDIN_ACCOUNTS, getAccountMeta, buildConversationThreads, isDateInRange, type LinkedInQuota, type LinkedInLead, type LinkedInMessage, type DataBatch } from "@/lib/services/linkedin-sheets";
 import { LinkedInAccountBadge, LinkedInBatchBadge, accountColorClasses, batchColorClasses } from "@/components/dashboard/linkedin-account-badge";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import type { DateRange } from "react-day-picker";
 
 const BATCH_HEX: Record<DataBatch, string> = {
     old: '#f59e0b',
@@ -31,6 +33,7 @@ export default function LinkedInAnalyticsPage() {
     const [leads, setLeads] = useState<LinkedInLead[]>([]);
     const [messages, setMessages] = useState<LinkedInMessage[]>([]);
     const [loading, setLoading] = useState(true);
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
     const fetchData = async () => {
         setLoading(true);
@@ -55,25 +58,42 @@ export default function LinkedInAnalyticsPage() {
         fetchData();
     }, []);
 
+    const filteredData = useMemo(() => {
+        if (!dateRange?.from) {
+            return { quota, leads, messages };
+        }
+        const from = new Date(dateRange.from);
+        from.setHours(0, 0, 0, 0);
+        const to = new Date(dateRange.to || dateRange.from);
+        to.setHours(23, 59, 59, 999);
+
+        return {
+            quota: quota.filter(q => isDateInRange(q.date || q.lastSentAt, from, to)),
+            leads: leads.filter(l => isDateInRange(l.lastActionSentAt, from, to)),
+            messages: messages.filter(m => isDateInRange(m.sentAt, from, to)),
+        };
+    }, [quota, leads, messages, dateRange]);
+
     const stats = useMemo(() => {
-        const totalSent = quota.reduce((sum, q) => sum + q.sentCount, 0);
-        const totalCap = quota.reduce((sum, q) => sum + q.dailyCap, 0);
-        const totalRemaining = quota.reduce((sum, q) => sum + q.remainingQuota, 0);
-        const connected = leads.filter(l => l.connectionStatus.toLowerCase().includes('connect')).length;
+        const { quota: fQuota, leads: fLeads, messages: fMessages } = filteredData;
+        const totalSent = fQuota.reduce((sum, q) => sum + q.sentCount, 0);
+        const totalCap = fQuota.reduce((sum, q) => sum + q.dailyCap, 0);
+        const totalRemaining = fQuota.reduce((sum, q) => sum + q.remainingQuota, 0);
+        const connected = fLeads.filter(l => l.connectionStatus.toLowerCase().includes('connect')).length;
         const connectionRate = totalSent > 0 ? ((connected / totalSent) * 100).toFixed(1) + "%" : "0%";
 
         // Replies — leads with content in the Reply Text column from the Leads sheet.
-        const repliedLeads = leads.filter(l => l.replyText.trim());
+        const repliedLeads = fLeads.filter(l => l.replyText.trim());
 
         const statusCounts: Record<string, number> = {};
-        leads.forEach(l => {
+        fLeads.forEach(l => {
             const key = (l.connectionStatus || 'Unknown').trim() || 'Unknown';
             statusCounts[key] = (statusCounts[key] || 0) + 1;
         });
 
         return {
             totalSent, totalCap, totalRemaining, connected, connectionRate,
-            totalMessages: messages.length,
+            totalMessages: fMessages.length,
             statusData: Object.entries(statusCounts).map(([name, value]) => ({ name, value })),
             replied: repliedLeads.length,
             replies: repliedLeads
@@ -88,27 +108,27 @@ export default function LinkedInAnalyticsPage() {
                 }))
                 .sort((a, b) => new Date(b.lastActionSentAt).getTime() - new Date(a.lastActionSentAt).getTime()),
         };
-    }, [quota, leads, messages]);
+    }, [filteredData]);
 
     const quotaTrend = useMemo(() => {
         const groups: Record<string, { date: string; sent: number; cap: number }> = {};
-        quota.forEach(q => {
+        filteredData.quota.forEach(q => {
             if (!q.date) return;
             if (!groups[q.date]) groups[q.date] = { date: q.date, sent: 0, cap: 0 };
             groups[q.date].sent += q.sentCount;
             groups[q.date].cap += q.dailyCap;
         });
         return Object.values(groups).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(-14);
-    }, [quota]);
+    }, [filteredData.quota]);
 
     // Bifurcation by LinkedIn sender Account ID, joined across Leads, Conversations & Quota Tracker.
-    const threads = useMemo(() => buildConversationThreads(messages, leads), [messages, leads]);
+    const threads = useMemo(() => buildConversationThreads(filteredData.messages, filteredData.leads), [filteredData.messages, filteredData.leads]);
 
     // Batch bifurcation — "Leads"/"Old Conversations" (Old) vs "New Leads"/"New Conversations" (New)
     // vs "New Leads_1"/"New Conversations_1" (New 1) sheet tabs. Quota Tracker has no batch split.
     const batchBreakdown = useMemo(() => {
         return (['old', 'new', 'new_1'] as const).map(batch => {
-            const batchLeads = leads.filter(l => l.batch === batch);
+            const batchLeads = filteredData.leads.filter(l => l.batch === batch);
             const batchConnected = batchLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
             const batchReplied = batchLeads.filter(l => l.replyText.trim()).length;
             const batchThreads = threads.filter(t => t.batch === batch);
@@ -122,21 +142,20 @@ export default function LinkedInAnalyticsPage() {
                 messages: batchThreads.reduce((sum, t) => sum + t.messages.length, 0),
             };
         });
-    }, [leads, threads]);
+    }, [filteredData.leads, threads]);
 
     const accountBreakdown = useMemo(() => {
         // Restricted to the known LinkedIn sender accounts only — stray/unknown
         // Account IDs picked up from the sheet (e.g. test rows) are excluded.
-        const ids = LINKEDIN_ACCOUNTS.map(a => a.accountId);
-        return ids.map(accountId => {
-            const meta = getAccountMeta(accountId);
-            const accountLeads = leads.filter(l => l.accountId === accountId);
+        return LINKEDIN_ACCOUNTS.map(acc => {
+            const meta = getAccountMeta(acc.accountId);
+            const accountLeads = filteredData.leads.filter(l => acc.accountIds.includes(l.accountId) || l.accountId === acc.accountId);
             const accountConnected = accountLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
             const accountReplied = accountLeads.filter(l => l.replyText.trim()).length;
-            const accountThreads = threads.filter(t => t.accountId === accountId);
-            const accountQuota = quota.filter(q => q.accountId === accountId);
+            const accountThreads = threads.filter(t => acc.accountIds.includes(t.accountId) || t.accountId === acc.accountId);
+            const accountQuota = filteredData.quota.filter(q => acc.accountIds.includes(q.accountId) || q.accountId === acc.accountId);
             return {
-                accountId,
+                accountId: acc.accountId,
                 name: meta.name,
                 color: meta.color,
                 totalLeads: accountLeads.length,
@@ -150,20 +169,37 @@ export default function LinkedInAnalyticsPage() {
                 remaining: accountQuota.reduce((sum, q) => sum + q.remainingQuota, 0),
             };
         }).sort((a, b) => b.totalLeads - a.totalLeads);
-    }, [leads, quota, threads]);
+    }, [filteredData.leads, filteredData.quota, threads]);
+
+    if (loading) return <SPLoader />;
 
     return (
         <div className="space-y-6 p-6 lg:p-8 bg-slate-50/30 min-h-screen">
-            {loading && <SPLoader />}
-
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">LinkedIn Analytics</h1>
                     <p className="text-slate-500 text-sm">Quota usage, connections and messaging performance from Google Sheets</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={fetchData} className="h-9 w-9 p-0 border-slate-200">
-                    <RefreshCw className="h-4 w-4 text-slate-600" />
-                </Button>
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    <DateRangePicker
+                        value={dateRange}
+                        placeholder="All Dates"
+                        onUpdate={(val) => setDateRange(val.range)}
+                    />
+                    {dateRange?.from && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDateRange(undefined)}
+                            className="h-10 px-3 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                        >
+                            Reset
+                        </Button>
+                    )}
+                    <Button variant="outline" size="sm" onClick={fetchData} className="h-10 px-4 gap-2 border-slate-200">
+                        <RefreshCw className="h-4 w-4 text-slate-600" /> Refresh
+                    </Button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">

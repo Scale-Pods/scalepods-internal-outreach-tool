@@ -1,16 +1,34 @@
 import { NextResponse } from 'next/server';
 import {
     getLinkedInLeads, getLinkedInConversations, getLinkedInQuota,
-    buildConversationThreads, LINKEDIN_ACCOUNTS, getAccountMeta,
+    buildConversationThreads, LINKEDIN_ACCOUNTS, getAccountMeta, isDateInRange,
 } from '@/lib/services/linkedin-sheets';
 
-export async function GET() {
+export async function GET(req: Request) {
     try {
-        const [leads, messages, quota] = await Promise.all([
+        const { searchParams } = new URL(req.url);
+        const fromParam = searchParams.get('from');
+        const toParam = searchParams.get('to');
+        const fromDate = fromParam ? new Date(fromParam) : null;
+        const toDate = toParam ? new Date(toParam) : null;
+
+        const [allLeads, allMessages, allQuota] = await Promise.all([
             getLinkedInLeads(),
             getLinkedInConversations(),
             getLinkedInQuota(),
         ]);
+
+        const leads = (fromDate || toDate)
+            ? allLeads.filter(l => isDateInRange(l.lastActionSentAt, fromDate, toDate))
+            : allLeads;
+
+        const messages = (fromDate || toDate)
+            ? allMessages.filter(m => isDateInRange(m.sentAt, fromDate, toDate))
+            : allMessages;
+
+        const quota = (fromDate || toDate)
+            ? allQuota.filter(q => isDateInRange(q.date || q.lastSentAt, fromDate, toDate))
+            : allQuota;
 
         // A lead counts as "accepted / connected" only when both Status and
         // Connection Status (from the Leads sheet) are filled in.
@@ -55,18 +73,16 @@ export async function GET() {
         // Per-account bifurcation across Leads, Conversations & Quota Tracker.
         // Restricted to the known LinkedIn sender accounts only — stray/unknown
         // Account IDs picked up from the sheet (e.g. test rows) are excluded.
-        const accountIds = LINKEDIN_ACCOUNTS.map(a => a.accountId);
-
-        const accountBreakdown = accountIds.map(accountId => {
-            const meta = getAccountMeta(accountId);
-            const accountLeads = leads.filter(l => l.accountId === accountId);
+        const accountBreakdown = LINKEDIN_ACCOUNTS.map(acc => {
+            const meta = getAccountMeta(acc.accountId);
+            const accountLeads = leads.filter(l => acc.accountIds.includes(l.accountId) || l.accountId === acc.accountId);
             const accountConnected = accountLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
             const accountReplied = accountLeads.filter(l => l.replyText.trim()).length;
-            const accountThreads = threads.filter(t => t.accountId === accountId);
-            const accountQuota = quota.filter(q => q.accountId === accountId);
+            const accountThreads = threads.filter(t => acc.accountIds.includes(t.accountId) || t.accountId === acc.accountId);
+            const accountQuota = quota.filter(q => acc.accountIds.includes(q.accountId) || q.accountId === acc.accountId);
 
             return {
-                accountId,
+                accountId: acc.accountId,
                 name: meta.name,
                 color: meta.color,
                 totalLeads: accountLeads.length,

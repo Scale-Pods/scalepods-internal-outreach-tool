@@ -15,8 +15,10 @@ import {
     Search, RefreshCw, MessageSquare, User, Send, ExternalLink,
 } from "lucide-react";
 import { SPLoader } from "@/components/sp-loader";
-import { LINKEDIN_ACCOUNTS, type LinkedInConversationThread, type DataBatch } from "@/lib/services/linkedin-sheets";
+import { LINKEDIN_ACCOUNTS, isDateInRange, type LinkedInConversationThread, type DataBatch } from "@/lib/services/linkedin-sheets";
 import { LinkedInAccountBadge, LinkedInBatchBadge } from "@/components/dashboard/linkedin-account-badge";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import type { DateRange } from "react-day-picker";
 
 export default function LinkedInChatPage() {
     const [threads, setThreads] = useState<LinkedInConversationThread[]>([]);
@@ -26,6 +28,7 @@ export default function LinkedInChatPage() {
     const [selectedThread, setSelectedThread] = useState<LinkedInConversationThread | null>(null);
     const [accountFilter, setAccountFilter] = useState<string[]>([]);
     const [batchFilter, setBatchFilter] = useState<DataBatch[]>([]);
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
     const fetchData = async () => {
         setLoading(true);
@@ -60,17 +63,43 @@ export default function LinkedInChatPage() {
         setBatchFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
     };
 
+    const hasActiveFilters = accountFilter.length > 0 || batchFilter.length > 0 || !!searchQuery || !!dateRange?.from;
+
+    const resetFilters = () => {
+        setAccountFilter([]);
+        setBatchFilter([]);
+        setSearchQuery("");
+        setDateRange(undefined);
+    };
+
     const filteredThreads = useMemo(() => {
         const q = searchQuery.toLowerCase();
         return threads.filter(t => {
-            if (accountFilter.length > 0 && !accountFilter.includes(t.accountId.trim())) return false;
+            if (accountFilter.length > 0) {
+                const threadAccId = t.accountId.trim();
+                const matches = accountFilter.some(accId => {
+                    const acc = LINKEDIN_ACCOUNTS.find(a => a.accountId === accId);
+                    if (acc) return acc.accountIds.includes(threadAccId) || acc.accountId === threadAccId;
+                    return accId === threadAccId;
+                });
+                if (!matches) return false;
+            }
             if (batchFilter.length > 0 && !batchFilter.includes(t.batch)) return false;
+            if (dateRange?.from) {
+                const from = new Date(dateRange.from);
+                from.setHours(0, 0, 0, 0);
+                const to = new Date(dateRange.to || dateRange.from);
+                to.setHours(23, 59, 59, 999);
+                const matchesDate = isDateInRange(t.lastMessageAt, from, to) ||
+                    t.messages.some(m => isDateInRange(m.sentAt, from, to));
+                if (!matchesDate) return false;
+            }
             if (!q) return true;
             const name = t.lead?.fullName || t.personId;
             const haystack = `${name} ${t.lead?.title || ''} ${t.messages.map(m => m.message).join(' ')}`.toLowerCase();
             return haystack.includes(q);
         });
-    }, [threads, searchQuery, accountFilter, batchFilter]);
+    }, [threads, searchQuery, accountFilter, batchFilter, dateRange]);
 
     if (loading) return <SPLoader />;
 
@@ -131,6 +160,19 @@ export default function LinkedInChatPage() {
                         ))}
                     </DropdownMenuContent>
                 </DropdownMenu>
+
+                <DateRangePicker
+                    value={dateRange}
+                    placeholder="All Dates"
+                    onUpdate={(val) => setDateRange(val.range)}
+                    className="w-auto"
+                />
+
+                {hasActiveFilters && (
+                    <Button variant="ghost" size="sm" onClick={resetFilters} className="h-10 gap-1 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3">
+                        Reset
+                    </Button>
+                )}
             </div>
 
             {error && (

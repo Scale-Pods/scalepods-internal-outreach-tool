@@ -9,6 +9,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SPLoader } from "@/components/sp-loader";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import type { DateRange } from "react-day-picker";
 import { LinkedInAccountBadge, LinkedInBatchBadge, accountColorClasses, batchColorClasses } from "@/components/dashboard/linkedin-account-badge";
 import type { DataBatch } from "@/lib/services/linkedin-sheets";
 
@@ -72,11 +74,24 @@ export default function LinkedInDashboardPage() {
     const router = useRouter();
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [loading, setLoading] = useState(true);
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-    const fetchData = async () => {
+    const fetchData = async (range?: DateRange | undefined) => {
         setLoading(true);
         try {
-            const res = await fetch("/api/linkedin/dashboard");
+            const activeRange = range !== undefined ? range : dateRange;
+            let url = "/api/linkedin/dashboard";
+            if (activeRange?.from) {
+                const from = new Date(activeRange.from);
+                from.setHours(0, 0, 0, 0);
+                const to = new Date(activeRange.to || activeRange.from);
+                to.setHours(23, 59, 59, 999);
+                const params = new URLSearchParams();
+                params.set('from', from.toISOString());
+                params.set('to', to.toISOString());
+                url += `?${params.toString()}`;
+            }
+            const res = await fetch(url);
             const json = await res.json();
             setStats(json);
         } catch (err) {
@@ -84,6 +99,16 @@ export default function LinkedInDashboardPage() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleDateUpdate = (values: { range: DateRange | undefined; label?: string }) => {
+        setDateRange(values.range);
+        fetchData(values.range);
+    };
+
+    const handleResetDate = () => {
+        setDateRange(undefined);
+        fetchData(undefined);
     };
 
     useEffect(() => {
@@ -98,10 +123,10 @@ export default function LinkedInDashboardPage() {
         ? Math.min((stats.quota.sentCount / stats.quota.dailyCap) * 100, 100)
         : 0;
 
+    if (loading) return <SPLoader />;
+
     return (
         <div className="space-y-8 pb-10 pt-6 relative min-h-[500px] px-6">
-            {loading && <SPLoader />}
-
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">LinkedIn Outreach Center</h1>
@@ -109,9 +134,26 @@ export default function LinkedInDashboardPage() {
                         Connection requests, conversations and daily quota synced from Google Sheets
                     </p>
                 </div>
-                <Button variant="outline" size="sm" onClick={fetchData} className="gap-2 h-10 px-4">
-                    <RefreshCw className="h-4 w-4" /> Refresh
-                </Button>
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    <DateRangePicker
+                        value={dateRange}
+                        placeholder="All Dates"
+                        onUpdate={handleDateUpdate}
+                    />
+                    {dateRange?.from && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleResetDate}
+                            className="h-10 px-3 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                        >
+                            Reset
+                        </Button>
+                    )}
+                    <Button variant="outline" size="sm" onClick={() => fetchData()} className="gap-2 h-10 px-4">
+                        <RefreshCw className="h-4 w-4" /> Refresh
+                    </Button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">

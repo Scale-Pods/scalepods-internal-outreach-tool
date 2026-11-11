@@ -22,25 +22,92 @@ export type DataBatch = 'old' | 'new' | 'new_1';
 // Known LinkedIn sender accounts (Account ID -> display name), shared across
 // Dashboard / Chat / Leads / Analytics so every page bifurcates data the same way.
 export interface LinkedInAccount {
-    accountId: string;
+    accountId: string; // primary / canonical ID
+    accountIds: string[]; // all associated IDs including historical rotations
     name: string;
     color: string; // tailwind color token, e.g. "blue"
 }
 
 export const LINKEDIN_ACCOUNTS: LinkedInAccount[] = [
-    { accountId: 'THgf5G4aQ_6ySkG97g3-UA', name: 'Adnan Shaikh', color: 'blue' },
-    { accountId: 'skWloOywQJeCP9Ys3eXt9g', name: 'Vishnu Girish', color: 'violet' },
-    { accountId: '9SwCve6hQDGCULIufHvCZQ', name: 'Raunak Kumar', color: 'emerald' },
+    {
+        accountId: 'THgf5G4aQ_6ySkG97g3-UA',
+        accountIds: ['THgf5G4aQ_6ySkG97g3-UA', 'z7ijp3_8QGSei2SxwwrekQ'],
+        name: 'Adnan Shaikh',
+        color: 'blue',
+    },
+    {
+        accountId: 'skWloOywQJeCP9Ys3eXt9g',
+        accountIds: ['skWloOywQJeCP9Ys3eXt9g'],
+        name: 'Vishnu Girish',
+        color: 'violet',
+    },
+    {
+        accountId: '9SwCve6hQDGCULIufHvCZQ',
+        accountIds: ['9SwCve6hQDGCULIufHvCZQ'],
+        name: 'Raunak Kumar',
+        color: 'emerald',
+    },
 ];
 
 const UNKNOWN_ACCOUNT_COLOR = 'slate';
 
-export function getAccountMeta(accountId: string | null | undefined): { name: string; color: string } {
+export function getAccountMeta(accountId: string | null | undefined): { name: string; color: string; canonicalId?: string } {
     const id = (accountId || '').trim();
     if (!id) return { name: 'Unassigned', color: UNKNOWN_ACCOUNT_COLOR };
-    const known = LINKEDIN_ACCOUNTS.find(a => a.accountId === id);
-    if (known) return { name: known.name, color: known.color };
+    const known = LINKEDIN_ACCOUNTS.find(a => a.accountIds.includes(id) || a.accountId === id);
+    if (known) return { name: known.name, color: known.color, canonicalId: known.accountId };
     return { name: id, color: UNKNOWN_ACCOUNT_COLOR };
+}
+
+export function isAccountMatch(account: LinkedInAccount, accountId: string | null | undefined): boolean {
+    const id = (accountId || '').trim();
+    if (!id) return false;
+    return account.accountIds.includes(id) || account.accountId === id;
+}
+
+/**
+ * Checks if a given date string or Date falls within [from, to] (inclusive).
+ * Safely parses ISO timestamp strings, date-time strings, and 'YYYY-MM-DD' dates.
+ * If both from and to are undefined/null, returns true (no filter active).
+ * If dateVal is empty/null/undefined, returns false when a filter range is active.
+ */
+export function isDateInRange(
+    dateVal: string | Date | null | undefined,
+    from?: Date | null,
+    to?: Date | null
+): boolean {
+    if (!from && !to) return true;
+    if (!dateVal) return false;
+
+    let time: number;
+    if (dateVal instanceof Date) {
+        time = dateVal.getTime();
+    } else {
+        const s = String(dateVal).trim();
+        if (!s) return false;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+            const [y, m, d] = s.split('-').map(Number);
+            time = new Date(y, m - 1, d, 12, 0, 0).getTime();
+        } else {
+            time = new Date(s).getTime();
+        }
+    }
+
+    if (isNaN(time)) return false;
+
+    if (from) {
+        const start = new Date(from);
+        start.setHours(0, 0, 0, 0);
+        if (time < start.getTime()) return false;
+    }
+
+    if (to) {
+        const end = new Date(to);
+        end.setHours(23, 59, 59, 999);
+        if (time > end.getTime()) return false;
+    }
+
+    return true;
 }
 
 export interface LinkedInLead {
