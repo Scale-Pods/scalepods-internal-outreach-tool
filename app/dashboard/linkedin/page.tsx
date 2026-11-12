@@ -17,6 +17,7 @@ import type { DataBatch } from "@/lib/services/linkedin-sheets";
 interface BatchBreakdown {
     batch: DataBatch;
     totalLeads: number;
+    requestsSent: number;
     connectedLeads: number;
     notConnectedLeads: number;
     repliedLeads: number;
@@ -29,6 +30,7 @@ interface AccountBreakdown {
     name: string;
     color: string;
     totalLeads: number;
+    requestsSent: number;
     connectedLeads: number;
     notConnectedLeads: number;
     repliedLeads: number;
@@ -160,6 +162,7 @@ export default function LinkedInDashboardPage() {
                 <MetricCard
                     title="Total Leads"
                     value={stats?.totalLeads ?? "..."}
+                    subtitle={stats ? `${stats.requestsSent} requests sent out of ${stats.totalLeads}` : undefined}
                     icon={<Users className="h-5 w-5" />}
                     iconBg="bg-indigo-50 text-indigo-600"
                     onClick={() => router.push('/dashboard/linkedin/leads')}
@@ -188,6 +191,7 @@ export default function LinkedInDashboardPage() {
                 <MetricCard
                     title="Connection Rate"
                     value={`${connectionRate}%`}
+                    subtitle={stats ? `${stats.connectedLeads} of ${stats.requestsSent} requests sent` : undefined}
                     icon={<Percent className="h-5 w-5" />}
                     iconBg="bg-violet-50 text-violet-600"
                 />
@@ -220,6 +224,7 @@ export default function LinkedInDashboardPage() {
                         />
                     </div>
                     <div className="flex items-center gap-4 mt-2 text-[11px] font-semibold text-slate-500">
+                        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-blue-500" /> Requests Sent ({stats?.requestsSent ?? 0} of {stats?.totalLeads ?? 0})</span>
                         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" /> Accepted / Connected ({stats?.connectedLeads ?? 0})</span>
                         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-rose-400" /> Not Connected ({stats?.notConnectedLeads ?? 0})</span>
                     </div>
@@ -241,6 +246,7 @@ export default function LinkedInDashboardPage() {
                                 <tr className="border-b border-border">
                                     <th className="px-3 py-2.5">Batch</th>
                                     <th className="px-3 py-2.5 text-center">Total Leads</th>
+                                    <th className="px-3 py-2.5 text-center">Connection Requests Sent</th>
                                     <th className="px-3 py-2.5 text-center">Connected</th>
                                     <th className="px-3 py-2.5 text-center">Not Connected</th>
                                     <th className="px-3 py-2.5 text-center">Replied</th>
@@ -253,6 +259,7 @@ export default function LinkedInDashboardPage() {
                                     <tr key={row.batch} className={cn("transition-colors", batchColorClasses(row.batch).split(' ')[0])}>
                                         <td className="px-3 py-2.5"><LinkedInBatchBadge batch={row.batch} /></td>
                                         <td className="px-3 py-2.5 text-center font-bold text-slate-700">{row.totalLeads}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-blue-700">{row.requestsSent}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-emerald-700">{row.connectedLeads}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-rose-600">{row.notConnectedLeads}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-cyan-700">{row.repliedLeads}</td>
@@ -281,6 +288,7 @@ export default function LinkedInDashboardPage() {
                                 <tr className="border-b border-border">
                                     <th className="px-3 py-2.5">Account</th>
                                     <th className="px-3 py-2.5 text-center">Total Leads</th>
+                                    <th className="px-3 py-2.5 text-center">Connection Requests Sent</th>
                                     <th className="px-3 py-2.5 text-center">Connected</th>
                                     <th className="px-3 py-2.5 text-center">Not Connected</th>
                                     <th className="px-3 py-2.5 text-center">Replied</th>
@@ -296,6 +304,7 @@ export default function LinkedInDashboardPage() {
                                     <tr key={row.accountId} className={cn("transition-colors", accountColorClasses(row.color).split(' ')[0])}>
                                         <td className="px-3 py-2.5"><LinkedInAccountBadge accountId={row.accountId} /></td>
                                         <td className="px-3 py-2.5 text-center font-bold text-slate-700">{row.totalLeads}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-blue-700">{row.requestsSent}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-emerald-700">{row.connectedLeads}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-rose-600">{row.notConnectedLeads}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-cyan-700">{row.repliedLeads}</td>
@@ -393,9 +402,10 @@ export default function LinkedInDashboardPage() {
     );
 }
 
-function MetricCard({ title, value, icon, iconBg, onClick }: {
+function MetricCard({ title, value, icon, iconBg, onClick, subtitle }: {
     title: string; value: number | string;
     icon: React.ReactNode; iconBg: string; onClick?: () => void;
+    subtitle?: string;
 }) {
     return (
         <Card
@@ -406,6 +416,7 @@ function MetricCard({ title, value, icon, iconBg, onClick }: {
                 <div className="flex-1 min-w-0">
                     <h3 className="text-xl font-bold text-slate-900">{value}</h3>
                     <p className="text-xs font-semibold text-slate-600 mt-0.5">{title}</p>
+                    {subtitle && <p className="text-[11px] text-slate-500 mt-1 font-medium">{subtitle}</p>}
                 </div>
                 <div className={cn("p-2.5 rounded-xl shrink-0", iconBg)}>
                     {icon}

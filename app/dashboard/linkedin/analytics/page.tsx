@@ -10,7 +10,7 @@ import { TrendingUp, Users, MessageSquare, Send, RefreshCw, Gauge, Reply } from 
 import { Button } from "@/components/ui/button";
 import { SPLoader } from "@/components/sp-loader";
 import { cn } from "@/lib/utils";
-import { LINKEDIN_ACCOUNTS, getAccountMeta, buildConversationThreads, isDateInRange, type LinkedInQuota, type LinkedInLead, type LinkedInMessage, type DataBatch } from "@/lib/services/linkedin-sheets";
+import { LINKEDIN_ACCOUNTS, getAccountMeta, buildConversationThreads, isDateInRange, isLeadInDateRange, normalizeDateBoundary, type LinkedInQuota, type LinkedInLead, type LinkedInMessage, type DataBatch } from "@/lib/services/linkedin-sheets";
 import { LinkedInAccountBadge, LinkedInBatchBadge, accountColorClasses, batchColorClasses } from "@/components/dashboard/linkedin-account-badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import type { DateRange } from "react-day-picker";
@@ -62,14 +62,12 @@ export default function LinkedInAnalyticsPage() {
         if (!dateRange?.from) {
             return { quota, leads, messages };
         }
-        const from = new Date(dateRange.from);
-        from.setHours(0, 0, 0, 0);
-        const to = new Date(dateRange.to || dateRange.from);
-        to.setHours(23, 59, 59, 999);
+        const from = normalizeDateBoundary(dateRange.from, false);
+        const to = normalizeDateBoundary(dateRange.to || dateRange.from, true);
 
         return {
             quota: quota.filter(q => isDateInRange(q.date || q.lastSentAt, from, to)),
-            leads: leads.filter(l => isDateInRange(l.lastActionSentAt, from, to)),
+            leads: leads.filter(l => isLeadInDateRange(l, from, to)),
             messages: messages.filter(m => isDateInRange(m.sentAt, from, to)),
         };
     }, [quota, leads, messages, dateRange]);
@@ -79,8 +77,9 @@ export default function LinkedInAnalyticsPage() {
         const totalSent = fQuota.reduce((sum, q) => sum + q.sentCount, 0);
         const totalCap = fQuota.reduce((sum, q) => sum + q.dailyCap, 0);
         const totalRemaining = fQuota.reduce((sum, q) => sum + q.remainingQuota, 0);
-        const connected = fLeads.filter(l => l.connectionStatus.toLowerCase().includes('connect')).length;
-        const connectionRate = totalSent > 0 ? ((connected / totalSent) * 100).toFixed(1) + "%" : "0%";
+        const requestsSent = fLeads.filter(l => l.status.trim()).length;
+        const connected = fLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
+        const connectionRate = requestsSent > 0 ? ((connected / requestsSent) * 100).toFixed(1) + "%" : "0%";
 
         // Replies — leads with content in the Reply Text column from the Leads sheet.
         const repliedLeads = fLeads.filter(l => l.replyText.trim());
@@ -93,6 +92,8 @@ export default function LinkedInAnalyticsPage() {
 
         return {
             totalSent, totalCap, totalRemaining, connected, connectionRate,
+            requestsSent,
+            totalLeads: fLeads.length,
             totalMessages: fMessages.length,
             statusData: Object.entries(statusCounts).map(([name, value]) => ({ name, value })),
             replied: repliedLeads.length,
@@ -130,11 +131,13 @@ export default function LinkedInAnalyticsPage() {
         return (['old', 'new', 'new_1'] as const).map(batch => {
             const batchLeads = filteredData.leads.filter(l => l.batch === batch);
             const batchConnected = batchLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
+            const batchRequestsSent = batchLeads.filter(l => l.status.trim()).length;
             const batchReplied = batchLeads.filter(l => l.replyText.trim()).length;
             const batchThreads = threads.filter(t => t.batch === batch);
             return {
                 batch,
                 totalLeads: batchLeads.length,
+                requestsSent: batchRequestsSent,
                 connected: batchConnected,
                 notConnected: batchLeads.length - batchConnected,
                 replied: batchReplied,
@@ -151,6 +154,7 @@ export default function LinkedInAnalyticsPage() {
             const meta = getAccountMeta(acc.accountId);
             const accountLeads = filteredData.leads.filter(l => acc.accountIds.includes(l.accountId) || l.accountId === acc.accountId);
             const accountConnected = accountLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
+            const accountRequestsSent = accountLeads.filter(l => l.status.trim()).length;
             const accountReplied = accountLeads.filter(l => l.replyText.trim()).length;
             const accountThreads = threads.filter(t => acc.accountIds.includes(t.accountId) || t.accountId === acc.accountId);
             const accountQuota = filteredData.quota.filter(q => acc.accountIds.includes(q.accountId) || q.accountId === acc.accountId);
@@ -159,6 +163,7 @@ export default function LinkedInAnalyticsPage() {
                 name: meta.name,
                 color: meta.color,
                 totalLeads: accountLeads.length,
+                requestsSent: accountRequestsSent,
                 connected: accountConnected,
                 notConnected: accountLeads.length - accountConnected,
                 replied: accountReplied,
@@ -205,7 +210,7 @@ export default function LinkedInAnalyticsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <EnhancedAnalyticCard title="Outbound Pulses" value={stats.totalSent.toLocaleString()} label="Total Invites/Msgs Sent" icon={Send} color="text-blue-600" bg="bg-blue-50" />
                 <EnhancedAnalyticCard title="Quota Remaining" value={stats.totalRemaining.toLocaleString()} label={`Of ${stats.totalCap.toLocaleString()} daily cap`} icon={Gauge} color="text-amber-600" bg="bg-amber-50" />
-                <EnhancedAnalyticCard title="Connection Rate" value={stats.connectionRate} label={`${stats.connected} connected leads`} icon={TrendingUp} color="text-indigo-600" bg="bg-indigo-50" />
+                <EnhancedAnalyticCard title="Connection Rate" value={stats.connectionRate} label={`${stats.connected} of ${stats.requestsSent} requests sent`} icon={TrendingUp} color="text-indigo-600" bg="bg-indigo-50" />
                 <EnhancedAnalyticCard title="Replied" value={stats.replied.toLocaleString()} label="Leads with a reply" icon={Reply} color="text-cyan-600" bg="bg-cyan-50" />
                 <EnhancedAnalyticCard title="Total Messages" value={stats.totalMessages.toLocaleString()} label="Across all conversations" icon={MessageSquare} color="text-emerald-600" bg="bg-emerald-50" />
             </div>
@@ -307,6 +312,7 @@ export default function LinkedInAnalyticsPage() {
                                 <tr className="border-b border-border">
                                     <th className="px-3 py-2.5">Batch</th>
                                     <th className="px-3 py-2.5 text-center">Total Leads</th>
+                                    <th className="px-3 py-2.5 text-center">Connection Requests Sent</th>
                                     <th className="px-3 py-2.5 text-center">Connected</th>
                                     <th className="px-3 py-2.5 text-center">Not Connected</th>
                                     <th className="px-3 py-2.5 text-center">Replied</th>
@@ -319,6 +325,7 @@ export default function LinkedInAnalyticsPage() {
                                     <tr key={row.batch} className={cn("transition-colors", batchColorClasses(row.batch).split(' ')[0])}>
                                         <td className="px-3 py-2.5"><LinkedInBatchBadge batch={row.batch} /></td>
                                         <td className="px-3 py-2.5 text-center font-bold text-slate-700">{row.totalLeads}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-blue-700">{row.requestsSent}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-emerald-700">{row.connected}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-rose-600">{row.notConnected}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-cyan-700">{row.replied}</td>
@@ -364,6 +371,7 @@ export default function LinkedInAnalyticsPage() {
                                 <tr className="border-b border-border">
                                     <th className="px-3 py-2.5">Account</th>
                                     <th className="px-3 py-2.5 text-center">Total Leads</th>
+                                    <th className="px-3 py-2.5 text-center">Connection Requests Sent</th>
                                     <th className="px-3 py-2.5 text-center">Connected</th>
                                     <th className="px-3 py-2.5 text-center">Not Connected</th>
                                     <th className="px-3 py-2.5 text-center">Replied</th>
@@ -379,6 +387,7 @@ export default function LinkedInAnalyticsPage() {
                                     <tr key={row.accountId} className={cn("transition-colors", accountColorClasses(row.color).split(' ')[0])}>
                                         <td className="px-3 py-2.5"><LinkedInAccountBadge accountId={row.accountId} /></td>
                                         <td className="px-3 py-2.5 text-center font-bold text-slate-700">{row.totalLeads}</td>
+                                        <td className="px-3 py-2.5 text-center font-bold text-blue-700">{row.requestsSent}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-emerald-700">{row.connected}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-rose-600">{row.notConnected}</td>
                                         <td className="px-3 py-2.5 text-center font-bold text-cyan-700">{row.replied}</td>

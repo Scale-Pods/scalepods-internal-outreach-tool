@@ -15,7 +15,7 @@ import {
     Search, RefreshCw, MessageSquare, User, Send, ExternalLink,
 } from "lucide-react";
 import { SPLoader } from "@/components/sp-loader";
-import { LINKEDIN_ACCOUNTS, isDateInRange, type LinkedInConversationThread, type DataBatch } from "@/lib/services/linkedin-sheets";
+import { LINKEDIN_ACCOUNTS, isDateInRange, isLeadInDateRange, normalizeDateBoundary, type LinkedInConversationThread, type DataBatch } from "@/lib/services/linkedin-sheets";
 import { LinkedInAccountBadge, LinkedInBatchBadge } from "@/components/dashboard/linkedin-account-badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import type { DateRange } from "react-day-picker";
@@ -86,12 +86,11 @@ export default function LinkedInChatPage() {
             }
             if (batchFilter.length > 0 && !batchFilter.includes(t.batch)) return false;
             if (dateRange?.from) {
-                const from = new Date(dateRange.from);
-                from.setHours(0, 0, 0, 0);
-                const to = new Date(dateRange.to || dateRange.from);
-                to.setHours(23, 59, 59, 999);
+                const from = normalizeDateBoundary(dateRange.from, false);
+                const to = normalizeDateBoundary(dateRange.to || dateRange.from, true);
                 const matchesDate = isDateInRange(t.lastMessageAt, from, to) ||
-                    t.messages.some(m => isDateInRange(m.sentAt, from, to));
+                    t.messages.some(m => isDateInRange(m.sentAt, from, to)) ||
+                    (t.lead ? isLeadInDateRange(t.lead, from, to) : false);
                 if (!matchesDate) return false;
             }
             if (!q) return true;

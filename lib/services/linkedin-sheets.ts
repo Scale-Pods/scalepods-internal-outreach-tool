@@ -66,6 +66,53 @@ export function isAccountMatch(account: LinkedInAccount, accountId: string | nul
 }
 
 /**
+ * Extracts ISO timestamp string from a 64-bit snowflake ID (e.g. Unipile invitation_id).
+ * The timestamp is stored in the higher 42 bits: ms = Number(BigInt(snowflakeId) >> 22n).
+ */
+export function extractSnowflakeDate(snowflakeId: string | null | undefined): string | null {
+    if (!snowflakeId) return null;
+    const s = String(snowflakeId).trim();
+    if (!/^\d{16,21}$/.test(s)) return null;
+    try {
+        const ms = Number(BigInt(s) >> 22n);
+        const d = new Date(ms);
+        const yr = d.getUTCFullYear();
+        if (yr >= 2020 && yr <= 2030) return d.toISOString();
+    } catch {
+        return null;
+    }
+    return null;
+}
+
+/**
+ * Normalizes a date or date-string boundary.
+ * For pure 'YYYY-MM-DD' dates or boundary dates without a specific time,
+ * sets start dates to 00:00:00.000 and end dates to 23:59:59.999.
+ */
+export function normalizeDateBoundary(val: Date | string | null | undefined, isEnd = false): Date | null {
+    if (!val) return null;
+    let d: Date;
+    if (val instanceof Date) {
+        d = new Date(val.getTime());
+    } else {
+        const s = String(val).trim();
+        if (!s) return null;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+            const [y, m, dNum] = s.split('-').map(Number);
+            return isEnd
+                ? new Date(y, m - 1, dNum, 23, 59, 59, 999)
+                : new Date(y, m - 1, dNum, 0, 0, 0, 0);
+        }
+        d = new Date(s);
+    }
+    if (isNaN(d.getTime())) return null;
+    if (isEnd && d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0) {
+        d.setHours(23, 59, 59, 999);
+    }
+    return d;
+}
+
+/**
  * Checks if a given date string or Date falls within [from, to] (inclusive).
  * Safely parses ISO timestamp strings, date-time strings, and 'YYYY-MM-DD' dates.
  * If both from and to are undefined/null, returns true (no filter active).
@@ -95,19 +142,25 @@ export function isDateInRange(
 
     if (isNaN(time)) return false;
 
-    if (from) {
-        const start = new Date(from);
-        start.setHours(0, 0, 0, 0);
-        if (time < start.getTime()) return false;
-    }
-
-    if (to) {
-        const end = new Date(to);
-        end.setHours(23, 59, 59, 999);
-        if (time > end.getTime()) return false;
-    }
+    if (from && time < from.getTime()) return false;
+    if (to && time > to.getTime()) return false;
 
     return true;
+}
+
+/**
+ * Checks if a lead falls within [from, to] (inclusive).
+ * Matches if EITHER the outreach invitation was sent in that period (decoded from invitation_id),
+ * OR a follow-up action / message was sent in that period (lastActionSentAt).
+ * If both from and to are empty/null, returns true (no filter active).
+ */
+export function isLeadInDateRange(
+    lead: LinkedInLead,
+    from?: Date | null,
+    to?: Date | null
+): boolean {
+    if (!from && !to) return true;
+    return isDateInRange(lead.invitationSentAt, from, to) || isDateInRange(lead.lastActionSentAt, from, to);
 }
 
 export interface LinkedInLead {
@@ -125,6 +178,8 @@ export interface LinkedInLead {
     companyPhoneNumber: string;
     providerId: string;
     accountId: string;
+    invitationId: string;
+    invitationSentAt: string;
     status: string;
     connectionStatus: string;
     sequenceStep: string;
@@ -169,6 +224,7 @@ const LEADS_COLUMNS: Record<string, keyof LinkedInLead> = {
     'Company Phone Number': 'companyPhoneNumber',
     'Provider ID': 'providerId',
     'Account ID': 'accountId',
+    'invitation_id': 'invitationId',
     'Status': 'status',
     'Connection Status': 'connectionStatus',
     'Sequence Step': 'sequenceStep',
@@ -271,11 +327,15 @@ export async function getLinkedInLeads(): Promise<LinkedInLead[]> {
         fetchSheetRows(NEW_LEADS_SHEET_NAME),
         fetchSheetRows(NEW_LEADS_1_SHEET_NAME),
     ]);
-    return [
+    const leads = [
         ...rowsToObjects<LinkedInLead>(oldRows, LEADS_COLUMNS, 'old'),
         ...rowsToObjects<LinkedInLead>(newRows, LEADS_COLUMNS, 'new'),
         ...rowsToObjects<LinkedInLead>(new1Rows, LEADS_COLUMNS, 'new_1'),
     ];
+    for (const lead of leads) {
+        lead.invitationSentAt = extractSnowflakeDate(lead.invitationId) || '';
+    }
+    return leads;
 }
 
 /** Fetches "Old Conversations", "New Conversations", and "New Conversations_1" tabs and merges them, each row tagged with its batch. */

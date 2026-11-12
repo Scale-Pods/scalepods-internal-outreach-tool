@@ -12,7 +12,7 @@ import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SPLoader } from "@/components/sp-loader";
-import { LINKEDIN_ACCOUNTS, getAccountMeta, isDateInRange, type LinkedInLead, type DataBatch } from "@/lib/services/linkedin-sheets";
+import { LINKEDIN_ACCOUNTS, getAccountMeta, isDateInRange, isLeadInDateRange, normalizeDateBoundary, type LinkedInLead, type DataBatch } from "@/lib/services/linkedin-sheets";
 import { LinkedInAccountBadge, LinkedInBatchBadge } from "@/components/dashboard/linkedin-account-badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import type { DateRange } from "react-day-picker";
@@ -110,11 +110,9 @@ export default function LinkedInLeadsPage() {
             }
             if (batchFilter.length > 0 && !batchFilter.includes(lead.batch)) return false;
             if (dateRange?.from) {
-                const from = new Date(dateRange.from);
-                from.setHours(0, 0, 0, 0);
-                const to = new Date(dateRange.to || dateRange.from);
-                to.setHours(23, 59, 59, 999);
-                if (!isDateInRange(lead.lastActionSentAt, from, to)) return false;
+                const from = normalizeDateBoundary(dateRange.from, false);
+                const to = normalizeDateBoundary(dateRange.to || dateRange.from, true);
+                if (!isLeadInDateRange(lead, from, to)) return false;
             }
             return true;
         });

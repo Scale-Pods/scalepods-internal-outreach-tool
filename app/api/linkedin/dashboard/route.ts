@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import {
     getLinkedInLeads, getLinkedInConversations, getLinkedInQuota,
     buildConversationThreads, LINKEDIN_ACCOUNTS, getAccountMeta, isDateInRange,
+    isLeadInDateRange, normalizeDateBoundary,
 } from '@/lib/services/linkedin-sheets';
 
 export async function GET(req: Request) {
@@ -9,8 +10,8 @@ export async function GET(req: Request) {
         const { searchParams } = new URL(req.url);
         const fromParam = searchParams.get('from');
         const toParam = searchParams.get('to');
-        const fromDate = fromParam ? new Date(fromParam) : null;
-        const toDate = toParam ? new Date(toParam) : null;
+        const fromDate = normalizeDateBoundary(fromParam, false);
+        const toDate = normalizeDateBoundary(toParam, true);
 
         const [allLeads, allMessages, allQuota] = await Promise.all([
             getLinkedInLeads(),
@@ -19,7 +20,7 @@ export async function GET(req: Request) {
         ]);
 
         const leads = (fromDate || toDate)
-            ? allLeads.filter(l => isDateInRange(l.lastActionSentAt, fromDate, toDate))
+            ? allLeads.filter(l => isLeadInDateRange(l, fromDate, toDate))
             : allLeads;
 
         const messages = (fromDate || toDate)
@@ -56,12 +57,14 @@ export async function GET(req: Request) {
         const batchBreakdown = (['old', 'new', 'new_1'] as const).map(batch => {
             const batchLeads = leads.filter(l => l.batch === batch);
             const batchConnected = batchLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
+            const batchRequestsSent = batchLeads.filter(l => l.status.trim()).length;
             const batchReplied = batchLeads.filter(l => l.replyText.trim()).length;
             const batchThreads = threads.filter(t => t.batch === batch);
 
             return {
                 batch,
                 totalLeads: batchLeads.length,
+                requestsSent: batchRequestsSent,
                 connectedLeads: batchConnected,
                 notConnectedLeads: batchLeads.length - batchConnected,
                 repliedLeads: batchReplied,
@@ -77,6 +80,7 @@ export async function GET(req: Request) {
             const meta = getAccountMeta(acc.accountId);
             const accountLeads = leads.filter(l => acc.accountIds.includes(l.accountId) || l.accountId === acc.accountId);
             const accountConnected = accountLeads.filter(l => l.status.trim() && l.connectionStatus.trim()).length;
+            const accountRequestsSent = accountLeads.filter(l => l.status.trim()).length;
             const accountReplied = accountLeads.filter(l => l.replyText.trim()).length;
             const accountThreads = threads.filter(t => acc.accountIds.includes(t.accountId) || t.accountId === acc.accountId);
             const accountQuota = quota.filter(q => acc.accountIds.includes(q.accountId) || q.accountId === acc.accountId);
@@ -86,6 +90,7 @@ export async function GET(req: Request) {
                 name: meta.name,
                 color: meta.color,
                 totalLeads: accountLeads.length,
+                requestsSent: accountRequestsSent,
                 connectedLeads: accountConnected,
                 notConnectedLeads: accountLeads.length - accountConnected,
                 repliedLeads: accountReplied,
