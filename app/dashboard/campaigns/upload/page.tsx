@@ -26,6 +26,8 @@ const SOURCE_OPTIONS = [
 ];
 
 const ACCEPTED_EXTENSIONS = [".csv", ".xlsx", ".xls"];
+const MAX_FILE_SIZE_BYTES = 4.5 * 1024 * 1024; // 4.5 MB Vercel serverless payload limit
+const FILE_SIZE_ERROR_MESSAGE = "File size exceeds the 4.5 MB upload limit. Please split your file into smaller files and upload them separately.";
 
 interface PreviewData {
     headers: string[];
@@ -59,6 +61,15 @@ export default function UploadLeadsPage() {
         setParseError(null);
         setPreview(null);
         resetUploadStatus();
+
+        if (f.size > MAX_FILE_SIZE_BYTES) {
+            setParseError(FILE_SIZE_ERROR_MESSAGE);
+            setUploadState("error");
+            setUploadErrors([FILE_SIZE_ERROR_MESSAGE]);
+            setFile(null);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+            return;
+        }
 
         const ext = "." + (f.name.split(".").pop() || "").toLowerCase();
         if (!ACCEPTED_EXTENSIONS.includes(ext)) {
@@ -123,6 +134,13 @@ export default function UploadLeadsPage() {
 
     const handleUpload = async () => {
         if (!file || !campaignId) return;
+
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+            setUploadState("error");
+            setUploadErrors([FILE_SIZE_ERROR_MESSAGE]);
+            return;
+        }
+
         setUploadState("uploading");
         setUploadErrors([]);
 
@@ -143,11 +161,30 @@ export default function UploadLeadsPage() {
                 body: formData,
             });
 
-            const json = await res.json().catch(() => ({}));
+            if (res.status === 413) {
+                setUploadState("error");
+                setUploadErrors([FILE_SIZE_ERROR_MESSAGE]);
+                return;
+            }
+
+            const text = await res.text().catch(() => "");
+            let json: any = null;
+            try { json = text ? JSON.parse(text) : null; } catch { json = { error: text }; }
+
+            const errorStr = json?.error || text || "";
+            const isPayloadTooLarge = res.status === 413 || 
+                String(errorStr).includes("FUNCTION_PAYLOAD_TOO_LARGE") || 
+                String(errorStr).includes("Payload Too Large");
+
+            if (isPayloadTooLarge) {
+                setUploadState("error");
+                setUploadErrors([FILE_SIZE_ERROR_MESSAGE]);
+                return;
+            }
 
             if (!res.ok || json?.success === false) {
                 setUploadState("error");
-                setUploadErrors(Array.isArray(json?.errors) ? json.errors : [json?.error || "Upload failed. Please try again."]);
+                setUploadErrors(Array.isArray(json?.errors) ? json.errors : [errorStr || "Upload failed. Please try again."]);
                 return;
             }
 
@@ -156,7 +193,12 @@ export default function UploadLeadsPage() {
         } catch (err: any) {
             console.error("Upload failed:", err);
             setUploadState("error");
-            setUploadErrors([err.message || "Network error while uploading."]);
+            const msg = err?.message || "";
+            if (msg.includes("413") || msg.includes("FUNCTION_PAYLOAD_TOO_LARGE") || msg.includes("Payload Too Large")) {
+                setUploadErrors([FILE_SIZE_ERROR_MESSAGE]);
+            } else {
+                setUploadErrors([msg || "Network error while uploading."]);
+            }
         }
     };
 

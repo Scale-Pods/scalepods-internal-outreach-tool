@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
     try {
+        const contentLength = Number(request.headers.get("content-length") || 0);
+        if (contentLength > 4.5 * 1024 * 1024) {
+            return NextResponse.json({
+                error: "File size exceeds the 4.5 MB upload limit. Please split your file into smaller files and upload them separately."
+            }, { status: 413 });
+        }
+
         const formData = await request.formData();
         const webhookUrl = formData.get('webhookUrl') as string;
         

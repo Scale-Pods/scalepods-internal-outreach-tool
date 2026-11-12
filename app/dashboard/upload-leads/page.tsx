@@ -5,6 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle } from "lucide-react";
 
+const MAX_FILE_SIZE_BYTES = 4.5 * 1024 * 1024; // 4.5 MB Vercel serverless payload limit
+const FILE_SIZE_ERROR_MESSAGE = "File size exceeds the 4.5 MB upload limit. Please split your file into smaller files and upload them separately.";
+
 export default function UploadLeadsPage() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -14,6 +17,15 @@ export default function UploadLeadsPage() {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            if (file.size > MAX_FILE_SIZE_BYTES) {
+                setUploadStatus({
+                    type: 'error',
+                    message: FILE_SIZE_ERROR_MESSAGE,
+                });
+                setSelectedFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+                return;
+            }
             setSelectedFile(file);
             setUploadStatus({ type: null, message: "" });
         }
@@ -21,6 +33,14 @@ export default function UploadLeadsPage() {
 
     const handleUpload = async () => {
         if (!selectedFile) return;
+
+        if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
+            setUploadStatus({
+                type: 'error',
+                message: FILE_SIZE_ERROR_MESSAGE,
+            });
+            return;
+        }
 
         setIsUploading(true);
         setUploadStatus({ type: null, message: "" });
@@ -34,20 +54,52 @@ export default function UploadLeadsPage() {
                 method: 'POST',
                 body: formData,
             });
-            const result = await res.json();
+
+            if (res.status === 413) {
+                setUploadStatus({
+                    type: 'error',
+                    message: FILE_SIZE_ERROR_MESSAGE,
+                });
+                return;
+            }
+
+            const text = await res.text().catch(() => "");
+            let result: any = null;
+            try { result = text ? JSON.parse(text) : null; } catch { result = { error: text }; }
             
-            if (res.ok && result.ok) {
+            const errorMsg = result?.response || result?.error || text || res.statusText || "";
+            const isPayloadTooLarge = res.status === 413 || 
+                String(errorMsg).includes("FUNCTION_PAYLOAD_TOO_LARGE") || 
+                String(errorMsg).includes("Payload Too Large");
+
+            if (isPayloadTooLarge) {
+                setUploadStatus({
+                    type: 'error',
+                    message: FILE_SIZE_ERROR_MESSAGE,
+                });
+                return;
+            }
+
+            if (res.ok && result?.ok) {
                 setUploadStatus({ type: 'success', message: `Successfully sent ${selectedFile.name} to the webhook.` });
                 setSelectedFile(null);
                 if (fileInputRef.current) {
                     fileInputRef.current.value = "";
                 }
             } else {
-                setUploadStatus({ type: 'error', message: `Error uploading leads: ${result.response || result.error || res.statusText}` });
+                setUploadStatus({ type: 'error', message: `Error uploading leads: ${errorMsg}` });
             }
         } catch (error: any) {
             console.error("Upload error:", error);
-            setUploadStatus({ type: 'error', message: `An unexpected error occurred: ${error.message}` });
+            const msg = error?.message || "";
+            if (msg.includes("413") || msg.includes("FUNCTION_PAYLOAD_TOO_LARGE") || msg.includes("Payload Too Large")) {
+                setUploadStatus({
+                    type: 'error',
+                    message: FILE_SIZE_ERROR_MESSAGE,
+                });
+            } else {
+                setUploadStatus({ type: 'error', message: `An unexpected error occurred: ${msg}` });
+            }
         } finally {
             setIsUploading(false);
         }

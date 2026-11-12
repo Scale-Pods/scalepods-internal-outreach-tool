@@ -5,6 +5,13 @@ import { NextResponse } from "next/server";
 // webhook — the body is forwarded as-is since it must stay multipart, not JSON.
 export async function POST(request: Request) {
     try {
+        const contentLength = Number(request.headers.get("content-length") || 0);
+        if (contentLength > 4.5 * 1024 * 1024) {
+            return NextResponse.json({
+                error: "File size exceeds the 4.5 MB upload limit. Please split your file into smaller files and upload them separately."
+            }, { status: 413 });
+        }
+
         const webhookUrl = process.env.UPLOAD_LEADS_WEBHOOK_URL || "https://n8n.srv1010832.hstgr.cloud/webhook/scalepods-leadupload";
 
         const formData = await request.formData();
