@@ -4,8 +4,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     Search, ChevronLeft, ChevronRight, RefreshCw, Mail, MessageCircle, Mic, X,
+    Send, Loader2, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
@@ -54,6 +56,9 @@ function LeadsPageInner() {
     const [currentPage, setCurrentPage] = useState(1);
     const [campaignFilter, setCampaignFilter] = useState<string[]>([]);
     const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [sendingToEnrichment, setSendingToEnrichment] = useState(false);
+    const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({ show: false, message: '', type: 'success' });
 
     // All known campaigns for the filter dropdown — lightweight (comes from
     // the dashboard aggregate endpoint), so it doesn't need the leads list.
@@ -107,6 +112,61 @@ function LeadsPageInner() {
 
     useEffect(() => { setCurrentPage(1); }, [searchQuery, campaignFilter]);
 
+    // Clear selection only when the result set itself changes — not on page
+    // change, so selections persist across pagination.
+    useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, campaignFilter]);
+
+    useEffect(() => {
+        if (toast.show) {
+            const t = setTimeout(() => setToast(prev => ({ ...prev, show: false })), 4000);
+            return () => clearTimeout(t);
+        }
+    }, [toast.show]);
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        const pageIds = leads.map(l => l.id);
+        const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (allPageSelected) pageIds.forEach(id => next.delete(id));
+            else pageIds.forEach(id => next.add(id));
+            return next;
+        });
+    };
+
+    const handleSendToEnrichment = async () => {
+        if (selectedIds.size === 0) return;
+        setSendingToEnrichment(true);
+        try {
+            const res = await fetch('/api/campaigns/leads/enrich', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lead_ids: Array.from(selectedIds) }),
+            });
+            if (res.ok) {
+                setToast({ show: true, message: `Successfully sent ${selectedIds.size} lead(s) to enrichment!`, type: 'success' });
+                setSelectedIds(new Set());
+            } else {
+                const text = await res.text();
+                setToast({ show: true, message: `Failed to send leads: ${res.status} ${text || res.statusText}`, type: 'error' });
+            }
+        } catch (err) {
+            console.error("Failed to send leads to enrichment:", err);
+            setToast({ show: true, message: 'Failed to send leads to enrichment.', type: 'error' });
+        } finally {
+            setSendingToEnrichment(false);
+        }
+    };
+
     const totalPages = Math.ceil(totalCount / LEADS_PER_PAGE) || 1;
 
     return (
@@ -150,6 +210,18 @@ function LeadsPageInner() {
                         <X className="h-3 w-3" /> Reset
                     </Button>
                 )}
+
+                {selectedIds.size > 0 && (
+                    <Button
+                        size="sm"
+                        disabled={sendingToEnrichment}
+                        onClick={handleSendToEnrichment}
+                        className="h-8 gap-1.5 text-xs font-bold bg-cyan-600 hover:bg-cyan-700 text-white"
+                    >
+                        {sendingToEnrichment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                        Send to Enrichment ({selectedIds.size})
+                    </Button>
+                )}
             </div>
 
             <Card className="border-border overflow-hidden shadow-sm flex-1 flex flex-col min-h-0">
@@ -158,6 +230,12 @@ function LeadsPageInner() {
                         <table className="w-full text-left text-sm">
                             <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase sticky top-0 z-10">
                                 <tr className="border-b border-border">
+                                    <th className="px-3 py-2.5 w-10">
+                                        <Checkbox
+                                            checked={leads.length > 0 && leads.every(l => selectedIds.has(l.id))}
+                                            onCheckedChange={toggleSelectAll}
+                                        />
+                                    </th>
                                     <th className="px-3 py-2.5">Campaign</th>
                                     <th className="px-3 py-2.5">Full Name</th>
                                     <th className="px-3 py-2.5">Email</th>
@@ -172,7 +250,7 @@ function LeadsPageInner() {
                             </thead>
                             <tbody className="divide-y divide-border">
                                 {!loading && leads.length === 0 ? (
-                                    <tr><td colSpan={10} className="px-3 py-12 text-center text-slate-400 text-sm">No leads found.</td></tr>
+                                    <tr><td colSpan={11} className="px-3 py-12 text-center text-slate-400 text-sm">No leads found.</td></tr>
                                 ) : (
                                     leads.map((lead) => {
                                         const color = campaignColor(lead.campaignId);
@@ -182,6 +260,12 @@ function LeadsPageInner() {
                                                 className={`transition-colors cursor-pointer hover:brightness-95 ${campaignColorClasses(color).split(' ')[0]}`}
                                                 onClick={() => setSelectedLeadId(lead.id)}
                                             >
+                                                <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                                                    <Checkbox
+                                                        checked={selectedIds.has(lead.id)}
+                                                        onCheckedChange={() => toggleSelect(lead.id)}
+                                                    />
+                                                </td>
                                                 <td className="px-3 py-2">
                                                     <CampaignBadge campaignId={lead.campaignId} campaignName={lead.campaignName} />
                                                 </td>
@@ -251,6 +335,20 @@ function LeadsPageInner() {
                     {selectedLeadId && <LeadDetail leadId={selectedLeadId} />}
                 </DialogContent>
             </Dialog>
+
+            {toast.show && (
+                <div className={`fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300 px-5 py-3 rounded-xl shadow-2xl border text-sm font-bold flex items-center gap-3 ${
+                    toast.type === 'success'
+                        ? 'bg-emerald-900 border-emerald-700 text-emerald-100'
+                        : 'bg-red-900 border-red-700 text-red-100'
+                }`}>
+                    {toast.type === 'success' ? <CheckCircle2 className="h-5 w-5 shrink-0" /> : <AlertCircle className="h-5 w-5 shrink-0" />}
+                    {toast.message}
+                    <button onClick={() => setToast(prev => ({ ...prev, show: false }))} className="ml-2 hover:opacity-70">
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
