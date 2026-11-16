@@ -268,12 +268,14 @@ function renderStatusPill(status: string) {
     const raw = String(status).toUpperCase();
     let label = 'SENT';
     if (raw.includes('FAILED')) label = 'FAILED';
+    else if (raw.includes('BLOCKED')) label = 'BLOCKED';
     else if (raw.includes('READ')) label = 'READ';
     else if (raw.includes('DELIVERED')) label = 'DELIVERED';
     else if (raw.includes('REPLIED')) label = 'REPLIED';
 
     let cls = 'bg-white/20 text-emerald-50';
     if (label === 'FAILED') cls = 'bg-red-400/40 text-red-100';
+    else if (label === 'BLOCKED') cls = 'bg-amber-400/40 text-amber-100';
     else if (label === 'READ') cls = 'bg-blue-400/40 text-blue-100';
     else if (label === 'DELIVERED') cls = 'bg-emerald-500/30 text-emerald-100';
     else if (label === 'REPLIED') cls = 'bg-cyan-400/40 text-cyan-100';

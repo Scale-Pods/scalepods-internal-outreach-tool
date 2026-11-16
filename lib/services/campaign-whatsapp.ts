@@ -242,6 +242,7 @@ export function getLeadClassification(lead: {
     lead_status?: string | null;
     whatsapp_status?: string | null;
     whatsapp_conversation?: any[] | null;
+    whatsapp_outreach_message?: any[] | null;
 }): string {
     const conv = parseJsonbArray<CampaignWaMessage>(lead.whatsapp_conversation);
     for (let i = conv.length - 1; i >= 0; i--) {
@@ -251,7 +252,15 @@ export function getLeadClassification(lead: {
     if (lead.lead_status && lead.lead_status !== 'new' && lead.lead_status !== 'contacted') {
         return lead.lead_status;
     }
-    return lead.whatsapp_status || 'DELIVERED';
+    if (lead.whatsapp_status) {
+        return lead.whatsapp_status;
+    }
+    const outreach = parseJsonbArray<CampaignWaMessage>(lead.whatsapp_outreach_message);
+    if (outreach.length > 0) {
+        const last = outreach[outreach.length - 1];
+        if (last?.status) return String(last.status);
+    }
+    return 'NOT_CONTACTED';
 }
 
 /** Combines whatsapp_outreach_message (bot) and whatsapp_conversation (customer replies only) into chronological timeline */
@@ -354,10 +363,21 @@ export function normalizeCampaignWaLead(row: any): CampaignWaLead {
     const repliesCount = customerReplies.length;
     const hasReplied = repliesCount > 0 || String(row.whatsapp_status || '').toUpperCase() === 'REPLIED';
 
+    // Derive whatsappStatus: use row.whatsapp_status if present, otherwise derive from latest outreach attempt
+    let derivedStatus: string | null = row.whatsapp_status ? String(row.whatsapp_status).trim() : null;
+    if (!derivedStatus && rawOutreach.length > 0) {
+        const latestAttempt = rawOutreach[rawOutreach.length - 1];
+        if (latestAttempt?.status) {
+            derivedStatus = String(latestAttempt.status).trim();
+        } else if (latestAttempt?.error) {
+            derivedStatus = 'FAILED';
+        }
+    }
+
     // 3. Lead Contacted Status (at least 1 outbound message dispatched or active non-failed status)
     const isContacted = isGenuinelyContacted({
         messagesSentCount,
-        whatsappStatus: row.whatsapp_status,
+        whatsappStatus: derivedStatus,
     });
 
     // 4. Chronological timeline
@@ -387,7 +407,7 @@ export function normalizeCampaignWaLead(row: any): CampaignWaLead {
         campaignName,
         campaignColor: color,
         leadStatus: row.lead_status || null,
-        whatsappStatus: row.whatsapp_status || null,
+        whatsappStatus: derivedStatus,
         lastContactedAt: lastContacted,
         createdAt: row.created_at || null,
         updatedAt: row.updated_at || null,
@@ -399,7 +419,11 @@ export function normalizeCampaignWaLead(row: any): CampaignWaLead {
         isContacted,
         isPf: isPfLead(row),
         isPositive: isPositiveLead(row),
-        leadClassification: getLeadClassification(row),
+        leadClassification: getLeadClassification({
+            ...row,
+            whatsapp_status: derivedStatus,
+            whatsapp_outreach_message: rawOutreach,
+        }),
         timeline,
     };
 }
@@ -415,14 +439,21 @@ export interface CampaignWaFilterParams {
     pageSize?: number;
 }
 
-/** Safe timestamp parser that handles ISO strings and common date formats */
-export function parseSafeTimestamp(val: any): number {
+/** Safe timestamp parser that handles ISO strings, dates without timezone, and common date formats */
+export function parseSafeTimestamp(val: any, isEndOfDay: boolean = false): number {
     if (!val) return 0;
-    const d = new Date(val);
+    if (typeof val === 'number') return val;
+    let str = String(val).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+        str = str + (isEndOfDay ? 'T23:59:59.999Z' : 'T00:00:00.000Z');
+    } else if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(str)) {
+        str = str.replace(' ', 'T') + 'Z';
+    }
+    const d = new Date(str);
     const t = d.getTime();
     if (!isNaN(t)) return t;
-    const str = String(val).trim().replace(' ', 'T');
-    const d2 = new Date(str);
+    const str2 = str.replace(' ', 'T');
+    const d2 = new Date(str2);
     const t2 = d2.getTime();
     return isNaN(t2) ? 0 : t2;
 }
@@ -469,8 +500,8 @@ export async function getCampaignWaOverview(filters: CampaignWaFilterParams = {}
         if (!ts) return false;
         const time = parseSafeTimestamp(ts);
         if (!time) return false;
-        if (filters.from && time < parseSafeTimestamp(filters.from)) return false;
-        if (filters.to && time > parseSafeTimestamp(filters.to)) return false;
+        if (filters.from && time < parseSafeTimestamp(filters.from, false)) return false;
+        if (filters.to && time > parseSafeTimestamp(filters.to, true)) return false;
         return true;
     });
 
@@ -619,8 +650,8 @@ export async function getCampaignWaLeads(filters: CampaignWaFilterParams = {}) {
             if (!ts) return false;
             const time = parseSafeTimestamp(ts);
             if (!time) return false;
-            if (filters.from && time < parseSafeTimestamp(filters.from)) return false;
-            if (filters.to && time > parseSafeTimestamp(filters.to)) return false;
+            if (filters.from && time < parseSafeTimestamp(filters.from, false)) return false;
+            if (filters.to && time > parseSafeTimestamp(filters.to, true)) return false;
             return true;
         });
     }

@@ -115,8 +115,10 @@ export default function CampaignWhatsAppLeadsPage() {
                 from: new Date(range.range.from),
                 to: new Date(range.range.to || range.range.from),
             });
-            setCurrentPage(1);
+        } else {
+            setDateRange({ from: undefined, to: undefined });
         }
+        setCurrentPage(1);
     };
 
     const toggleCampaign = (id: string) => {
@@ -131,6 +133,10 @@ export default function CampaignWhatsAppLeadsPage() {
         setSelectedCampaigns([]);
         setReplyStatus("all");
         setLeadTagFilter("all");
+        setDateRange({
+            from: subDays(new Date(), 30),
+            to: new Date(),
+        });
         setCurrentPage(1);
     };
 
@@ -200,7 +206,7 @@ export default function CampaignWhatsAppLeadsPage() {
                     </DropdownMenu>
 
                     {/* Date Picker */}
-                    <DateRangePicker onUpdate={handleDateUpdate} />
+                    <DateRangePicker value={dateRange} onUpdate={handleDateUpdate} />
 
                     {hasActiveFilters && (
                         <Button
@@ -440,12 +446,24 @@ export default function CampaignWhatsAppLeadsPage() {
                                                 className={`text-[9px] font-bold uppercase ${
                                                     lead.hasReplied
                                                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                        : lead.whatsappStatus === 'FAILED'
+                                                        : (lead.whatsappStatus || '').toUpperCase() === 'FAILED'
                                                         ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                                        : (lead.whatsappStatus || '').toUpperCase() === 'BLOCKED'
+                                                        ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                                        : (lead.whatsappStatus || '').toUpperCase() === 'DELIVERED' || (lead.whatsappStatus || '').toUpperCase() === 'READ'
+                                                        ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
+                                                        : (lead.whatsappStatus || '').toUpperCase() === 'SENT'
+                                                        ? 'bg-blue-50 text-blue-700 border-blue-200'
                                                         : 'bg-slate-50 text-slate-600 border-slate-200'
                                                 }`}
                                             >
-                                                {lead.hasReplied ? 'Replied' : lead.whatsappStatus || 'Sent'}
+                                                {lead.hasReplied
+                                                    ? 'Replied'
+                                                    : lead.whatsappStatus
+                                                    ? lead.whatsappStatus
+                                                    : lead.messagesSentCount > 0
+                                                    ? 'Sent'
+                                                    : 'Not Sent'}
                                             </Badge>
                                         </td>
 
