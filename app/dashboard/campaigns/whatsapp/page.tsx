@@ -1,218 +1,574 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, ChevronLeft, ChevronRight, RefreshCw, MessageCircle, X } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
 import {
-    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+    Users,
+    MessageCircle,
+    Send,
+    Reply,
+    Percent,
+    Sparkles,
+    Flame,
+    RefreshCw,
+    Filter,
+    X,
+    ChevronRight,
+    Building2,
+    Calendar,
+    AlertCircle,
+} from "lucide-react";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useRouter } from "next/navigation";
 import { SPLoader } from "@/components/sp-loader";
-import { CampaignBadge, campaignColorClasses } from "@/components/dashboard/campaign-badge";
-import { campaignColor, type OutreachLeadListItem, type ChannelStats } from "@/lib/services/campaigns";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
+import { CampaignBadge } from "@/components/dashboard/campaign-badge";
+import { CampaignWhatsAppChatDetail } from "@/components/dashboard/campaign-whatsapp-chat-detail";
+import type { CampaignWaOverviewStats, CampaignWaLead } from "@/lib/services/campaign-whatsapp";
+import { startOfDay, endOfDay, subDays } from "date-fns";
 
-function statusBadgeClass(status: string | null | undefined) {
-    const s = (status || '').toLowerCase();
-    if (s.includes('unsubscribed') || s.includes('opt')) return 'bg-rose-50 text-rose-700 border-rose-200';
-    if (s.includes('replied')) return 'bg-cyan-50 text-cyan-700 border-cyan-200';
-    if (s.includes('sent') || s.includes('delivered')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    return 'bg-slate-100 text-slate-500 border-slate-200';
-}
+function CampaignWhatsAppOverviewContent() {
+    const router = useRouter();
 
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-    const [debounced, setDebounced] = useState(value);
-    useEffect(() => {
-        const t = setTimeout(() => setDebounced(value), delayMs);
-        return () => clearTimeout(t);
-    }, [value, delayMs]);
-    return debounced;
-}
-
-const LEADS_PER_PAGE = 15;
-
-export default function CampaignWhatsAppPage() {
-    const [leads, setLeads] = useState<OutreachLeadListItem[]>([]);
-    const [totalCount, setTotalCount] = useState(0);
-    const [stats, setStats] = useState<ChannelStats | null>(null);
+    const [stats, setStats] = useState<CampaignWaOverviewStats | null>(null);
+    const [recentLeads, setRecentLeads] = useState<CampaignWaLead[]>([]);
     const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string }[]>([]);
+    const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchInput, setSearchInput] = useState("");
-    const searchQuery = useDebouncedValue(searchInput, 350);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [campaignFilter, setCampaignFilter] = useState<string[]>([]);
-    const [scope, setScope] = useState<'enrolled' | 'active'>('enrolled');
+    const [fetchError, setFetchError] = useState<string | null>(null);
+    const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+    const [selectedLead, setSelectedLead] = useState<CampaignWaLead | null>(null);
+    const [leadLoading, setLeadLoading] = useState(false);
 
-    const fetchLeads = useCallback(async () => {
+    const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+        from: subDays(new Date(), 30),
+        to: new Date(),
+    });
+
+    // Fetch Overview data
+    const fetchData = useCallback(async () => {
         setLoading(true);
+        setFetchError(null);
         try {
             const params = new URLSearchParams();
-            params.set('page', String(currentPage));
-            params.set('pageSize', String(LEADS_PER_PAGE));
-            params.set('channel', 'whatsapp');
-            if (scope === 'active') params.set('activeOnly', 'true');
-            if (searchQuery) params.set('search', searchQuery);
-            campaignFilter.forEach(id => params.append('campaignId', id));
+            if (dateRange.from) {
+                params.set('from', startOfDay(dateRange.from).toISOString());
+                params.set('to', endOfDay(dateRange.to || dateRange.from).toISOString());
+            }
+            selectedCampaigns.forEach(c => params.append('campaignId', c));
 
-            const res = await fetch(`/api/campaigns/leads?${params.toString()}`);
-            if (!res.ok) throw new Error("Failed to fetch");
+            // Fetch Overview stats
+            const res = await fetch(`/api/campaigns/whatsapp/overview?${params.toString()}`);
+            if (!res.ok) {
+                const errorJson = await res.json().catch(() => ({}));
+                const errMsg = errorJson.error || errorJson.details || `Failed to fetch overview (HTTP ${res.status})`;
+                throw new Error(errMsg);
+            }
             const json = await res.json();
-            setLeads(json.data || []);
-            setTotalCount(json.totalCount || 0);
-        } catch (err) {
-            console.error("Failed to fetch campaign WhatsApp data:", err);
+            setStats(json.stats || null);
+
+            // Fetch recent 5 leads for activity snapshot
+            const leadsParams = new URLSearchParams(params.toString());
+            leadsParams.set('page', '1');
+            leadsParams.set('pageSize', '5');
+            const leadsRes = await fetch(`/api/campaigns/whatsapp/leads?${leadsParams.toString()}`);
+            if (leadsRes.ok) {
+                const leadsJson = await leadsRes.json();
+                setRecentLeads(leadsJson.data || []);
+            }
+        } catch (err: any) {
+            console.error("Failed to fetch WhatsApp overview:", err);
+            setFetchError(err?.message || "Failed to fetch overview");
         } finally {
             setLoading(false);
         }
-    }, [currentPage, searchQuery, campaignFilter, scope]);
-
-    useEffect(() => { fetchLeads(); }, [fetchLeads]);
+    }, [dateRange, selectedCampaigns]);
 
     useEffect(() => {
-        fetch('/api/campaigns/channel-stats?channel=whatsapp').then(r => r.json()).then(json => {
-            setStats(json.stats || null);
-            setCampaignOptions(json.campaignOptions || []);
-        }).catch(err => console.error("Failed to fetch WhatsApp channel stats:", err));
+        fetchData();
+    }, [fetchData]);
+
+    // Fetch campaign options once
+    useEffect(() => {
+        fetch('/api/campaigns/channel-stats?channel=whatsapp')
+            .then(r => r.json())
+            .then(json => {
+                const opts = (json.campaignOptions || []).map((c: any) => ({
+                    id: String(c.campaign_id),
+                    name: c.campaign_name,
+                }));
+                setCampaignOptions(opts);
+            })
+            .catch(err => console.error("Failed to fetch campaign options:", err));
     }, []);
 
-    const toggleCampaignFilter = (value: string) => {
-        setCampaignFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+    // Fetch single lead when modal opened
+    useEffect(() => {
+        if (!selectedLeadId) {
+            setSelectedLead(null);
+            return;
+        }
+        setLeadLoading(true);
+        fetch(`/api/campaigns/whatsapp/leads/${selectedLeadId}`)
+            .then(r => r.json())
+            .then(json => {
+                setSelectedLead(json.lead || null);
+            })
+            .catch(err => console.error("Failed to load lead detail:", err))
+            .finally(() => setLeadLoading(false));
+    }, [selectedLeadId]);
+
+    const handleDateUpdate = (range: any) => {
+        if (range?.range?.from) {
+            setDateRange({
+                from: new Date(range.range.from),
+                to: new Date(range.range.to || range.range.from),
+            });
+        }
     };
 
-    const hasActiveFilters = campaignFilter.length > 0 || !!searchInput || scope === 'active';
-    const resetFilters = () => { setCampaignFilter([]); setSearchInput(""); setScope('enrolled'); };
+    const toggleCampaign = (id: string) => {
+        setSelectedCampaigns(prev =>
+            prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+        );
+    };
 
-    useEffect(() => { setCurrentPage(1); }, [searchQuery, campaignFilter, scope]);
+    const resetFilters = () => {
+        setSelectedCampaigns([]);
+        setDateRange({ from: subDays(new Date(), 30), to: new Date() });
+    };
 
-    const totalPages = Math.ceil(totalCount / LEADS_PER_PAGE) || 1;
+    const hasActiveFilters = selectedCampaigns.length > 0;
 
     return (
-        <div className="h-full flex flex-col overflow-hidden p-4 space-y-3 relative min-h-[400px]">
+        <div className="space-y-6 pb-12 pt-4 px-6 relative min-h-[500px]">
             {loading && <SPLoader />}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0">
+
+            {/* Top Header */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
                 <div>
-                    <h1 className="text-lg font-bold text-slate-900 tracking-tight">Campaign WhatsApp</h1>
-                    <p className="text-slate-500 text-xs">WhatsApp channel activity across all campaigns, from &quot;outreach_leads&quot;</p>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <MessageCircle className="h-6 w-6 text-emerald-600" />
+                        Campaign WhatsApp Overview
+                    </h1>
+                    <p className="text-sm text-slate-500 mt-1">
+                        Real-time WhatsApp outreach performance across all campaigns from outreach_leads
+                    </p>
                 </div>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={fetchLeads}>
-                    <RefreshCw className="h-3 w-3" /> Refresh
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                    {/* Campaign Dropdown Filter */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs font-semibold">
+                                <Filter className="h-3.5 w-3.5 text-slate-500" />
+                                {selectedCampaigns.length === 0
+                                    ? "All Campaigns"
+                                    : `${selectedCampaigns.length} Campaign${selectedCampaigns.length > 1 ? 's' : ''}`}
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56 bg-white p-1">
+                            <DropdownMenuItem
+                                className="text-xs font-bold cursor-pointer"
+                                onClick={() => setSelectedCampaigns([])}
+                            >
+                                All Campaigns
+                            </DropdownMenuItem>
+                            {campaignOptions.map(c => (
+                                <DropdownMenuItem
+                                    key={c.id}
+                                    className="text-xs cursor-pointer flex items-center justify-between"
+                                    onClick={() => toggleCampaign(c.id)}
+                                >
+                                    <span className="truncate">{c.name}</span>
+                                    {selectedCampaigns.includes(c.id) && (
+                                        <Badge className="h-4 px-1 text-[9px] bg-cyan-600">Active</Badge>
+                                    )}
+                                </DropdownMenuItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* Date Range Picker */}
+                    <DateRangePicker onUpdate={handleDateUpdate} />
+
+                    {hasActiveFilters && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={resetFilters}
+                            className="h-9 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 gap-1 font-bold"
+                        >
+                            <X className="h-3.5 w-3.5" /> Reset
+                        </Button>
+                    )}
+
+                    <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs" onClick={fetchData}>
+                        <RefreshCw className="h-3.5 w-3.5" /> Refresh
+                    </Button>
+                </div>
+            </div>
+
+            {/* Quick Sub-navigation banner */}
+            <div className="flex items-center gap-2 pb-1 overflow-x-auto">
+                <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-8 text-xs font-bold bg-cyan-600 text-white hover:bg-cyan-700 shadow-sm"
+                    onClick={() => router.push('/dashboard/campaigns/whatsapp')}
+                >
+                    Overview
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs font-semibold text-slate-600 hover:text-cyan-600 hover:bg-cyan-50"
+                    onClick={() => router.push('/dashboard/campaigns/whatsapp/chat')}
+                >
+                    Chat
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs font-semibold text-slate-600 hover:text-cyan-600 hover:bg-cyan-50"
+                    onClick={() => router.push('/dashboard/campaigns/whatsapp/leads')}
+                >
+                    Leads
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs font-semibold text-slate-600 hover:text-cyan-600 hover:bg-cyan-50"
+                    onClick={() => router.push('/dashboard/campaigns/whatsapp/analytics')}
+                >
+                    Analytics
                 </Button>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 shrink-0">
-                <StatBox label="Enrolled" value={stats?.enrolled ?? 0} color="indigo" />
-                <StatBox label="Active" value={stats?.active ?? 0} color="emerald" />
-                <StatBox label="Not Started" value={stats?.notStarted ?? 0} color="slate" />
-            </div>
-
-            {stats && stats.active === 0 && (
-                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 shrink-0">
-                    No WhatsApp activity recorded yet — leads are enrolled (<span className="font-bold">{stats.enrolled}</span>) but <code className="font-mono">whatsapp_status</code> hasn&apos;t started populating in the sheet/table.
+            {/* Error banner if fetch failed */}
+            {fetchError && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl text-xs flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                        <span className="font-medium">{fetchError}</span>
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={fetchData}
+                        className="h-7 text-xs border-rose-300 text-rose-700 hover:bg-rose-100 gap-1 font-semibold"
+                    >
+                        <RefreshCw className="h-3 w-3" /> Retry
+                    </Button>
                 </div>
             )}
 
-            <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                    <Input className="pl-8 h-8 text-sm bg-white border-border" placeholder="Search by name, mobile, company..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
-                </div>
+            {/* 5 Core Required Overview Metric Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                {/* 1. Unique Leads Contacted */}
+                <MetricCard
+                    title="Unique Leads Contacted"
+                    value={stats?.uniqueLeadsContacted ?? 0}
+                    subtitle="WhatsApp outreach sent"
+                    icon={Users}
+                    iconColor="text-blue-600"
+                    iconBg="bg-blue-50"
+                />
 
-                <div className="flex items-center bg-slate-100 rounded-lg p-1 gap-0.5">
-                    <button onClick={() => setScope('enrolled')} className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${scope === 'enrolled' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>All Enrolled</button>
-                    <button onClick={() => setScope('active')} className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${scope === 'active' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Active Only</button>
-                </div>
+                {/* 2. Total Replies */}
+                <MetricCard
+                    title="Total Replies"
+                    value={stats?.totalReplies ?? 0}
+                    subtitle={`Reply rate: ${stats?.replyRate ?? 0}%`}
+                    icon={Reply}
+                    iconColor="text-emerald-600"
+                    iconBg="bg-emerald-50"
+                />
 
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className={`h-8 gap-1.5 text-xs font-bold ${campaignFilter.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-700' : ''}`}>
-                            {campaignFilter.length > 0 ? `Campaign (${campaignFilter.length})` : 'Campaign'}
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-64">
-                        {campaignOptions.map(opt => (
-                            <DropdownMenuItem key={opt.id} onClick={() => toggleCampaignFilter(opt.id)}>
-                                {opt.name} {campaignFilter.includes(opt.id) && "✓"}
-                            </DropdownMenuItem>
-                        ))}
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                {/* 3. Total Messages Sent */}
+                <MetricCard
+                    title="Total Messages Sent"
+                    value={stats?.totalMessagesSent ?? 0}
+                    subtitle="Bot sequence outreach"
+                    icon={Send}
+                    iconColor="text-cyan-600"
+                    iconBg="bg-cyan-50"
+                />
 
-                {hasActiveFilters && (
-                    <Button variant="ghost" size="sm" onClick={resetFilters} className="h-8 gap-1 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2">
-                        <X className="h-3 w-3" /> Reset
-                    </Button>
-                )}
+                {/* 4. PF Leads */}
+                <MetricCard
+                    title="PF Leads"
+                    value={stats?.pfLeads ?? 0}
+                    subtitle="Product Fit / Qualified"
+                    icon={Flame}
+                    iconColor="text-purple-600"
+                    iconBg="bg-purple-50"
+                />
+
+                {/* 5. Positive Leads */}
+                <MetricCard
+                    title="Positive Leads"
+                    value={stats?.positiveLeads ?? 0}
+                    subtitle="Meetings & high intent"
+                    icon={Sparkles}
+                    iconColor="text-amber-600"
+                    iconBg="bg-amber-50"
+                />
             </div>
 
-            <Card className="border-border overflow-hidden shadow-sm flex-1 flex flex-col min-h-0">
-                <CardContent className="p-0 flex-1 flex flex-col min-h-0">
-                    <div className="overflow-auto flex-1 min-h-0">
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase sticky top-0 z-10">
-                                <tr className="border-b border-border">
-                                    <th className="px-3 py-2.5">Campaign</th>
-                                    <th className="px-3 py-2.5">Full Name</th>
-                                    <th className="px-3 py-2.5">Mobile</th>
-                                    <th className="px-3 py-2.5 text-center">WhatsApp Status</th>
-                                    <th className="px-3 py-2.5">Last Contacted</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border">
-                                {!loading && leads.length === 0 ? (
-                                    <tr><td colSpan={5} className="px-3 py-12 text-center text-slate-400 text-sm">No leads found.</td></tr>
-                                ) : (
-                                    leads.map((lead) => {
-                                        const color = campaignColor(lead.campaignId);
-                                        return (
-                                            <tr key={lead.id} className={`transition-colors ${campaignColorClasses(color).split(' ')[0]}`}>
-                                                <td className="px-3 py-2"><CampaignBadge campaignId={lead.campaignId} campaignName={lead.campaignName} /></td>
-                                                <td className="px-3 py-2 font-semibold text-slate-900 text-xs whitespace-nowrap">{lead.fullName}</td>
-                                                <td className="px-3 py-2 text-slate-500 text-[11px] whitespace-nowrap">{lead.mobileNumber || "—"}</td>
-                                                <td className="px-3 py-2 text-center">
-                                                    {lead.whatsappStatus ? (
-                                                        <Badge variant="outline" className={`text-[9px] uppercase font-bold px-1.5 py-0.5 ${statusBadgeClass(lead.whatsappStatus)}`}>{lead.whatsappStatus}</Badge>
-                                                    ) : <span className="text-slate-300 text-[10px]">Not started</span>}
-                                                </td>
-                                                <td className="px-3 py-2 text-slate-400 text-[11px]">{lead.lastContactedAt ? new Date(lead.lastContactedAt).toLocaleString() : "—"}</td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
-                            </tbody>
-                        </table>
+            {/* Campaign Breakdown & Sequence Funnel */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Campaign Breakdown Table (2 Cols) */}
+                <Card className="lg:col-span-2 border-border shadow-sm bg-white overflow-hidden">
+                    <div className="p-4 border-b border-border flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-cyan-600" />
+                            <h2 className="text-sm font-bold text-slate-900">Campaign Performance Breakdown</h2>
+                        </div>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs text-cyan-600 hover:text-cyan-700 h-7"
+                            onClick={() => router.push('/dashboard/campaigns/whatsapp/analytics')}
+                        >
+                            View Analytics <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                        </Button>
                     </div>
-                    <div className="px-3 py-2 border-t border-border bg-slate-50/50 flex items-center justify-between shrink-0">
-                        <p className="text-[11px] text-slate-500"><span className="font-bold text-slate-900">{totalCount.toLocaleString()}</span> leads</p>
-                        {totalPages > 1 && (
-                            <div className="flex items-center gap-1">
-                                <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="h-7 w-7 p-0"><ChevronLeft className="h-3.5 w-3.5" /></Button>
-                                <span className="text-[11px] font-bold text-slate-600 px-2">{currentPage}/{totalPages}</span>
-                                <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="h-7 w-7 p-0"><ChevronRight className="h-3.5 w-3.5" /></Button>
+                    <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                                <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] border-b border-border">
+                                    <tr>
+                                        <th className="px-4 py-3">Campaign</th>
+                                        <th className="px-4 py-3 text-right">Leads Contacted</th>
+                                        <th className="px-4 py-3 text-right">Messages Sent</th>
+                                        <th className="px-4 py-3 text-right">Replies</th>
+                                        <th className="px-4 py-3 text-right">PF Leads</th>
+                                        <th className="px-4 py-3 text-right">Positive</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {!stats?.campaignBreakdown?.length ? (
+                                        <tr>
+                                            <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                                                No campaign WhatsApp data for selected range.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        stats.campaignBreakdown.map(c => (
+                                            <tr key={c.campaignId} className="hover:bg-slate-50/60 transition-colors">
+                                                <td className="px-4 py-3">
+                                                    <CampaignBadge
+                                                        campaignId={c.campaignId === 'unknown' ? null : Number(c.campaignId)}
+                                                        campaignName={c.campaignName}
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-medium text-slate-700">
+                                                    {c.leadsContacted}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-medium text-slate-700">
+                                                    {c.messagesSent}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-bold text-emerald-600">
+                                                    {c.totalReplies}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-medium text-purple-600">
+                                                    {c.pfLeads}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-bold text-amber-600">
+                                                    {c.positiveLeads}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Sequence Funnel (1 Col) */}
+                <Card className="border-border shadow-sm bg-white">
+                    <div className="p-4 border-b border-border flex items-center justify-between">
+                        <h2 className="text-sm font-bold text-slate-900">Outreach Step Funnel</h2>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">Bot Sequence</span>
+                    </div>
+                    <CardContent className="p-4 space-y-3">
+                        {stats?.stepBreakdown?.map(item => {
+                            const total = stats.totalMessagesSent || 1;
+                            const percent = Math.round((item.sentCount / total) * 100);
+                            return (
+                                <div key={item.step} className="space-y-1">
+                                    <div className="flex justify-between text-xs">
+                                        <span className="font-semibold text-slate-700">Step {item.step} Message</span>
+                                        <span className="font-bold text-slate-900">
+                                            {item.sentCount}{" "}
+                                            <span className="text-slate-400 font-normal">({percent}%)</span>
+                                        </span>
+                                    </div>
+                                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-cyan-600 rounded-full transition-all duration-500"
+                                            style={{ width: `${Math.max(percent, item.sentCount > 0 ? 5 : 0)}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Recent WhatsApp Leads Activity */}
+            <Card className="border-border shadow-sm bg-white">
+                <div className="p-4 border-b border-border flex items-center justify-between">
+                    <div>
+                        <h2 className="text-sm font-bold text-slate-900">Recent WhatsApp Activity</h2>
+                        <p className="text-xs text-slate-400">Latest contacted leads and customer replies</p>
+                    </div>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-cyan-600 hover:text-cyan-700 h-7"
+                        onClick={() => router.push('/dashboard/campaigns/whatsapp/leads')}
+                    >
+                        View All Leads <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                    </Button>
+                </div>
+                <CardContent className="p-0">
+                    <div className="divide-y divide-border">
+                        {recentLeads.length === 0 ? (
+                            <div className="p-8 text-center text-slate-400 text-xs">
+                                No recent WhatsApp activity found.
                             </div>
+                        ) : (
+                            recentLeads.map(lead => (
+                                <div
+                                    key={lead.id}
+                                    onClick={() => setSelectedLeadId(lead.id)}
+                                    className="p-4 hover:bg-slate-50/70 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer"
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs shrink-0">
+                                            <MessageCircle className="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-sm text-slate-900">{lead.fullName}</span>
+                                                <CampaignBadge
+                                                    campaignId={lead.campaignId}
+                                                    campaignName={lead.campaignName}
+                                                />
+                                                {lead.isPositive && (
+                                                    <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] font-bold uppercase">
+                                                        Positive
+                                                    </Badge>
+                                                )}
+                                                {lead.isPf && (
+                                                    <Badge className="bg-purple-100 text-purple-800 border-none text-[9px] font-bold uppercase">
+                                                        PF
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                                                <span>{lead.mobileNumber || 'No phone'}</span>
+                                                {lead.companyName && <span>• {lead.companyName}</span>}
+                                                <span>• {lead.messagesSentCount} sent</span>
+                                                <span>• {lead.repliesCount} replies</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-3 self-end sm:self-center">
+                                        <Badge
+                                            variant="outline"
+                                            className={`text-[10px] font-bold uppercase ${
+                                                lead.hasReplied
+                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                    : 'bg-slate-50 text-slate-600 border-slate-200'
+                                            }`}
+                                        >
+                                            {lead.hasReplied ? 'Replied' : lead.whatsappStatus || 'Sent'}
+                                        </Badge>
+                                        <Button variant="ghost" size="sm" className="h-8 text-xs font-bold text-cyan-600">
+                                            View Chat <ChevronRight className="h-3 w-3 ml-0.5" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))
                         )}
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Chat Detail Modal */}
+            <Dialog open={!!selectedLeadId} onOpenChange={open => !open && setSelectedLeadId(null)}>
+                <DialogContent className="max-w-4xl p-6 h-[85vh] flex flex-col bg-white">
+                    <VisuallyHidden.Root>
+                        <DialogTitle>
+                            {selectedLead ? `WhatsApp Chat with ${selectedLead.fullName}` : "WhatsApp Chat Details"}
+                        </DialogTitle>
+                        <DialogDescription>
+                            Conversation history and lead details
+                        </DialogDescription>
+                    </VisuallyHidden.Root>
+                    <CampaignWhatsAppChatDetail
+                        lead={selectedLead}
+                        loading={leadLoading}
+                        onClose={() => setSelectedLeadId(null)}
+                    />
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
 
-function StatBox({ label, value, color }: { label: string; value: number; color: string }) {
-    const colorMap: Record<string, string> = {
-        indigo: 'bg-indigo-50 text-indigo-600',
-        emerald: 'bg-emerald-50 text-emerald-600',
-        slate: 'bg-slate-100 text-slate-500',
-    };
+function MetricCard({
+    title,
+    value,
+    subtitle,
+    icon: Icon,
+    iconColor,
+    iconBg,
+}: {
+    title: string;
+    value: number;
+    subtitle: string;
+    icon: any;
+    iconColor: string;
+    iconBg: string;
+}) {
     return (
-        <Card className="border-border bg-white shadow-sm">
-            <CardContent className="p-3 flex items-center justify-between">
-                <div>
-                    <p className="text-lg font-bold text-slate-900">{value.toLocaleString()}</p>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">{label}</p>
+        <Card className="border-border shadow-sm bg-white overflow-hidden hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</span>
+                    <div className={`p-2 rounded-lg ${iconBg} ${iconColor}`}>
+                        <Icon className="h-4 w-4" />
+                    </div>
                 </div>
-                <div className={`p-2 rounded-lg ${colorMap[color]}`}><MessageCircle className="h-4 w-4" /></div>
+                <div className="mt-2">
+                    <div className="text-2xl font-bold text-slate-900 tracking-tight">{value}</div>
+                    <div className="text-[11px] text-slate-400 font-medium mt-0.5">{subtitle}</div>
+                </div>
             </CardContent>
         </Card>
+    );
+}
+
+export default function CampaignWhatsAppOverviewPage() {
+    return (
+        <Suspense fallback={<SPLoader />}>
+            <CampaignWhatsAppOverviewContent />
+        </Suspense>
     );
 }

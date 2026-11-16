@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity, Building2, Phone, Menu, X, Linkedin, Gauge, Megaphone, UploadCloud, UserPlus } from "lucide-react";
+import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, ChevronRight, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity, Building2, Phone, Menu, X, Linkedin, Gauge, Megaphone, UploadCloud, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import {
@@ -316,7 +316,17 @@ function DashboardContent({
                 { title: "Assign Person", href: "/dashboard/campaigns/assign-person", icon: UserPlus },
                 { title: "Leads", href: "/dashboard/campaigns/leads", icon: Users },
                 { title: "Email", href: "/dashboard/campaigns/email", icon: Mail },
-                { title: "WhatsApp", href: "/dashboard/campaigns/whatsapp", icon: MessageCircle },
+                {
+                    title: "WhatsApp",
+                    href: "/dashboard/campaigns/whatsapp",
+                    icon: MessageCircle,
+                    subItems: [
+                        { title: "Overview", href: "/dashboard/campaigns/whatsapp" },
+                        { title: "Chat", href: "/dashboard/campaigns/whatsapp/chat" },
+                        { title: "Leads", href: "/dashboard/campaigns/whatsapp/leads" },
+                        { title: "Analytics", href: "/dashboard/campaigns/whatsapp/analytics" },
+                    ]
+                },
                 { title: "Voice", href: "/dashboard/campaigns/voice", icon: Mic },
             ]
         }
@@ -355,6 +365,14 @@ function DashboardContent({
     });
 
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+    const isCampaignWa = pathname.startsWith("/dashboard/campaigns/whatsapp");
+    const [campaignWaExpanded, setCampaignWaExpanded] = useState(true);
+
+    useEffect(() => {
+        if (isCampaignWa) {
+            setCampaignWaExpanded(true);
+        }
+    }, [isCampaignWa]);
 
     // Close the mobile sidebar whenever the route changes
     useEffect(() => {
@@ -457,6 +475,56 @@ function DashboardContent({
 
                     <nav className="flex-1 overflow-y-auto overflow-x-hidden px-4 space-y-2 mt-2 custom-scrollbar">
                         {activeConfig.items.map((item: any, index: number) => {
+                            if (item.subItems) {
+                                const isItemActive = pathname === item.href || item.subItems.some((s: any) => pathname === s.href);
+                                return (
+                                    <div key={index} className="space-y-1">
+                                        <div
+                                            className={`group flex items-center justify-between rounded-xl px-4 py-3 text-sm font-medium transition-all duration-300 cursor-pointer ${
+                                                isItemActive
+                                                    ? "bg-cyan-50 text-cyan-700 font-semibold"
+                                                    : "text-slate-600 hover:text-cyan-600 hover:bg-cyan-50"
+                                            }`}
+                                            onClick={() => {
+                                                setCampaignWaExpanded(prev => !prev);
+                                                if (!isItemActive) router.push(item.href);
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <item.icon className={`h-5 w-5 flex-shrink-0 ${isItemActive ? "text-cyan-600" : "text-slate-500 group-hover:text-cyan-600 transition-colors"}`} />
+                                                <span className="whitespace-nowrap">{item.title}</span>
+                                            </div>
+                                            {campaignWaExpanded ? (
+                                                <ChevronDown className="h-4 w-4 opacity-70" />
+                                            ) : (
+                                                <ChevronRight className="h-4 w-4 opacity-70" />
+                                            )}
+                                        </div>
+
+                                        {campaignWaExpanded && (
+                                            <div className="pl-11 pr-2 py-1 space-y-1">
+                                                {item.subItems.map((sub: any, subIdx: number) => {
+                                                    const isSubActive = pathname === sub.href;
+                                                    return (
+                                                        <Link
+                                                            key={subIdx}
+                                                            href={sub.href}
+                                                            className={`block px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                                                                isSubActive
+                                                                    ? "bg-cyan-600 text-white font-bold shadow-sm"
+                                                                    : "text-slate-500 hover:text-cyan-600 hover:bg-cyan-50/60"
+                                                            }`}
+                                                        >
+                                                            {sub.title}
+                                                        </Link>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            }
+
                             const isActive = pathname === item.href;
                             return (
                                 <Link
