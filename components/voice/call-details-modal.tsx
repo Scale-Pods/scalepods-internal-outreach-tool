@@ -112,7 +112,7 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
 
     // Cost Mapping
     // Cost is pre-formatted in /api/calls route as "X credits", fallback to displayCall.cost
-    const costDisplay = displayCall.cost || (displayCall.metadata?.cost ? `${displayCall.metadata.cost} credits` : '$0.00');
+    const costDisplay = displayCall.cost || (displayCall.metadata?.cost ? `${displayCall.metadata.cost} credits` : (displayCall.metadata?.charging?.call_charge !== undefined ? `${displayCall.metadata.charging.call_charge} credits` : 'N/A'));
 
     const startedAtDisplay = displayCall.metadata?.start_time_unix_secs
         ? new Date(displayCall.metadata.start_time_unix_secs * 1000).toLocaleString('en-US', {
@@ -260,12 +260,10 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
 
                         {/* Column 3: Cost breakdown Top */}
                         <div className="space-y-6">
-                            {(displayCall.metadata?.charging?.call_charge > 0) && (
-                                <div>
-                                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Call Cost</p>
-                                    <span className="font-bold text-slate-900">{displayCall.metadata.charging.call_charge} credits</span>
-                                </div>
-                            )}
+                            <div>
+                                <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Call Cost</p>
+                                <span className="font-bold text-slate-900">{costDisplay}</span>
+                            </div>
                             {(displayCall.llm_charge > 0 || displayCall.metadata?.charging?.llm_charge > 0) && (
                                 <div>
                                     <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Credits (LLM)</p>

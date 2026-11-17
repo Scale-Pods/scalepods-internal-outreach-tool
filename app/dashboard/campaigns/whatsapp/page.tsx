@@ -35,9 +35,11 @@ import { CampaignBadge } from "@/components/dashboard/campaign-badge";
 import { CampaignWhatsAppChatDetail } from "@/components/dashboard/campaign-whatsapp-chat-detail";
 import type { CampaignWaOverviewStats, CampaignWaLead } from "@/lib/services/campaign-whatsapp";
 import { startOfDay, endOfDay, subDays } from "date-fns";
+import { useCampaignDateRange } from "@/context/CampaignDateContext";
 
 function CampaignWhatsAppOverviewContent() {
     const router = useRouter();
+    const { dateRange, setDateRange, fromIso, toIso } = useCampaignDateRange();
 
     const [stats, setStats] = useState<CampaignWaOverviewStats | null>(null);
     const [recentLeads, setRecentLeads] = useState<CampaignWaLead[]>([]);
@@ -49,21 +51,14 @@ function CampaignWhatsAppOverviewContent() {
     const [selectedLead, setSelectedLead] = useState<CampaignWaLead | null>(null);
     const [leadLoading, setLeadLoading] = useState(false);
 
-    const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
-        from: subDays(new Date(), 30),
-        to: new Date(),
-    });
-
     // Fetch Overview data
     const fetchData = useCallback(async () => {
         setLoading(true);
         setFetchError(null);
         try {
             const params = new URLSearchParams();
-            if (dateRange.from) {
-                params.set('from', startOfDay(dateRange.from).toISOString());
-                params.set('to', endOfDay(dateRange.to || dateRange.from).toISOString());
-            }
+            if (fromIso) params.set('from', fromIso);
+            if (toIso) params.set('to', toIso);
             selectedCampaigns.forEach(c => params.append('campaignId', c));
 
             // Fetch Overview stats
@@ -91,7 +86,7 @@ function CampaignWhatsAppOverviewContent() {
         } finally {
             setLoading(false);
         }
-    }, [dateRange, selectedCampaigns]);
+    }, [fromIso, toIso, selectedCampaigns]);
 
     useEffect(() => {
         fetchData();
@@ -129,10 +124,9 @@ function CampaignWhatsAppOverviewContent() {
 
     const handleDateUpdate = (range: any) => {
         if (range?.range?.from) {
-            setDateRange({
-                from: new Date(range.range.from),
-                to: new Date(range.range.to || range.range.from),
-            });
+            setDateRange(range.range, range.label);
+        } else {
+            setDateRange(undefined);
         }
     };
 
@@ -144,7 +138,7 @@ function CampaignWhatsAppOverviewContent() {
 
     const resetFilters = () => {
         setSelectedCampaigns([]);
-        setDateRange({ from: subDays(new Date(), 30), to: new Date() });
+        setDateRange(undefined);
     };
 
     const hasActiveFilters = selectedCampaigns.length > 0;
@@ -199,7 +193,7 @@ function CampaignWhatsAppOverviewContent() {
                     </DropdownMenu>
 
                     {/* Date Range Picker */}
-                    <DateRangePicker onUpdate={handleDateUpdate} />
+                    <DateRangePicker value={dateRange} onUpdate={handleDateUpdate} />
 
                     {hasActiveFilters && (
                         <Button

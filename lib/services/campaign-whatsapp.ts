@@ -70,6 +70,7 @@ export interface CampaignWaOverviewStats {
     positiveLeads: number;
     totalEnrolled: number;
     replyRate: number;
+    uniqueRepliedLeads: number;
     campaignBreakdown: {
         campaignId: string;
         campaignName: string;
@@ -450,10 +451,16 @@ export function parseSafeTimestamp(val: any, isEndOfDay: boolean = false): numbe
         str = str.replace(' ', 'T') + 'Z';
     }
     const d = new Date(str);
+    if (isEndOfDay) {
+        d.setUTCHours(23, 59, 59, 999);
+    }
     const t = d.getTime();
     if (!isNaN(t)) return t;
     const str2 = str.replace(' ', 'T');
     const d2 = new Date(str2);
+    if (isEndOfDay) {
+        d2.setUTCHours(23, 59, 59, 999);
+    }
     const t2 = d2.getTime();
     return isNaN(t2) ? 0 : t2;
 }
@@ -575,6 +582,7 @@ export async function getCampaignWaOverview(filters: CampaignWaFilterParams = {}
         positiveLeads,
         totalEnrolled: filtered.length,
         replyRate,
+        uniqueRepliedLeads: repliedLeadsCount,
         campaignBreakdown: Object.values(campaignMap),
         stepBreakdown: Object.entries(stepMap).map(([step, count]) => ({
             step: Number(step),

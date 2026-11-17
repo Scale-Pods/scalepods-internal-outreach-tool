@@ -1,10 +1,16 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getCampaignsDashboardStats, getCampaignsSummary } from '@/lib/services/campaigns';
 
-export async function GET() {
+export const dynamic = 'force-dynamic';
+
+export async function GET(req: NextRequest) {
     try {
+        const { searchParams } = new URL(req.url);
+        const from = searchParams.get('from') || undefined;
+        const to = searchParams.get('to') || undefined;
+
         const [stats, campaigns] = await Promise.all([
-            getCampaignsDashboardStats(),
+            getCampaignsDashboardStats({ from, to }),
             getCampaignsSummary(),
         ]);
 

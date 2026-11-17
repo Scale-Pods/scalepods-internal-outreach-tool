@@ -35,9 +35,11 @@ import { CampaignWhatsAppChatDetail } from "@/components/dashboard/campaign-what
 import type { CampaignWaLead } from "@/lib/services/campaign-whatsapp";
 import { subDays, startOfDay, endOfDay } from "date-fns";
 import { useRouter } from "next/navigation";
+import { useCampaignDateRange } from "@/context/CampaignDateContext";
 
 export default function CampaignWhatsAppChatPage() {
     const router = useRouter();
+    const { dateRange, setDateRange, fromIso, toIso } = useCampaignDateRange();
 
     const [leads, setLeads] = useState<CampaignWaLead[]>([]);
     const [loading, setLoading] = useState(true);
@@ -51,11 +53,6 @@ export default function CampaignWhatsAppChatPage() {
 
     const [selectedLead, setSelectedLead] = useState<CampaignWaLead | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
-
-    const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
-        from: subDays(new Date(), 30),
-        to: new Date(),
-    });
 
     const fetchCampaignOptions = useCallback(async () => {
         try {
@@ -78,10 +75,8 @@ export default function CampaignWhatsAppChatPage() {
             const params = new URLSearchParams();
             params.set('page', '1');
             params.set('pageSize', '200'); // fetch all active for client-side responsive search & filtering
-            if (dateRange.from) {
-                params.set('from', startOfDay(dateRange.from).toISOString());
-                params.set('to', endOfDay(dateRange.to || dateRange.from).toISOString());
-            }
+            if (fromIso) params.set('from', fromIso);
+            if (toIso) params.set('to', toIso);
             selectedCampaigns.forEach(c => params.append('campaignId', c));
 
             const res = await fetch(`/api/campaigns/whatsapp/leads?${params.toString()}`);
@@ -93,7 +88,7 @@ export default function CampaignWhatsAppChatPage() {
         } finally {
             setLoading(false);
         }
-    }, [dateRange, selectedCampaigns]);
+    }, [fromIso, toIso, selectedCampaigns]);
 
     useEffect(() => {
         fetchCampaignOptions();
@@ -153,12 +148,11 @@ export default function CampaignWhatsAppChatPage() {
 
     const handleDateUpdate = (range: any) => {
         if (range?.range?.from) {
-            setDateRange({
-                from: new Date(range.range.from),
-                to: new Date(range.range.to || range.range.from),
-            });
-            setCurrentPage(1);
+            setDateRange(range.range, range.label);
+        } else {
+            setDateRange(undefined);
         }
+        setCurrentPage(1);
     };
 
     const toggleCampaign = (id: string) => {
@@ -179,6 +173,7 @@ export default function CampaignWhatsAppChatPage() {
         setSearchQuery("");
         setSelectedCampaigns([]);
         setReplyStatusFilter([]);
+        setDateRange(undefined);
         setCurrentPage(1);
     };
 
@@ -240,7 +235,7 @@ export default function CampaignWhatsAppChatPage() {
                     </DropdownMenu>
 
                     {/* Date Picker */}
-                    <DateRangePicker onUpdate={handleDateUpdate} />
+                    <DateRangePicker value={dateRange} onUpdate={handleDateUpdate} />
 
                     {hasActiveFilters && (
                         <Button

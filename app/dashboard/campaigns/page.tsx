@@ -2,14 +2,16 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import {
-    Users, Send, Reply, UserMinus, AlertCircle, MessageCircle, Mic, RefreshCw, CheckCircle2, Sparkles,
+    Users, Send, Reply, UserMinus, AlertCircle, MessageCircle, Mic, RefreshCw, CheckCircle2, Sparkles, Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SPLoader } from "@/components/sp-loader";
 import { CampaignBadge, campaignColorClasses } from "@/components/dashboard/campaign-badge";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { useCampaignDateRange } from "@/context/CampaignDateContext";
 import type { CampaignColor } from "@/lib/services/campaigns";
 
 interface CampaignSummary {
@@ -38,18 +40,35 @@ interface DashboardStats {
     voiceActive: number;
     contacted: number;
     newLeads: number;
+    whatsappSent?: number;
+    whatsappReplies?: number;
+    whatsappReplyRate?: number;
+    whatsappContacted?: number;
+    whatsappUniqueReplied?: number;
+    voiceCalls?: number;
+    voiceSarvamCalls?: number;
+    voiceTwilioCalls?: number;
+    voicePickedUp?: number;
+    voicePickupRate?: number;
+    voicePositive?: number;
+    voiceDurationSeconds?: number;
+    voiceDurationString?: string;
     campaigns: CampaignSummary[];
 }
 
 export default function CampaignsDashboardPage() {
     const router = useRouter();
+    const { dateRange, setDateRange, fromIso, toIso } = useCampaignDateRange();
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [loading, setLoading] = useState(true);
 
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await fetch("/api/campaigns/dashboard");
+            const params = new URLSearchParams();
+            if (fromIso) params.set('from', fromIso);
+            if (toIso) params.set('to', toIso);
+            const res = await fetch(`/api/campaigns/dashboard?${params.toString()}`);
             const json = await res.json();
             setStats(json);
         } catch (err) {
@@ -57,11 +76,11 @@ export default function CampaignsDashboardPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [fromIso, toIso]);
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [fetchData]);
 
     return (
         <div className="space-y-8 pb-10 pt-6 relative min-h-[500px] px-6">
@@ -74,11 +93,18 @@ export default function CampaignsDashboardPage() {
                         Multi-channel outreach performance across all campaigns, synced from Supabase
                     </p>
                 </div>
-                <Button variant="outline" size="sm" onClick={fetchData} className="gap-2 h-10 px-4">
-                    <RefreshCw className="h-4 w-4" /> Refresh
-                </Button>
+                <div className="flex items-center gap-3">
+                    <DateRangePicker
+                        value={dateRange}
+                        onUpdate={({ range, label }) => setDateRange(range, label)}
+                    />
+                    <Button variant="outline" size="sm" onClick={fetchData} className="gap-2 h-10 px-4">
+                        <RefreshCw className="h-4 w-4" /> Refresh
+                    </Button>
+                </div>
             </div>
 
+            {/* Row 1: High Level Campaign Overview */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
                     title="Total Leads"
@@ -98,27 +124,32 @@ export default function CampaignsDashboardPage() {
                     value={stats?.emailSent ?? "..."}
                     icon={<Send className="h-5 w-5" />}
                     iconBg="bg-blue-50 text-blue-600"
+                    onClick={() => router.push('/dashboard/campaigns/email')}
                 />
                 <MetricCard
                     title="Replied"
                     value={stats?.emailReplied ?? "..."}
                     icon={<Reply className="h-5 w-5" />}
                     iconBg="bg-cyan-50 text-cyan-600"
+                    onClick={() => router.push('/dashboard/campaigns/email')}
                 />
             </div>
 
+            {/* Row 2: Lead Acquisition & Lifecycle */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
                     title="New Leads"
                     value={stats?.newLeads ?? "..."}
                     icon={<Users className="h-5 w-5" />}
                     iconBg="bg-slate-100 text-slate-600"
+                    onClick={() => router.push('/dashboard/campaigns/leads')}
                 />
                 <MetricCard
                     title="Contacted"
                     value={stats?.contacted ?? "..."}
                     icon={<CheckCircle2 className="h-5 w-5" />}
                     iconBg="bg-emerald-50 text-emerald-600"
+                    onClick={() => router.push('/dashboard/campaigns/leads')}
                 />
                 <MetricCard
                     title="Unsubscribed"
@@ -131,6 +162,42 @@ export default function CampaignsDashboardPage() {
                     value={stats?.bounced ?? "..."}
                     icon={<AlertCircle className="h-5 w-5" />}
                     iconBg="bg-amber-50 text-amber-600"
+                />
+            </div>
+
+            {/* Row 3: WhatsApp & Voice Multi-Channel Outreach Metrics (Section 2 marked area) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <MetricCard
+                    title="WhatsApp Sent"
+                    value={stats?.whatsappSent !== undefined ? stats.whatsappSent.toLocaleString() : "..."}
+                    subtitle={`${stats?.whatsappContacted ?? 0} leads contacted`}
+                    icon={<MessageCircle className="h-5 w-5" />}
+                    iconBg="bg-emerald-50 text-emerald-600"
+                    onClick={() => router.push('/dashboard/campaigns/whatsapp')}
+                />
+                <MetricCard
+                    title="WhatsApp Replies"
+                    value={stats?.whatsappReplies !== undefined ? stats.whatsappReplies.toLocaleString() : "..."}
+                    subtitle={`${stats?.whatsappReplyRate ?? 0}% Reply Rate${stats?.whatsappUniqueReplied ? ` (${stats.whatsappUniqueReplied} leads)` : ''}`}
+                    icon={<Reply className="h-5 w-5" />}
+                    iconBg="bg-teal-50 text-teal-600"
+                    onClick={() => router.push('/dashboard/campaigns/whatsapp/chat')}
+                />
+                <MetricCard
+                    title="Voice Calls"
+                    value={stats?.voiceCalls !== undefined ? stats.voiceCalls.toLocaleString() : "..."}
+                    subtitle={`Sarvam: ${stats?.voiceSarvamCalls ?? 0} | Twilio: ${stats?.voiceTwilioCalls ?? 0}`}
+                    icon={<Phone className="h-5 w-5" />}
+                    iconBg="bg-violet-50 text-violet-600"
+                    onClick={() => router.push('/dashboard/campaigns/voice')}
+                />
+                <MetricCard
+                    title="Voice Picked Up"
+                    value={stats?.voicePickedUp !== undefined ? stats.voicePickedUp.toLocaleString() : "..."}
+                    subtitle={`${stats?.voicePickupRate ?? 0}% Pickup | ${stats?.voicePositive ?? 0} Positive`}
+                    icon={<CheckCircle2 className="h-5 w-5" />}
+                    iconBg="bg-indigo-50 text-indigo-600"
+                    onClick={() => router.push('/dashboard/campaigns/voice/logs')}
                 />
             </div>
 
@@ -150,23 +217,23 @@ export default function CampaignsDashboardPage() {
                 </CardContent>
             </Card>
 
-            <div className="space-y-4">
-                <div className="flex items-center justify-between">
+            <div>
+                <div className="flex items-center justify-between mb-4">
                     <div>
                         <h2 className="text-lg font-bold text-slate-900">Campaigns</h2>
-                        <p className="text-xs text-slate-500">Each campaign is color-coded consistently across Dashboard, Leads &amp; Analytics</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Performance breakdown by campaign</p>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {(stats?.campaigns ?? []).map(campaign => (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {(stats?.campaigns || []).map((c) => (
                         <CampaignCard
-                            key={campaign.campaignId}
-                            campaign={campaign}
-                            onClick={() => router.push(`/dashboard/campaigns/leads?campaignId=${campaign.campaignId}`)}
+                            key={c.campaignId}
+                            campaign={c}
+                            onClick={() => router.push(`/dashboard/campaigns/leads?campaignId=${encodeURIComponent(String(c.campaignId))}`)}
                         />
                     ))}
-                    {!loading && (stats?.campaigns?.length ?? 0) === 0 && (
+                    {(stats?.campaigns || []).length === 0 && !loading && (
                         <p className="text-sm text-slate-400 py-10 text-center col-span-full">No campaigns found.</p>
                     )}
                 </div>
@@ -175,8 +242,8 @@ export default function CampaignsDashboardPage() {
     );
 }
 
-function MetricCard({ title, value, icon, iconBg, onClick }: {
-    title: string; value: number | string;
+function MetricCard({ title, value, subtitle, icon, iconBg, onClick }: {
+    title: string; value: number | string; subtitle?: string;
     icon: React.ReactNode; iconBg: string; onClick?: () => void;
 }) {
     return (
@@ -188,6 +255,7 @@ function MetricCard({ title, value, icon, iconBg, onClick }: {
                 <div className="flex-1 min-w-0">
                     <h3 className="text-xl font-bold text-slate-900">{value}</h3>
                     <p className="text-xs font-semibold text-slate-600 mt-0.5">{title}</p>
+                    {subtitle && <p className="text-[11px] text-slate-500 mt-1 truncate">{subtitle}</p>}
                 </div>
                 <div className={cn("p-2.5 rounded-xl shrink-0", iconBg)}>
                     {icon}

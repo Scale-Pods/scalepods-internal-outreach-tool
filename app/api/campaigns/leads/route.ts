@@ -15,6 +15,8 @@ export async function GET(req: NextRequest) {
         const channel = VALID_CHANNELS.includes(channelParam as OutreachChannel) ? (channelParam as OutreachChannel) : undefined;
         const statusFilter = searchParams.getAll('status').filter(Boolean);
         const activeOnly = searchParams.get('activeOnly') === 'true';
+        const from = searchParams.get('from') || undefined;
+        const to = searchParams.get('to') || undefined;
 
         const result = await getOutreachLeadsPage({
             page,
@@ -24,6 +26,8 @@ export async function GET(req: NextRequest) {
             channel,
             statusFilter: statusFilter.length ? statusFilter : undefined,
             activeOnly,
+            from,
+            to,
         });
 
         return NextResponse.json(result);

@@ -54,6 +54,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SPLoader } from "@/components/sp-loader";
 import { useData } from "@/context/DataContext";
+import { useCampaignDateRange } from "@/context/CampaignDateContext";
 
 interface CampaignDashboardStats {
     totalLeads: number;
@@ -66,6 +67,19 @@ interface CampaignDashboardStats {
     voiceActive: number;
     contacted: number;
     newLeads: number;
+    whatsappSent?: number;
+    whatsappReplies?: number;
+    whatsappReplyRate?: number;
+    whatsappContacted?: number;
+    whatsappUniqueReplied?: number;
+    voiceCalls?: number;
+    voiceSarvamCalls?: number;
+    voiceTwilioCalls?: number;
+    voicePickedUp?: number;
+    voicePickupRate?: number;
+    voicePositive?: number;
+    voiceDurationSeconds?: number;
+    voiceDurationString?: string;
 }
 
 interface RepliedLead {
@@ -102,6 +116,7 @@ interface DashboardStats {
 export default function MasterDashboard({ stats, acquisitionChartData }: { stats: DashboardStats, acquisitionChartData: any[] }) {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const { dateRange, setDateRange, clearDateFilter, fromIso, toIso } = useCampaignDateRange();
     const [repliesModal, setRepliesModal] = useState<{ open: boolean; scope: 'cold' | 'hot' }>({ open: false, scope: 'cold' });
     const [dateLabel, setDateLabel] = useState("Last 7 days");
     const [campaignStats, setCampaignStats] = useState<CampaignDashboardStats | null>(null);
@@ -111,7 +126,13 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
         let cancelled = false;
         (async () => {
             try {
-                const res = await fetch("/api/campaigns/dashboard");
+                setCampaignStatsLoading(true);
+                const params = new URLSearchParams();
+                const from = searchParams.get('from') || fromIso;
+                const to = searchParams.get('to') || toIso;
+                if (from) params.set('from', from);
+                if (to) params.set('to', to);
+                const res = await fetch(`/api/campaigns/dashboard?${params.toString()}`);
                 const json = await res.json();
                 if (!cancelled) setCampaignStats(json);
             } catch (err) {
@@ -121,18 +142,13 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
             }
         })();
         return () => { cancelled = true; };
-    }, []);
+    }, [searchParams, fromIso, toIso]);
+
     const handleDateUpdate = (values: any) => {
         if (values.range?.from) {
-            const from = new Date(values.range.from);
-            from.setHours(0, 0, 0, 0);
-            const to = new Date(values.range.to || values.range.from);
-            to.setHours(23, 59, 59, 999);
-            
-            const params = new URLSearchParams(searchParams.toString());
-            params.set('from', from.toISOString());
-            params.set('to', to.toISOString());
-            router.push(`?${params.toString()}`);
+            setDateRange(values.range, values.label);
+        } else {
+            clearDateFilter();
         }
     };
 
@@ -157,7 +173,7 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                     <p className="text-sm text-slate-500">Holistic view of all your marketing channels performance.</p>
                 </div>
                 <div className="shrink-0">
-                    <DateRangePicker onUpdate={handleDateUpdate} />
+                    <DateRangePicker value={dateRange} onUpdate={handleDateUpdate} />
                 </div>
             </div>
 
@@ -289,7 +305,7 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
             {/* Campaigns Section */}
             <div className="mb-8 mt-8">
                 <h2 className="text-xl font-bold text-slate-800 mb-4">Campaigns</h2>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
                     <MetricCard
                         title="Active Campaigns"
                         value={campaignStatsLoading ? "..." : (campaignStats?.totalCampaigns ?? 0).toLocaleString()}
@@ -334,6 +350,30 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                         bg="bg-cyan-50"
                         border="border-cyan-100"
                         onClick={() => router.push('/dashboard/campaigns/email')}
+                    />
+                    <MetricCard
+                        title="WhatsApp Chats"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.whatsappSent ?? 0).toLocaleString()}
+                        change={`${campaignStats?.whatsappReplyRate ?? 0}% Rate`}
+                        isUp={true}
+                        icon={<MessageCircle className="h-6 w-6" />}
+                        color="text-purple-600"
+                        bg="bg-purple-50"
+                        border="border-purple-100"
+                        onClick={() => router.push('/dashboard/campaigns/whatsapp')}
+                        subtitle={`${campaignStats?.whatsappReplies ?? 0} replies | ${campaignStats?.whatsappContacted ?? 0} contacted`}
+                    />
+                    <MetricCard
+                        title="Voice Calls"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.voiceCalls ?? 0).toLocaleString()}
+                        change={`${campaignStats?.voicePickupRate ?? 0}% Pickup`}
+                        isUp={true}
+                        icon={<Activity className="h-6 w-6" />}
+                        color="text-orange-600"
+                        bg="bg-orange-50"
+                        border="border-orange-100"
+                        onClick={() => router.push('/dashboard/campaigns/voice')}
+                        subtitle={`${campaignStats?.voiceDurationString || '0m 0s'} | ${campaignStats?.voicePickedUp ?? 0} answered`}
                     />
                     <MetricCard
                         title="Unsubscribed"

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { SPLoader } from "@/components/sp-loader";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { useCampaignDateRange } from "@/context/CampaignDateContext";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -39,6 +40,7 @@ const LEADS_PER_PAGE = 15;
 
 export default function CampaignWhatsAppLeadsPage() {
     const router = useRouter();
+    const { dateRange, setDateRange, fromIso, toIso } = useCampaignDateRange();
 
     const [leads, setLeads] = useState<CampaignWaLead[]>([]);
     const [totalCount, setTotalCount] = useState(0);
@@ -53,11 +55,6 @@ export default function CampaignWhatsAppLeadsPage() {
 
     const [selectedLead, setSelectedLead] = useState<CampaignWaLead | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
-
-    const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
-        from: subDays(new Date(), 30),
-        to: new Date(),
-    });
 
     const fetchCampaignOptions = useCallback(async () => {
         try {
@@ -83,10 +80,8 @@ export default function CampaignWhatsAppLeadsPage() {
             if (searchInput.trim()) params.set('search', searchInput.trim());
             if (replyStatus !== 'all') params.set('replyStatus', replyStatus);
             if (leadTagFilter !== 'all') params.set('leadStatus', leadTagFilter);
-            if (dateRange.from) {
-                params.set('from', startOfDay(dateRange.from).toISOString());
-                params.set('to', endOfDay(dateRange.to || dateRange.from).toISOString());
-            }
+            if (fromIso) params.set('from', fromIso);
+            if (toIso) params.set('to', toIso);
             selectedCampaigns.forEach(c => params.append('campaignId', c));
 
             const res = await fetch(`/api/campaigns/whatsapp/leads?${params.toString()}`);
@@ -99,7 +94,7 @@ export default function CampaignWhatsAppLeadsPage() {
         } finally {
             setLoading(false);
         }
-    }, [currentPage, searchInput, replyStatus, leadTagFilter, dateRange, selectedCampaigns]);
+    }, [currentPage, searchInput, replyStatus, leadTagFilter, fromIso, toIso, selectedCampaigns]);
 
     useEffect(() => {
         fetchCampaignOptions();
@@ -111,12 +106,9 @@ export default function CampaignWhatsAppLeadsPage() {
 
     const handleDateUpdate = (range: any) => {
         if (range?.range?.from) {
-            setDateRange({
-                from: new Date(range.range.from),
-                to: new Date(range.range.to || range.range.from),
-            });
+            setDateRange(range.range, range.label);
         } else {
-            setDateRange({ from: undefined, to: undefined });
+            setDateRange(undefined);
         }
         setCurrentPage(1);
     };
@@ -133,10 +125,7 @@ export default function CampaignWhatsAppLeadsPage() {
         setSelectedCampaigns([]);
         setReplyStatus("all");
         setLeadTagFilter("all");
-        setDateRange({
-            from: subDays(new Date(), 30),
-            to: new Date(),
-        });
+        setDateRange(undefined);
         setCurrentPage(1);
     };
 

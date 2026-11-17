@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/dialog";
 import { SPLoader } from "@/components/sp-loader";
 import { CampaignBadge, campaignColorClasses } from "@/components/dashboard/campaign-badge";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { useCampaignDateRange } from "@/context/CampaignDateContext";
 import {
     countEmailStepsSent, hasEmailReply, latestEmailStatus, campaignColor,
     type OutreachLead, type OutreachLeadListItem,
@@ -48,6 +50,7 @@ const LEADS_PER_PAGE = 15;
 
 function LeadsPageInner() {
     const searchParams = useSearchParams();
+    const { dateRange, setDateRange, fromIso, toIso } = useCampaignDateRange();
     const [leads, setLeads] = useState<OutreachLeadListItem[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -71,6 +74,8 @@ function LeadsPageInner() {
             params.set('page', String(currentPage));
             params.set('pageSize', String(LEADS_PER_PAGE));
             if (searchQuery) params.set('search', searchQuery);
+            if (fromIso) params.set('from', fromIso);
+            if (toIso) params.set('to', toIso);
             campaignFilter.forEach(id => params.append('campaignId', id));
 
             const res = await fetch(`/api/campaigns/leads?${params.toString()}`);
@@ -83,15 +88,18 @@ function LeadsPageInner() {
         } finally {
             setLoading(false);
         }
-    }, [currentPage, searchQuery, campaignFilter]);
+    }, [currentPage, searchQuery, campaignFilter, fromIso, toIso]);
 
     useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
     useEffect(() => {
-        fetch('/api/campaigns/dashboard').then(r => r.json()).then(json => {
+        const params = new URLSearchParams();
+        if (fromIso) params.set('from', fromIso);
+        if (toIso) params.set('to', toIso);
+        fetch(`/api/campaigns/dashboard?${params.toString()}`).then(r => r.json()).then(json => {
             setCampaignOptions((json.campaigns || []).map((c: any) => ({ id: String(c.campaignId), name: c.campaignName })));
         }).catch(err => console.error("Failed to fetch campaign options:", err));
-    }, []);
+    }, [fromIso, toIso]);
 
     // Pre-select campaign from ?campaignId= query param (set by the Dashboard's campaign cards)
     useEffect(() => {
@@ -110,7 +118,7 @@ function LeadsPageInner() {
         setSearchInput("");
     };
 
-    useEffect(() => { setCurrentPage(1); }, [searchQuery, campaignFilter]);
+    useEffect(() => { setCurrentPage(1); }, [searchQuery, campaignFilter, fromIso, toIso]);
 
     // Clear selection only when the result set itself changes — not on page
     // change, so selections persist across pagination.
@@ -177,9 +185,12 @@ function LeadsPageInner() {
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight">Campaign Leads</h1>
                     <p className="text-slate-500 text-xs">Synced from the &quot;outreach_leads&quot; table — Email, WhatsApp &amp; Voice in one view</p>
                 </div>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={fetchLeads}>
-                    <RefreshCw className="h-3 w-3" /> Refresh
-                </Button>
+                <div className="flex items-center gap-2">
+                    <DateRangePicker value={dateRange} onUpdate={({ range, label }) => setDateRange(range, label)} />
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={fetchLeads}>
+                        <RefreshCw className="h-3 w-3" /> Refresh
+                    </Button>
+                </div>
             </div>
 
             <div className="flex items-center gap-2 shrink-0 flex-wrap">

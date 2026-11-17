@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { DataProvider, useData } from "@/context/DataContext";
+import { CampaignDateProvider } from "@/context/CampaignDateContext";
 import { calculateDuration } from "@/lib/utils";
 import { useMemo } from "react";
 import { logout } from "@/app/actions/auth";
@@ -196,9 +197,11 @@ export default function DashboardLayout({
 }) {
     return (
         <DataProvider>
-            <DashboardContent>
-                {children}
-            </DashboardContent>
+            <CampaignDateProvider>
+                <DashboardContent>
+                    {children}
+                </DashboardContent>
+            </CampaignDateProvider>
         </DataProvider>
     );
 }
@@ -327,7 +330,17 @@ function DashboardContent({
                         { title: "Analytics", href: "/dashboard/campaigns/whatsapp/analytics" },
                     ]
                 },
-                { title: "Voice", href: "/dashboard/campaigns/voice", icon: Mic },
+                {
+                    title: "Voice",
+                    href: "/dashboard/campaigns/voice",
+                    icon: Mic,
+                    subItems: [
+                        { title: "Overview", href: "/dashboard/campaigns/voice" },
+                        { title: "Call Logs", href: "/dashboard/campaigns/voice/logs" },
+                        { title: "Cold Call Logs", href: "/dashboard/campaigns/voice/cold-logs" },
+                        { title: "Analytics", href: "/dashboard/campaigns/voice/analytics" },
+                    ]
+                },
             ]
         }
     };
@@ -368,11 +381,20 @@ function DashboardContent({
     const isCampaignWa = pathname.startsWith("/dashboard/campaigns/whatsapp");
     const [campaignWaExpanded, setCampaignWaExpanded] = useState(true);
 
+    const isCampaignVoice = pathname.startsWith("/dashboard/campaigns/voice");
+    const [campaignVoiceExpanded, setCampaignVoiceExpanded] = useState(true);
+
     useEffect(() => {
         if (isCampaignWa) {
             setCampaignWaExpanded(true);
         }
     }, [isCampaignWa]);
+
+    useEffect(() => {
+        if (isCampaignVoice) {
+            setCampaignVoiceExpanded(true);
+        }
+    }, [isCampaignVoice]);
 
     // Close the mobile sidebar whenever the route changes
     useEffect(() => {
@@ -476,6 +498,13 @@ function DashboardContent({
                     <nav className="flex-1 overflow-y-auto overflow-x-hidden px-4 space-y-2 mt-2 custom-scrollbar">
                         {activeConfig.items.map((item: any, index: number) => {
                             if (item.subItems) {
+                                const isWa = item.title === "WhatsApp";
+                                const isVoice = item.title === "Voice";
+                                const isExpanded = isWa ? campaignWaExpanded : isVoice ? campaignVoiceExpanded : true;
+                                const toggleExpanded = () => {
+                                    if (isWa) setCampaignWaExpanded(prev => !prev);
+                                    else if (isVoice) setCampaignVoiceExpanded(prev => !prev);
+                                };
                                 const isItemActive = pathname === item.href || item.subItems.some((s: any) => pathname === s.href);
                                 return (
                                     <div key={index} className="space-y-1">
@@ -486,7 +515,7 @@ function DashboardContent({
                                                     : "text-slate-600 hover:text-cyan-600 hover:bg-cyan-50"
                                             }`}
                                             onClick={() => {
-                                                setCampaignWaExpanded(prev => !prev);
+                                                toggleExpanded();
                                                 if (!isItemActive) router.push(item.href);
                                             }}
                                         >
@@ -494,14 +523,14 @@ function DashboardContent({
                                                 <item.icon className={`h-5 w-5 flex-shrink-0 ${isItemActive ? "text-cyan-600" : "text-slate-500 group-hover:text-cyan-600 transition-colors"}`} />
                                                 <span className="whitespace-nowrap">{item.title}</span>
                                             </div>
-                                            {campaignWaExpanded ? (
+                                            {isExpanded ? (
                                                 <ChevronDown className="h-4 w-4 opacity-70" />
                                             ) : (
                                                 <ChevronRight className="h-4 w-4 opacity-70" />
                                             )}
                                         </div>
 
-                                        {campaignWaExpanded && (
+                                        {isExpanded && (
                                             <div className="pl-11 pr-2 py-1 space-y-1">
                                                 {item.subItems.map((sub: any, subIdx: number) => {
                                                     const isSubActive = pathname === sub.href;

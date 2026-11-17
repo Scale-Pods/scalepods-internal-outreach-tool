@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { SPLoader } from "@/components/sp-loader";
 import { CampaignBadge, campaignColorClasses } from "@/components/dashboard/campaign-badge";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { useCampaignDateRange } from "@/context/CampaignDateContext";
 import {
     countEmailStepsSent, latestEmailStatus, campaignColor,
     type OutreachLead, type OutreachLeadListItem, type ChannelStats,
@@ -41,6 +43,7 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 const LEADS_PER_PAGE = 15;
 
 export default function CampaignEmailPage() {
+    const { dateRange, setDateRange, fromIso, toIso } = useCampaignDateRange();
     const [leads, setLeads] = useState<OutreachLeadListItem[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [stats, setStats] = useState<ChannelStats | null>(null);
@@ -61,6 +64,8 @@ export default function CampaignEmailPage() {
             params.set('pageSize', String(LEADS_PER_PAGE));
             params.set('channel', 'email');
             if (searchQuery) params.set('search', searchQuery);
+            if (fromIso) params.set('from', fromIso);
+            if (toIso) params.set('to', toIso);
             campaignFilter.forEach(id => params.append('campaignId', id));
             statusFilter.forEach(s => params.append('status', s));
 
@@ -74,16 +79,19 @@ export default function CampaignEmailPage() {
         } finally {
             setLoading(false);
         }
-    }, [currentPage, searchQuery, campaignFilter, statusFilter]);
+    }, [currentPage, searchQuery, campaignFilter, statusFilter, fromIso, toIso]);
 
     useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
     useEffect(() => {
-        fetch('/api/campaigns/channel-stats?channel=email').then(r => r.json()).then(json => {
+        const params = new URLSearchParams({ channel: 'email' });
+        if (fromIso) params.set('from', fromIso);
+        if (toIso) params.set('to', toIso);
+        fetch(`/api/campaigns/channel-stats?${params.toString()}`).then(r => r.json()).then(json => {
             setStats(json.stats || null);
             setCampaignOptions(json.campaignOptions || []);
         }).catch(err => console.error("Failed to fetch email channel stats:", err));
-    }, []);
+    }, [fromIso, toIso]);
 
     const toggleCampaignFilter = (value: string) => {
         setCampaignFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
@@ -95,7 +103,7 @@ export default function CampaignEmailPage() {
     const hasActiveFilters = campaignFilter.length > 0 || statusFilter.length > 0 || !!searchInput;
     const resetFilters = () => { setCampaignFilter([]); setStatusFilter([]); setSearchInput(""); };
 
-    useEffect(() => { setCurrentPage(1); }, [searchQuery, campaignFilter, statusFilter]);
+    useEffect(() => { setCurrentPage(1); }, [searchQuery, campaignFilter, statusFilter, fromIso, toIso]);
 
     const totalPages = Math.ceil(totalCount / LEADS_PER_PAGE) || 1;
 
@@ -107,9 +115,12 @@ export default function CampaignEmailPage() {
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight">Campaign Emails</h1>
                     <p className="text-slate-500 text-xs">Email sequence activity across all campaigns, from &quot;outreach_leads&quot;</p>
                 </div>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={fetchLeads}>
-                    <RefreshCw className="h-3 w-3" /> Refresh
-                </Button>
+                <div className="flex items-center gap-2">
+                    <DateRangePicker value={dateRange} onUpdate={({ range, label }) => setDateRange(range, label)} />
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={fetchLeads}>
+                        <RefreshCw className="h-3 w-3" /> Refresh
+                    </Button>
+                </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 shrink-0">
