@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
     Search, ChevronLeft, ChevronRight, RefreshCw, Mail, MessageCircle, Mic, X,
-    Send, Loader2, CheckCircle2, AlertCircle,
+    Send, Loader2, CheckCircle2, AlertCircle, Sparkles,
 } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
@@ -58,6 +58,7 @@ function LeadsPageInner() {
     const searchQuery = useDebouncedValue(searchInput, 350);
     const [currentPage, setCurrentPage] = useState(1);
     const [campaignFilter, setCampaignFilter] = useState<string[]>([]);
+    const [enrichedOnly, setEnrichedOnly] = useState(false);
     const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [sendingToEnrichment, setSendingToEnrichment] = useState(false);
@@ -74,6 +75,7 @@ function LeadsPageInner() {
             params.set('page', String(currentPage));
             params.set('pageSize', String(LEADS_PER_PAGE));
             if (searchQuery) params.set('search', searchQuery);
+            if (enrichedOnly) params.set('enrichedOnly', 'true');
             if (fromIso) params.set('from', fromIso);
             if (toIso) params.set('to', toIso);
             campaignFilter.forEach(id => params.append('campaignId', id));
@@ -88,7 +90,7 @@ function LeadsPageInner() {
         } finally {
             setLoading(false);
         }
-    }, [currentPage, searchQuery, campaignFilter, fromIso, toIso]);
+    }, [currentPage, searchQuery, campaignFilter, enrichedOnly, fromIso, toIso]);
 
     useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
@@ -111,18 +113,19 @@ function LeadsPageInner() {
         setCampaignFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
     };
 
-    const hasActiveFilters = campaignFilter.length > 0 || !!searchInput;
+    const hasActiveFilters = campaignFilter.length > 0 || !!searchInput || enrichedOnly;
 
     const resetFilters = () => {
         setCampaignFilter([]);
         setSearchInput("");
+        setEnrichedOnly(false);
     };
 
-    useEffect(() => { setCurrentPage(1); }, [searchQuery, campaignFilter, fromIso, toIso]);
+    useEffect(() => { setCurrentPage(1); }, [searchQuery, campaignFilter, enrichedOnly, fromIso, toIso]);
 
     // Clear selection only when the result set itself changes — not on page
     // change, so selections persist across pagination.
-    useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, campaignFilter]);
+    useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, campaignFilter, enrichedOnly]);
 
     useEffect(() => {
         if (toast.show) {
@@ -216,6 +219,20 @@ function LeadsPageInner() {
                     </DropdownMenuContent>
                 </DropdownMenu>
 
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEnrichedOnly(prev => !prev)}
+                    className={`h-8 gap-1.5 text-xs font-bold transition-colors ${
+                        enrichedOnly
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
+                            : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                >
+                    <Sparkles className={`h-3.5 w-3.5 ${enrichedOnly ? 'text-emerald-600 fill-emerald-600' : 'text-slate-400'}`} />
+                    Enriched Leads Only {enrichedOnly && "✓"}
+                </Button>
+
                 {hasActiveFilters && (
                     <Button variant="ghost" size="sm" onClick={resetFilters} className="h-8 gap-1 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2">
                         <X className="h-3 w-3" /> Reset
@@ -248,6 +265,7 @@ function LeadsPageInner() {
                                         />
                                     </th>
                                     <th className="px-3 py-2.5">Campaign</th>
+                                    <th className="px-3 py-2.5">Assigned Lead</th>
                                     <th className="px-3 py-2.5">Full Name</th>
                                     <th className="px-3 py-2.5">Email</th>
                                     <th className="px-3 py-2.5">LinkedIn</th>
@@ -261,7 +279,7 @@ function LeadsPageInner() {
                             </thead>
                             <tbody className="divide-y divide-border">
                                 {!loading && leads.length === 0 ? (
-                                    <tr><td colSpan={11} className="px-3 py-12 text-center text-slate-400 text-sm">No leads found.</td></tr>
+                                    <tr><td colSpan={12} className="px-3 py-12 text-center text-slate-400 text-sm">No leads found.</td></tr>
                                 ) : (
                                     leads.map((lead) => {
                                         const color = campaignColor(lead.campaignId);
@@ -280,7 +298,25 @@ function LeadsPageInner() {
                                                 <td className="px-3 py-2">
                                                     <CampaignBadge campaignId={lead.campaignId} campaignName={lead.campaignName} />
                                                 </td>
-                                                <td className="px-3 py-2 font-semibold text-slate-900 text-xs whitespace-nowrap">{lead.fullName}</td>
+                                                <td className="px-3 py-2">
+                                                    {lead.assignedLead ? (
+                                                        <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200 text-[10px] font-medium whitespace-nowrap">
+                                                            {lead.assignedLead}
+                                                        </Badge>
+                                                    ) : (
+                                                        <span className="text-slate-300 text-xs">—</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-2 font-semibold text-slate-900 text-xs whitespace-nowrap">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span>{lead.fullName}</span>
+                                                        {lead.isEnriched && (
+                                                            <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100 text-[9px] font-bold px-1.5 py-0 leading-tight">
+                                                                ENRICHED
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </td>
                                                 <td className="px-3 py-2 text-slate-500 text-[11px] whitespace-nowrap">{lead.email || "—"}</td>
                                                 <td className="px-3 py-2 text-[11px]">
                                                     {lead.linkedinUrl ? (
@@ -401,8 +437,10 @@ function LeadDetail({ leadId }: { leadId: string }) {
                 <DetailField label="Personal Email" value={lead.personalEmail} />
                 <DetailField label="Mobile" value={lead.mobileNumber} />
                 <DetailField label="Location" value={[lead.city, lead.state, lead.country].filter(Boolean).join(", ") || null} />
+                <DetailField label="Assigned Lead" value={lead.assignedLead} />
                 <DetailField label="Lead Status" value={lead.leadStatus} />
                 <DetailField label="LinkedIn" value={lead.linkedinUrl} isLink />
+                <DetailField label="Enriched" value={lead.isEnriched ? "Yes" : "No"} />
             </div>
 
             <div className="grid grid-cols-3 gap-3">

@@ -79,6 +79,8 @@ export interface OutreachLead {
     campaignId: number | null;
     campaignKey: string | null;
     campaignName: string | null;
+    assignedLead: string | null;
+    isEnriched: boolean;
     outreachChannels: OutreachChannel[];
 
     leadStatus: string | null;
@@ -115,6 +117,8 @@ export interface OutreachLeadListItem {
     campaignId: number | null;
     campaignKey: string | null;
     campaignName: string | null;
+    assignedLead: string | null;
+    isEnriched: boolean;
     outreachChannels: OutreachChannel[];
     leadStatus: string | null;
     whatsappStatus: string | null;
@@ -145,6 +149,8 @@ export interface OutreachLeadsPageFilters {
     statusFilter?: string[];
     /** Only leads with that channel's status populated (WhatsApp/Voice "Active Only" toggle). */
     activeOnly?: boolean;
+    /** Filter to show only enriched leads (is_enriched = true) */
+    enrichedOnly?: boolean;
     from?: string;
     to?: string;
 }
@@ -191,6 +197,8 @@ function normalizeLead(row: any): OutreachLead {
             ?? repliesRaw?.[0]?.campaign_name
             ?? (row.campaign_key ? row.campaign_key.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : null)
             ?? (row.campaign_id ? `Campaign ${row.campaign_id}` : null),
+        assignedLead: row.assigned_lead || null,
+        isEnriched: Boolean(row.is_enriched),
         outreachChannels: Array.isArray(row.outreach_channels) ? row.outreach_channels : [],
 
         leadStatus: row.lead_status,
@@ -241,6 +249,8 @@ function normalizeLeadListItem(row: any): OutreachLeadListItem {
         campaignId: row.campaign_id,
         campaignKey: row.campaign_key,
         campaignName,
+        assignedLead: row.assigned_lead || null,
+        isEnriched: Boolean(row.is_enriched),
         outreachChannels: Array.isArray(row.outreach_channels) ? row.outreach_channels : [],
         leadStatus: row.lead_status,
         whatsappStatus: row.whatsapp_status,
@@ -267,18 +277,24 @@ export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {
     const page = filters.page ?? 1;
     const pageSize = filters.pageSize ?? 15;
 
-    if (filters.from || filters.to) {
+    // Use direct Postgres query when date filtering is active, or enrichedOnly is requested,
+    // or for standard campaign lead listing (ensuring assigned_lead and is_enriched are always selected).
+    if (filters.from || filters.to || filters.enrichedOnly || (!filters.statusFilter?.length && !filters.activeOnly)) {
         let q = supabaseAdmin
             .from('outreach_leads')
             .select(`
                 id, full_name, email, mobile_number, linkedin_url, company_name, city, country,
                 campaign_id, campaign_key, outreach_channels, lead_status, whatsapp_status,
                 voice_status, unsubscribed, bounced, last_contacted_at, created_at,
+                assigned_lead, is_enriched,
                 email_status_1, email_status_2, email_status_3, email_status_4, email_status_5,
                 email_status_6, email_status_7, email_status_8, email_status_9, email_status_10,
                 email_reply
             `, { count: 'exact' });
 
+        if (filters.enrichedOnly) {
+            q = q.eq('is_enriched', true);
+        }
         if (filters.channel) {
             q = q.contains('outreach_channels', [filters.channel]);
         }
@@ -293,7 +309,7 @@ export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {
         }
         if (filters.search?.trim()) {
             const s = filters.search.trim();
-            q = q.or(`full_name.ilike.%${s}%,email.ilike.%${s}%,mobile_number.ilike.%${s}%,company_name.ilike.%${s}%`);
+            q = q.or(`full_name.ilike.%${s}%,email.ilike.%${s}%,mobile_number.ilike.%${s}%,company_name.ilike.%${s}%,assigned_lead.ilike.%${s}%`);
         }
 
         const startIndex = (page - 1) * pageSize;
@@ -311,22 +327,63 @@ export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {
         };
     }
 
-    const { data, error } = await supabaseAdmin.rpc('get_campaigns_leads_page', {
-        p_page: page,
-        p_page_size: pageSize,
-        p_search: filters.search?.trim() || null,
-        p_campaign_ids: filters.campaignIds?.length ? filters.campaignIds : null,
-        p_channel: filters.channel || null,
-        p_status_filter: filters.statusFilter?.length ? filters.statusFilter : null,
-        p_active_only: filters.activeOnly ?? false,
-    });
+    try {
+        const { data, error } = await supabaseAdmin.rpc('get_campaigns_leads_page', {
+            p_page: page,
+            p_page_size: pageSize,
+            p_search: filters.search?.trim() || null,
+            p_campaign_ids: filters.campaignIds?.length ? filters.campaignIds : null,
+            p_channel: filters.channel || null,
+            p_status_filter: filters.statusFilter?.length ? filters.statusFilter : null,
+            p_active_only: filters.activeOnly ?? false,
+        });
 
+        if (!error && data) {
+            const rows = data || [];
+            return {
+                data: rows.map(normalizeLeadListItem),
+                totalCount: rows[0]?.total_count ?? 0,
+                page,
+                pageSize,
+            };
+        }
+    } catch {
+        // Fall back to direct query
+    }
+
+    let q = supabaseAdmin
+        .from('outreach_leads')
+        .select(`
+            id, full_name, email, mobile_number, linkedin_url, company_name, city, country,
+            campaign_id, campaign_key, outreach_channels, lead_status, whatsapp_status,
+            voice_status, unsubscribed, bounced, last_contacted_at, created_at,
+            assigned_lead, is_enriched,
+            email_status_1, email_status_2, email_status_3, email_status_4, email_status_5,
+            email_status_6, email_status_7, email_status_8, email_status_9, email_status_10,
+            email_reply
+        `, { count: 'exact' });
+
+    if (filters.channel) {
+        q = q.contains('outreach_channels', [filters.channel]);
+    }
+    if (filters.campaignIds?.length) {
+        q = q.in('campaign_id', filters.campaignIds);
+    }
+    if (filters.search?.trim()) {
+        const s = filters.search.trim();
+        q = q.or(`full_name.ilike.%${s}%,email.ilike.%${s}%,mobile_number.ilike.%${s}%,company_name.ilike.%${s}%,assigned_lead.ilike.%${s}%`);
+    }
+
+    const startIndex = (page - 1) * pageSize;
+    q = q.order('last_contacted_at', { ascending: false, nullsFirst: false })
+         .range(startIndex, startIndex + pageSize - 1);
+
+    const { data, count, error } = await q;
     if (error) throw new Error(error.message);
 
-    const rows = data || [];
     return {
-        data: rows.map(normalizeLeadListItem),
-        totalCount: rows[0]?.total_count ?? 0,
+        data: (data || []).map(normalizeLeadListItem),
+        totalCount: count ?? 0,
         page,
         pageSize,
     };

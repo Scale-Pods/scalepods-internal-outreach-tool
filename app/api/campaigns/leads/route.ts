@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
         const channel = VALID_CHANNELS.includes(channelParam as OutreachChannel) ? (channelParam as OutreachChannel) : undefined;
         const statusFilter = searchParams.getAll('status').filter(Boolean);
         const activeOnly = searchParams.get('activeOnly') === 'true';
+        const enrichedOnly = searchParams.get('enrichedOnly') === 'true' || searchParams.get('is_enriched') === 'true';
         const from = searchParams.get('from') || undefined;
         const to = searchParams.get('to') || undefined;
 
@@ -26,6 +27,7 @@ export async function GET(req: NextRequest) {
             channel,
             statusFilter: statusFilter.length ? statusFilter : undefined,
             activeOnly,
+            enrichedOnly,
             from,
             to,
         });
