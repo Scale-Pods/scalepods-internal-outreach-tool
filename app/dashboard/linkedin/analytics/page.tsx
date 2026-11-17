@@ -25,6 +25,7 @@ const ACCOUNT_HEX: Record<string, string> = {
     blue: '#3b82f6',
     violet: '#8b5cf6',
     emerald: '#10b981',
+    amber: '#f59e0b',
     slate: '#94a3b8',
 };
 

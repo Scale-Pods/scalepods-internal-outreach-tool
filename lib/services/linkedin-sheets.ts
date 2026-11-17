@@ -47,6 +47,12 @@ export const LINKEDIN_ACCOUNTS: LinkedInAccount[] = [
         name: 'Raunak Kumar',
         color: 'emerald',
     },
+    {
+        accountId: 'TzfoLZKqRmun89zQUVCSzw',
+        accountIds: ['TzfoLZKqRmun89zQUVCSzw'],
+        name: 'Divit Chandak',
+        color: 'amber',
+    },
 ];
 
 const UNKNOWN_ACCOUNT_COLOR = 'slate';
