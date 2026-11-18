@@ -149,8 +149,15 @@ export default function CampaignVoiceOverviewPage() {
         setModalOpen(true);
     };
 
+    useEffect(() => {
+        if (loading) {
+            const main = document.querySelector('main');
+            if (main) main.scrollTop = 0;
+        }
+    }, [loading]);
+
     return (
-        <div className="space-y-6 pb-12 pt-4 px-6 relative min-h-[500px]">
+        <div className={`space-y-6 pb-12 pt-4 px-6 relative ${loading ? 'h-[calc(100vh-6rem)] overflow-hidden' : 'min-h-[500px]'}`}>
             {loading && <SPLoader />}
 
             {/* Header */}
@@ -235,14 +242,6 @@ export default function CampaignVoiceOverviewPage() {
                     onClick={() => router.push('/dashboard/campaigns/voice/logs')}
                 >
                     Call Logs
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 text-xs font-semibold text-slate-600 hover:text-cyan-600 hover:bg-cyan-50"
-                    onClick={() => router.push('/dashboard/campaigns/voice/cold-logs')}
-                >
-                    Cold Call Logs
                 </Button>
                 <Button
                     variant="ghost"

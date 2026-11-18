@@ -257,14 +257,6 @@ export default function CampaignVoiceCallLogsPage() {
                     variant="ghost"
                     size="sm"
                     className="h-8 text-xs font-semibold text-slate-600 hover:text-cyan-600 hover:bg-cyan-50"
-                    onClick={() => router.push('/dashboard/campaigns/voice/cold-logs')}
-                >
-                    Cold Call Logs
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 text-xs font-semibold text-slate-600 hover:text-cyan-600 hover:bg-cyan-50"
                     onClick={() => router.push('/dashboard/campaigns/voice/analytics')}
                 >
                     Analytics

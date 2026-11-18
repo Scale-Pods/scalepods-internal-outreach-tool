@@ -337,7 +337,6 @@ function DashboardContent({
                     subItems: [
                         { title: "Overview", href: "/dashboard/campaigns/voice" },
                         { title: "Call Logs", href: "/dashboard/campaigns/voice/logs" },
-                        { title: "Cold Call Logs", href: "/dashboard/campaigns/voice/cold-logs" },
                         { title: "Analytics", href: "/dashboard/campaigns/voice/analytics" },
                     ]
                 },
@@ -378,23 +377,8 @@ function DashboardContent({
     });
 
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-    const isCampaignWa = pathname.startsWith("/dashboard/campaigns/whatsapp");
-    const [campaignWaExpanded, setCampaignWaExpanded] = useState(true);
-
-    const isCampaignVoice = pathname.startsWith("/dashboard/campaigns/voice");
-    const [campaignVoiceExpanded, setCampaignVoiceExpanded] = useState(true);
-
-    useEffect(() => {
-        if (isCampaignWa) {
-            setCampaignWaExpanded(true);
-        }
-    }, [isCampaignWa]);
-
-    useEffect(() => {
-        if (isCampaignVoice) {
-            setCampaignVoiceExpanded(true);
-        }
-    }, [isCampaignVoice]);
+    const [campaignWaExpanded, setCampaignWaExpanded] = useState(false);
+    const [campaignVoiceExpanded, setCampaignVoiceExpanded] = useState(false);
 
     // Close the mobile sidebar whenever the route changes
     useEffect(() => {
@@ -500,7 +484,7 @@ function DashboardContent({
                             if (item.subItems) {
                                 const isWa = item.title === "WhatsApp";
                                 const isVoice = item.title === "Voice";
-                                const isExpanded = isWa ? campaignWaExpanded : isVoice ? campaignVoiceExpanded : true;
+                                const isExpanded = isWa ? campaignWaExpanded : isVoice ? campaignVoiceExpanded : false;
                                 const toggleExpanded = () => {
                                     if (isWa) setCampaignWaExpanded(prev => !prev);
                                     else if (isVoice) setCampaignVoiceExpanded(prev => !prev);
