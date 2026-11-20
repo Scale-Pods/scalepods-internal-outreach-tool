@@ -31,18 +31,30 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
     const audioUrl = displayCall.audio_url || displayCall.recordingUrl || null;
 
     useEffect(() => {
-        if (open && call?.id) {
-            setFullCall(call); // Set initial data
-            setLocalLoading(true);
-            // Fetch fresh details to get messages/transcript if not present
-            fetch(`/api/calls/${call.id}`)
-                .then(res => res.ok ? res.json() : null)
-                .then(data => {
-                    if (data) setFullCall(data);
-                })
-                .catch(err => console.error("Error fetching details", err))
-                .finally(() => setLocalLoading(false));
-        }
+        if (!open || !call?.id) return;
+        setFullCall(call); // Set initial data — already complete in most callers
+
+        // Only hit the network if the call we were handed is missing both a
+        // transcript and a messages array — callers like the Campaigns module
+        // already include the full transcript/summary/recording in the row
+        // they pass in, so re-fetching here was a pure, often-slow (cold
+        // Next.js route compile, extra round trip) duplicate of data we
+        // already have, shown behind a full loading overlay for no reason.
+        const hasTranscript = Array.isArray(call.transcript)
+            ? call.transcript.length > 0
+            : !!(typeof call.transcript === 'string' && call.transcript.trim());
+        const hasMessages = Array.isArray(call.messages) && call.messages.length > 0;
+        if (hasTranscript || hasMessages) return;
+
+        setLocalLoading(true);
+        // Fetch fresh details to get messages/transcript if not present
+        fetch(`/api/calls/${call.id}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data) setFullCall(data);
+            })
+            .catch(err => console.error("Error fetching details", err))
+            .finally(() => setLocalLoading(false));
     }, [open, call]);
 
     // Helper to get messages from various AI provider formats
