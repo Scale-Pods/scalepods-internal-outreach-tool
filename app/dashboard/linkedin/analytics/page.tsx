@@ -14,6 +14,7 @@ import { LINKEDIN_ACCOUNTS, getAccountMeta, buildConversationThreads, isDateInRa
 import { LinkedInAccountBadge, LinkedInBatchBadge, accountColorClasses, batchColorClasses } from "@/components/dashboard/linkedin-account-badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useCampaignDateRange } from "@/context/CampaignDateContext";
+import { getLinkedInClientCache, fetchLinkedInClient, prefetchLinkedInSections } from "@/lib/services/linkedin-client-cache";
 
 const BATCH_HEX: Record<DataBatch, string> = {
     old: '#f59e0b',
@@ -30,23 +31,42 @@ const ACCOUNT_HEX: Record<string, string> = {
 };
 
 export default function LinkedInAnalyticsPage() {
-    const [quota, setQuota] = useState<LinkedInQuota[]>([]);
-    const [leads, setLeads] = useState<LinkedInLead[]>([]);
-    const [messages, setMessages] = useState<LinkedInMessage[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [quota, setQuota] = useState<LinkedInQuota[]>(() => {
+        const cached = getLinkedInClientCache<{ data: LinkedInQuota[] }>("/api/linkedin/quota");
+        return cached?.data || [];
+    });
+    const [leads, setLeads] = useState<LinkedInLead[]>(() => {
+        const cached = getLinkedInClientCache<{ leads: LinkedInLead[] }>("/api/linkedin/conversations");
+        return cached?.leads || [];
+    });
+    const [messages, setMessages] = useState<LinkedInMessage[]>(() => {
+        const cached = getLinkedInClientCache<{ messages: LinkedInMessage[] }>("/api/linkedin/conversations");
+        return cached?.messages || [];
+    });
+    const [loading, setLoading] = useState(() => {
+        const hasQuota = !!getLinkedInClientCache("/api/linkedin/quota");
+        const hasConv = !!getLinkedInClientCache("/api/linkedin/conversations");
+        return !hasQuota || !hasConv;
+    });
+    const [refreshing, setRefreshing] = useState(false);
     const { dateRange, setDateRange } = useCampaignDateRange();
     const [repliesPage, setRepliesPage] = useState(1);
     const repliesPerPage = 10;
 
-    const fetchData = async () => {
-        setLoading(true);
+    const fetchData = async (force = false) => {
+        const hasQuota = !!getLinkedInClientCache("/api/linkedin/quota");
+        const hasConv = !!getLinkedInClientCache("/api/linkedin/conversations");
+        if (force) {
+            setRefreshing(true);
+        } else if (!hasQuota || !hasConv) {
+            setLoading(true);
+        }
+
         try {
-            const [quotaRes, convRes] = await Promise.all([
-                fetch("/api/linkedin/quota"),
-                fetch("/api/linkedin/conversations"),
+            const [quotaJson, convJson] = await Promise.all([
+                fetchLinkedInClient<{ data: LinkedInQuota[] }>("/api/linkedin/quota", force),
+                fetchLinkedInClient<{ leads: LinkedInLead[]; messages: LinkedInMessage[] }>("/api/linkedin/conversations", force),
             ]);
-            const quotaJson = await quotaRes.json();
-            const convJson = await convRes.json();
             setQuota(quotaJson.data || []);
             setLeads(convJson.leads || []);
             setMessages(convJson.messages || []);
@@ -54,11 +74,16 @@ export default function LinkedInAnalyticsPage() {
             console.error("LinkedIn analytics fetch error", e);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
 
     useEffect(() => {
-        fetchData();
+        fetchData(false);
+    }, []);
+
+    useEffect(() => {
+        prefetchLinkedInSections();
     }, []);
 
     const filteredData = useMemo(() => {
@@ -198,8 +223,8 @@ export default function LinkedInAnalyticsPage() {
                         value={dateRange}
                         onUpdate={({ range, label }) => setDateRange(range, label)}
                     />
-                    <Button variant="outline" size="sm" onClick={fetchData} className="h-10 px-4 gap-2 border-slate-200">
-                        <RefreshCw className="h-4 w-4 text-slate-600" /> Refresh
+                    <Button variant="outline" size="sm" onClick={() => fetchData(true)} disabled={refreshing} className="h-10 px-4 gap-2 border-slate-200">
+                        <RefreshCw className={cn("h-4 w-4 text-slate-600", refreshing && "animate-spin")} /> {refreshing ? "Refreshing..." : "Refresh"}
                     </Button>
                 </div>
             </div>

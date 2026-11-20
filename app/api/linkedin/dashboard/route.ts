@@ -2,21 +2,25 @@ import { NextResponse } from 'next/server';
 import {
     getLinkedInLeads, getLinkedInConversations, getLinkedInQuota,
     buildConversationThreads, LINKEDIN_ACCOUNTS, getAccountMeta, isDateInRange,
-    isLeadInDateRange, normalizeDateBoundary,
+    isLeadInDateRange, normalizeDateBoundary, clearLinkedInCache,
 } from '@/lib/services/linkedin-sheets';
 
 export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url);
+        const refresh = searchParams.get('refresh') === 'true';
+        if (refresh) {
+            clearLinkedInCache();
+        }
         const fromParam = searchParams.get('from');
         const toParam = searchParams.get('to');
         const fromDate = normalizeDateBoundary(fromParam, false);
         const toDate = normalizeDateBoundary(toParam, true);
 
         const [allLeads, allMessages, allQuota] = await Promise.all([
-            getLinkedInLeads(),
-            getLinkedInConversations(),
-            getLinkedInQuota(),
+            getLinkedInLeads(refresh),
+            getLinkedInConversations(refresh),
+            getLinkedInQuota(refresh),
         ]);
 
         const leads = (fromDate || toDate)

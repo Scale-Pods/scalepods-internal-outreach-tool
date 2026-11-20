@@ -12,10 +12,12 @@ import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SPLoader } from "@/components/sp-loader";
+import { cn } from "@/lib/utils";
 import { LINKEDIN_ACCOUNTS, getAccountMeta, isDateInRange, isLeadInDateRange, normalizeDateBoundary, type LinkedInLead, type DataBatch } from "@/lib/services/linkedin-sheets";
 import { LinkedInAccountBadge, LinkedInBatchBadge } from "@/components/dashboard/linkedin-account-badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useCampaignDateRange } from "@/context/CampaignDateContext";
+import { getLinkedInClientCache, fetchLinkedInClient, prefetchLinkedInSections } from "@/lib/services/linkedin-client-cache";
 
 const STATUS_STYLES: Record<string, string> = {
     connected: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -35,8 +37,12 @@ function isAcceptedConnection(lead: LinkedInLead) {
 }
 
 export default function LinkedInLeadsPage() {
-    const [leads, setLeads] = useState<LinkedInLead[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [leads, setLeads] = useState<LinkedInLead[]>(() => {
+        const cached = getLinkedInClientCache<{ data: LinkedInLead[] }>("/api/linkedin/leads");
+        return cached?.data || [];
+    });
+    const [loading, setLoading] = useState(() => !getLinkedInClientCache("/api/linkedin/leads"));
+    const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
     const leadsPerPage = 15;
@@ -45,22 +51,31 @@ export default function LinkedInLeadsPage() {
     const [batchFilter, setBatchFilter] = useState<DataBatch[]>([]);
     const { dateRange, setDateRange } = useCampaignDateRange();
 
-    const fetchData = async () => {
-        setLoading(true);
+    const fetchData = async (force = false) => {
+        const cached = getLinkedInClientCache<{ data: LinkedInLead[] }>("/api/linkedin/leads");
+        if (force) {
+            setRefreshing(true);
+        } else if (!cached) {
+            setLoading(true);
+        }
+
         try {
-            const res = await fetch("/api/linkedin/leads");
-            if (!res.ok) throw new Error("Failed to fetch");
-            const json = await res.json();
+            const json = await fetchLinkedInClient<{ data: LinkedInLead[] }>("/api/linkedin/leads", force);
             setLeads(json.data || []);
         } catch (err) {
             console.error("Failed to fetch LinkedIn leads:", err);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
 
     useEffect(() => {
-        fetchData();
+        fetchData(false);
+    }, []);
+
+    useEffect(() => {
+        prefetchLinkedInSections();
     }, []);
 
     const connectionStatusOptions = useMemo(() => {
@@ -136,8 +151,8 @@ export default function LinkedInLeadsPage() {
                         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-200 border border-emerald-300" /> Accepted / Connected</span>
                         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-rose-200 border border-rose-300" /> No Status / Not Connected</span>
                     </div>
-                    <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={fetchData}>
-                        <RefreshCw className="h-3 w-3" /> Refresh
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => fetchData(true)} disabled={refreshing}>
+                        <RefreshCw className={cn("h-3 w-3", refreshing && "animate-spin")} /> {refreshing ? "Refreshing..." : "Refresh"}
                     </Button>
                 </div>
             </div>
