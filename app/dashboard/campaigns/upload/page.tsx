@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,10 +8,12 @@ import { Label } from "@/components/ui/label";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-    UploadCloud, FileSpreadsheet, ChevronLeft, Loader2, CheckCircle2, AlertTriangle, X, Megaphone,
+    UploadCloud, FileSpreadsheet, ChevronLeft, Loader2, CheckCircle2, AlertTriangle, X, Megaphone, MessageSquare, ArrowRight,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { WhatsAppCampaignStudio } from "@/components/campaigns/whatsapp-campaign-studio";
 
 const CAMPAIGN_OPTIONS = Array.from({ length: 10 }, (_, i) => {
     const id = i + 1;
@@ -40,6 +42,7 @@ type UploadState = "idle" | "uploading" | "success" | "error";
 export default function UploadLeadsPage() {
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [activeTab, setActiveTab] = useState<string>("upload");
     const [file, setFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<PreviewData | null>(null);
     const [parseError, setParseError] = useState<string | null>(null);
@@ -50,6 +53,20 @@ export default function UploadLeadsPage() {
     const [uploadState, setUploadState] = useState<UploadState>("idle");
     const [uploadResult, setUploadResult] = useState<any>(null);
     const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            const tab = params.get("tab");
+            if (tab === "studio") {
+                setActiveTab("studio");
+            }
+            const cId = params.get("campaign_id");
+            if (cId) {
+                setCampaignId(cId);
+            }
+        }
+    }, []);
 
     const resetUploadStatus = () => {
         setUploadState("idle");
@@ -212,158 +229,202 @@ export default function UploadLeadsPage() {
                 </Button>
             </div>
 
-            <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-violet-600 text-white shadow-sm">
-                    <UploadCloud className="h-5 w-5" />
-                </div>
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Upload Leads</h1>
-                    <p className="text-sm text-slate-500">Upload a CSV or Excel file, assign it to a campaign, and send it for processing</p>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left: upload zone + preview */}
-                <Card className="lg:col-span-2 border-border shadow-sm bg-white">
-                    <CardContent className="p-6 space-y-5">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+                    <div className="flex items-center gap-3">
+                        <div className={`p-2.5 rounded-xl text-white shadow-sm transition-colors ${activeTab === "studio" ? "bg-emerald-600" : "bg-violet-600"}`}>
+                            {activeTab === "studio" ? <MessageSquare className="h-5 w-5" /> : <UploadCloud className="h-5 w-5" />}
+                        </div>
                         <div>
-                            <Label className="text-xs font-bold uppercase text-slate-500 mb-2 block">File</Label>
-                            {!file ? (
-                                <div
-                                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                                    onDragLeave={() => setIsDragging(false)}
-                                    onDrop={handleDrop}
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className={`py-12 rounded-2xl border-2 border-dashed text-center cursor-pointer transition-colors ${isDragging ? "border-violet-400 bg-violet-50" : "border-slate-200 bg-slate-50 hover:bg-slate-100/70"
-                                        }`}
-                                >
-                                    <UploadCloud className="h-9 w-9 text-slate-400 mx-auto mb-3" />
-                                    <p className="text-sm font-semibold text-slate-700">Drag &amp; drop your file here, or click to browse</p>
-                                    <p className="text-xs text-slate-400 mt-1">Accepts .csv, .xlsx, .xls</p>
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                        className="hidden"
-                                        onChange={handleFileChange}
-                                    />
-                                </div>
-                            ) : (
-                                <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-slate-50">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
-                                            <FileSpreadsheet className="h-5 w-5" />
+                            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                                {activeTab === "studio" ? "WhatsApp Campaign Studio" : "Upload Leads"}
+                            </h1>
+                            <p className="text-sm text-slate-500">
+                                {activeTab === "studio"
+                                    ? "Authoritative knowledge base, OpenAI sequence previews, and live WhatsApp outreach activation"
+                                    : "Upload a CSV or Excel file, assign it to a campaign, and send it for processing"}
+                            </p>
+                        </div>
+                    </div>
+
+                    <TabsList className="bg-slate-100 p-1 rounded-xl h-auto self-start sm:self-auto border border-slate-200">
+                        <TabsTrigger
+                            value="upload"
+                            className="gap-2 px-4 py-2 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-900 shadow-none data-[state=active]:shadow-sm"
+                        >
+                            <UploadCloud className="h-4 w-4" />
+                            Upload Leads
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="studio"
+                            className="gap-2 px-4 py-2 text-xs font-semibold rounded-lg data-[state=active]:bg-white data-[state=active]:text-emerald-700 shadow-none data-[state=active]:shadow-sm"
+                        >
+                            <MessageSquare className="h-4 w-4 text-emerald-600" />
+                            WhatsApp Sequence Studio
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
+
+                <TabsContent value="upload" className="space-y-6 mt-0">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Left: upload zone + preview */}
+                        <Card className="lg:col-span-2 border-border shadow-sm bg-white">
+                            <CardContent className="p-6 space-y-5">
+                                <div>
+                                    <Label className="text-xs font-bold uppercase text-slate-500 mb-2 block">File</Label>
+                                    {!file ? (
+                                        <div
+                                            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                                            onDragLeave={() => setIsDragging(false)}
+                                            onDrop={handleDrop}
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className={`py-12 rounded-2xl border-2 border-dashed text-center cursor-pointer transition-colors ${isDragging ? "border-violet-400 bg-violet-50" : "border-slate-200 bg-slate-50 hover:bg-slate-100/70"
+                                                }`}
+                                        >
+                                            <UploadCloud className="h-9 w-9 text-slate-400 mx-auto mb-3" />
+                                            <p className="text-sm font-semibold text-slate-700">Drag &amp; drop your file here, or click to browse</p>
+                                            <p className="text-xs text-slate-400 mt-1">Accepts .csv, .xlsx, .xls</p>
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                                className="hidden"
+                                                onChange={handleFileChange}
+                                            />
                                         </div>
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-bold text-slate-900 truncate">{file.name}</p>
-                                            <p className="text-xs text-slate-500">{(file.size / 1024).toFixed(1)} KB {preview ? `· ${preview.totalRows.toLocaleString()} rows` : ""}</p>
+                                    ) : (
+                                        <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-slate-50">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 shrink-0">
+                                                    <FileSpreadsheet className="h-5 w-5" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-bold text-slate-900 truncate">{file.name}</p>
+                                                    <p className="text-xs text-slate-500">{(file.size / 1024).toFixed(1)} KB {preview ? `· ${preview.totalRows.toLocaleString()} rows` : ""}</p>
+                                                </div>
+                                            </div>
+                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600" onClick={clearFile}>
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    )}
+                                    {parseError && (
+                                        <p className="text-xs text-rose-600 mt-2 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> {parseError}</p>
+                                    )}
+                                </div>
+
+                                {preview && (
+                                    <div>
+                                        <Label className="text-xs font-bold uppercase text-slate-500 mb-2 block">
+                                            Preview (first {Math.min(10, preview.rows.length)} of {preview.totalRows.toLocaleString()} rows)
+                                        </Label>
+                                        <div className="overflow-auto max-h-72 rounded-lg border border-border">
+                                            <table className="w-full text-left text-xs">
+                                                <thead className="bg-slate-50 text-slate-500 font-bold uppercase sticky top-0">
+                                                    <tr>
+                                                        {preview.headers.map((h, i) => (
+                                                            <th key={i} className="px-3 py-2 whitespace-nowrap">{h || `Column ${i + 1}`}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-border">
+                                                    {preview.rows.map((row, ri) => (
+                                                        <tr key={ri} className="hover:bg-slate-50">
+                                                            {preview.headers.map((_, ci) => (
+                                                                <td key={ci} className="px-3 py-2 text-slate-600 whitespace-nowrap max-w-[200px] truncate">{row[ci] ?? ""}</td>
+                                                            ))}
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
                                         </div>
                                     </div>
-                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600" onClick={clearFile}>
-                                        <X className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            )}
-                            {parseError && (
-                                <p className="text-xs text-rose-600 mt-2 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> {parseError}</p>
-                            )}
-                        </div>
+                                )}
+                            </CardContent>
+                        </Card>
 
-                        {preview && (
-                            <div>
-                                <Label className="text-xs font-bold uppercase text-slate-500 mb-2 block">
-                                    Preview (first {Math.min(10, preview.rows.length)} of {preview.totalRows.toLocaleString()} rows)
-                                </Label>
-                                <div className="overflow-auto max-h-72 rounded-lg border border-border">
-                                    <table className="w-full text-left text-xs">
-                                        <thead className="bg-slate-50 text-slate-500 font-bold uppercase sticky top-0">
-                                            <tr>
-                                                {preview.headers.map((h, i) => (
-                                                    <th key={i} className="px-3 py-2 whitespace-nowrap">{h || `Column ${i + 1}`}</th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-border">
-                                            {preview.rows.map((row, ri) => (
-                                                <tr key={ri} className="hover:bg-slate-50">
-                                                    {preview.headers.map((_, ci) => (
-                                                        <td key={ci} className="px-3 py-2 text-slate-600 whitespace-nowrap max-w-[200px] truncate">{row[ci] ?? ""}</td>
-                                                    ))}
-                                                </tr>
+                        {/* Right: campaign assignment + submit */}
+                        <Card className="border-border shadow-sm bg-white h-fit">
+                            <CardContent className="p-6 space-y-5">
+                                <div>
+                                    <Label className="text-xs font-bold uppercase text-slate-500 mb-2 flex items-center gap-1.5">
+                                        <Megaphone className="h-3.5 w-3.5" /> Assign to Campaign
+                                    </Label>
+                                    <Select value={campaignId} onValueChange={setCampaignId} disabled={!file}>
+                                        <SelectTrigger className="h-10">
+                                            <SelectValue placeholder="Select a campaign..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {CAMPAIGN_OPTIONS.map(c => (
+                                                <SelectItem key={c.id} value={String(c.id)}>
+                                                    {c.label} <span className="text-slate-400 ml-1">({c.key})</span>
+                                                </SelectItem>
                                             ))}
-                                        </tbody>
-                                    </table>
+                                        </SelectContent>
+                                    </Select>
+                                    {!file && <p className="text-[11px] text-slate-400 mt-1.5">Upload a file first to assign a campaign.</p>}
                                 </div>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
 
-                {/* Right: campaign assignment + submit */}
-                <Card className="border-border shadow-sm bg-white h-fit">
-                    <CardContent className="p-6 space-y-5">
-                        <div>
-                            <Label className="text-xs font-bold uppercase text-slate-500 mb-2 flex items-center gap-1.5">
-                                <Megaphone className="h-3.5 w-3.5" /> Assign to Campaign
-                            </Label>
-                            <Select value={campaignId} onValueChange={setCampaignId} disabled={!file}>
-                                <SelectTrigger className="h-10">
-                                    <SelectValue placeholder="Select a campaign..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {CAMPAIGN_OPTIONS.map(c => (
-                                        <SelectItem key={c.id} value={String(c.id)}>
-                                            {c.label} <span className="text-slate-400 ml-1">({c.key})</span>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            {!file && <p className="text-[11px] text-slate-400 mt-1.5">Upload a file first to assign a campaign.</p>}
-                        </div>
+                                <div>
+                                    <Label className="text-xs font-bold uppercase text-slate-500 mb-2 block">Source</Label>
+                                    <Select value={source} onValueChange={setSource}>
+                                        <SelectTrigger className="h-10">
+                                            <SelectValue placeholder="Select source..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {SOURCE_OPTIONS.map(s => (
+                                                <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                        <div>
-                            <Label className="text-xs font-bold uppercase text-slate-500 mb-2 block">Source</Label>
-                            <Select value={source} onValueChange={setSource}>
-                                <SelectTrigger className="h-10">
-                                    <SelectValue placeholder="Select source..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {SOURCE_OPTIONS.map(s => (
-                                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                                <Button
+                                    className="w-full h-11 gap-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl"
+                                    disabled={!canUpload}
+                                    onClick={handleUpload}
+                                >
+                                    {uploadState === "uploading" ? (
+                                        <><Loader2 className="h-4 w-4 animate-spin" /> Uploading...</>
+                                    ) : (
+                                        <><UploadCloud className="h-4 w-4" /> Upload &amp; Send</>
+                                    )}
+                                </Button>
 
-                        <Button
-                            className="w-full h-11 gap-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl"
-                            disabled={!canUpload}
-                            onClick={handleUpload}
-                        >
-                            {uploadState === "uploading" ? (
-                                <><Loader2 className="h-4 w-4 animate-spin" /> Uploading...</>
-                            ) : (
-                                <><UploadCloud className="h-4 w-4" /> Upload &amp; Send</>
-                            )}
-                        </Button>
+                                {uploadState === "success" && (
+                                    <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs space-y-2">
+                                        <p className="font-bold flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-emerald-600" /> Upload accepted — processing</p>
+                                        {uploadResult?.upload_id && <p className="font-mono text-[10px] text-emerald-700 break-all">Upload ID: {uploadResult.upload_id}</p>}
+                                        {selectedCampaign && <p>Assigned to <span className="font-bold">{selectedCampaign.label}</span> ({selectedCampaign.key})</p>}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full mt-2 text-xs font-semibold text-emerald-800 bg-emerald-100/70 border-emerald-300 hover:bg-emerald-200/80 gap-1.5"
+                                            onClick={() => setActiveTab("studio")}
+                                        >
+                                            <MessageSquare className="h-3.5 w-3.5" />
+                                            Open WhatsApp Studio for {selectedCampaign?.label || `Campaign ${campaignId}`}
+                                            <ArrowRight className="h-3.5 w-3.5 ml-auto" />
+                                        </Button>
+                                    </div>
+                                )}
 
-                        {uploadState === "success" && (
-                            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs space-y-1">
-                                <p className="font-bold flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" /> Upload accepted — processing</p>
-                                {uploadResult?.upload_id && <p className="font-mono text-[10px] text-emerald-700 break-all">Upload ID: {uploadResult.upload_id}</p>}
-                                {selectedCampaign && <p>Assigned to <span className="font-bold">{selectedCampaign.label}</span> ({selectedCampaign.key})</p>}
-                            </div>
-                        )}
+                                {uploadState === "error" && (
+                                    <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-1">
+                                        <p className="font-bold flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" /> Upload failed</p>
+                                        {uploadErrors.map((err, i) => <p key={i}>{err}</p>)}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+                </TabsContent>
 
-                        {uploadState === "error" && (
-                            <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-1">
-                                <p className="font-bold flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" /> Upload failed</p>
-                                {uploadErrors.map((err, i) => <p key={i}>{err}</p>)}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
+                <TabsContent value="studio" className="mt-0">
+                    <WhatsAppCampaignStudio initialCampaignId={campaignId ? Number(campaignId) : 9} />
+                </TabsContent>
+            </Tabs>
         </div>
     );
 }
