@@ -2,6 +2,13 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { campaignColor, CampaignColor } from '@/lib/services/campaigns';
 import { formatCampaignName, resolveCampaignInfo, parseSafeTimestamp } from '@/lib/services/campaign-whatsapp';
 
+// All campaign-module voice data is sourced exclusively from vapi_call_logs
+// where vapi_account = 'sarvam'. Campaign/lead attribution is resolved by
+// matching customer_phone against outreach_leads, but only for the small set
+// of phone numbers actually present in the (date-filtered) call rows — never
+// a full-table fetch of outreach_leads.
+const SARVAM_ACCOUNT = 'sarvam';
+
 export interface CampaignVoiceFilterParams {
     campaignIds?: string[];
     search?: string;
@@ -17,7 +24,7 @@ export interface CampaignVoiceFilterParams {
 export interface CampaignVoiceCall {
     id: string;
     callNumber: 1 | 2 | 3;
-    leadId: string;
+    leadId: string | null;
     leadName: string;
     phone: string;
     companyName: string | null;
@@ -37,7 +44,7 @@ export interface CampaignVoiceCall {
     transcript: string | null;
     isPickedUp: boolean;
     costUsd: number | null;
-    source: 'sarvam' | 'vapi' | 'twilio' | 'outreach_leads';
+    source: 'sarvam';
     vapiCallId: string | null;
 }
 
@@ -82,28 +89,6 @@ export interface CampaignVoiceOverviewStats {
     }[];
 }
 
-export interface CampaignVoiceColdCall {
-    id: string;
-    callSid: string;
-    from: string;
-    to: string;
-    direction: string;
-    status: string;
-    durationSeconds: number;
-    recordingUrl: string | null;
-    transcript: string | null;
-    transcriptionStatus: string | null;
-    startedAt: string | null;
-    createdAt: string | null;
-    leadId: string | null;
-    leadName: string;
-    campaignId: number | null;
-    campaignKey: string | null;
-    campaignName: string;
-    campaignColor: CampaignColor | 'slate';
-    isAttributed: boolean;
-}
-
 /** Determines if call was picked up / connected */
 export function isCallPickedUp(status?: string | null, durationSeconds: number = 0, replyTrack?: string | null): boolean {
     if (replyTrack && String(replyTrack).toLowerCase().includes('picked')) return true;
@@ -126,9 +111,8 @@ export function extractSentimentScore(text?: string | null): number | null {
 
 /**
  * Normalizes voice sentiment string into positive, negative, neutral or unknown.
- * Stored sentiment from outreach_leads is the primary source of truth.
- * Note or transcript fallback is ONLY evaluated if sentimentRaw is null or empty.
- * Never invents synthetic confidence scores.
+ * vapi_call_logs has no structured sentiment column, so this always runs off
+ * the call summary text (passed as noteRaw).
  */
 export function normalizeVoiceSentiment(sentimentRaw?: string | null, noteRaw?: string | null): {
     category: 'positive' | 'negative' | 'neutral' | 'unknown';
@@ -138,10 +122,8 @@ export function normalizeVoiceSentiment(sentimentRaw?: string | null, noteRaw?: 
     const raw = sentimentRaw ? String(sentimentRaw).trim() : null;
     const note = noteRaw ? String(noteRaw).trim() : '';
 
-    // Extract genuine score from raw or note if present, but never invent one
     const score = extractSentimentScore(raw) ?? extractSentimentScore(note);
 
-    // 1. PRIMARY SOURCE OF TRUTH: If stored sentiment exists, use it directly
     if (raw) {
         const lowerRaw = raw.toLowerCase();
         if (
@@ -170,16 +152,15 @@ export function normalizeVoiceSentiment(sentimentRaw?: string | null, noteRaw?: 
         ) {
             return { category: 'neutral', score, raw };
         }
-        // If stored sentiment is any other non-empty string, categorize as neutral with raw preserved
         return { category: 'neutral', score, raw };
     }
 
-    // 2. FALLBACK ONLY: If stored sentiment is null or empty, check note keywords
     if (note) {
         const lowerNote = note.toLowerCase();
         if (
             lowerNote.includes('sentiment: positive') ||
-            lowerNote.includes('positive') ||
+            lowerNote.includes('lead temperature: hot') ||
+            lowerNote.includes('lead temperature: warm') ||
             lowerNote.includes('intent: interested') ||
             lowerNote.includes('emotions: interested')
         ) {
@@ -193,7 +174,7 @@ export function normalizeVoiceSentiment(sentimentRaw?: string | null, noteRaw?: 
         ) {
             return { category: 'negative', score, raw: null };
         }
-        if (lowerNote.includes('sentiment: neutral')) {
+        if (lowerNote.includes('sentiment: neutral') || lowerNote.includes('no_response') || lowerNote.includes('lead temperature: cold')) {
             return { category: 'neutral', score, raw: null };
         }
     }
@@ -201,168 +182,123 @@ export function normalizeVoiceSentiment(sentimentRaw?: string | null, noteRaw?: 
     return { category: 'unknown', score: null, raw: null };
 }
 
-/** Extracts [ref <call_id>] from call note if present */
-export function extractRefCallId(note?: string | null): string | null {
-    if (!note) return null;
-    const match = note.match(/\[ref\s+([^\]]+)\]/i);
-    return match ? match[1].trim() : null;
+function last10Digits(phone?: string | null): string {
+    return String(phone || '').replace(/\D/g, '').slice(-10);
 }
 
-/** Extracts duration in seconds from note string (e.g. "124s." or "45s") */
-export function extractDurationFromNote(note?: string | null): number {
-    if (!note) return 0;
-    const match = note.match(/(\d+)\s*s\b/i);
-    return match ? parseInt(match[1], 10) : 0;
-}
+/** Fetches sarvam call rows from vapi_call_logs with date filtering pushed to Postgres,
+ *  then resolves campaign/lead attribution via a small targeted outreach_leads lookup
+ *  scoped only to the phone numbers present in that result set. */
+async function fetchSarvamCallsWithAttribution(filters: Pick<CampaignVoiceFilterParams, 'from' | 'to'>): Promise<CampaignVoiceCall[]> {
+    let query = supabaseAdmin
+        .from('vapi_call_logs')
+        .select('id, started_at, customer_phone, customer_name, duration_seconds, status, cost_usd, summary, recording_url, transcript, created_at, vapi_account')
+        .ilike('vapi_account', SARVAM_ACCOUNT)
+        .order('started_at', { ascending: true })
+        .limit(10000);
 
-/** Builds CampaignVoiceCall objects from outreach_leads row and matched vapi_call_logs */
-export function buildCampaignVoiceCallsFromLead(
-    lead: any,
-    vapiMapByRef: Map<string, any>,
-    vapiMapByPhone: Map<string, any[]>
-): CampaignVoiceCall[] {
-    const calls: CampaignVoiceCall[] = [];
-    const leadPhone = (lead.mobile_number || lead.company_phone || '').trim();
-    const phoneDigits = leadPhone.replace(/\D/g, '').slice(-10);
+    if (filters.from) {
+        query = query.gte('created_at', filters.from);
+    }
+    if (filters.to) {
+        query = query.lte('created_at', filters.to);
+    }
 
-    const rawCampaignId = lead.campaign_id !== undefined && lead.campaign_id !== null ? Number(lead.campaign_id) : null;
-    const { campaignId, campaignKey, campaignName, color } = resolveCampaignInfo(rawCampaignId, lead.campaign_key || null);
+    const { data: calls, error } = await query;
+    if (error) {
+        console.error('[campaign-voice] vapi_call_logs fetch error:', error);
+        throw new Error(error.message || 'Failed to fetch vapi_call_logs');
+    }
 
-    const slots: (1 | 2 | 3)[] = [1, 2, 3];
+    const rows = calls || [];
+    if (rows.length === 0) return [];
 
-    slots.forEach(slot => {
-        const date = lead[`call_${slot}_date`];
-        const status = lead[`call_${slot}_status`];
-        const sentiment = lead[`call_${slot}_sentiment`];
-        const note = lead[`call_${slot}_note`];
-        const recording = lead[`call_recording_${slot}`];
+    // Resolve lead/campaign attribution only for the phone numbers actually present here.
+    const phoneDigitsSet = new Set<string>();
+    rows.forEach(r => {
+        const digits = last10Digits(r.customer_phone);
+        if (digits.length >= 7) phoneDigitsSet.add(digits);
+    });
 
-        // If slot has no call recorded, skip
-        if (!date && !status && !sentiment && !note) {
-            return;
+    const leadByPhone = new Map<string, any>();
+    if (phoneDigitsSet.size > 0) {
+        const orClauses = Array.from(phoneDigitsSet)
+            .map(d => [`mobile_number.ilike.%${d}`, `mobile_number_2.ilike.%${d}`, `company_phone.ilike.%${d}`].join(','))
+            .join(',');
+
+        const { data: leadRows, error: leadErr } = await supabaseAdmin
+            .from('outreach_leads')
+            .select('id, full_name, first_name, last_name, mobile_number, mobile_number_2, company_phone, company_name, campaign_id, campaign_key')
+            .or(orClauses)
+            .limit(5000);
+
+        if (leadErr) {
+            console.error('[campaign-voice] outreach_leads attribution lookup error:', leadErr);
+        } else {
+            (leadRows || []).forEach(l => {
+                [l.mobile_number, l.mobile_number_2, l.company_phone].forEach(p => {
+                    const digits = last10Digits(p);
+                    if (digits.length >= 7 && phoneDigitsSet.has(digits) && !leadByPhone.has(digits)) {
+                        leadByPhone.set(digits, l);
+                    }
+                });
+            });
         }
+    }
 
-        const refId = extractRefCallId(note);
-        let vapiCall: any = null;
+    // Rank calls to the same phone number chronologically to derive a "touch" number (1/2/3+).
+    const touchCounters = new Map<string, number>();
 
-        if (refId && vapiMapByRef.has(refId)) {
-            vapiCall = vapiMapByRef.get(refId);
-        } else if (phoneDigits && vapiMapByPhone.has(phoneDigits)) {
-            const candidates = vapiMapByPhone.get(phoneDigits) || [];
-            if (candidates.length === 1) {
-                // Exactly one valid candidate -> match
-                vapiCall = candidates[0];
-            } else {
-                // Ambiguous: multiple call candidates match this phone number.
-                // Never assign an ambiguous call to a lead.
-                vapiCall = null;
-            }
-        }
+    return rows.map(r => {
+        const digits = last10Digits(r.customer_phone);
+        const lead = digits ? leadByPhone.get(digits) : undefined;
 
-        const durationSeconds = vapiCall?.duration_seconds
-            ? Math.round(Number(vapiCall.duration_seconds))
-            : extractDurationFromNote(note);
+        const touchIndex = (touchCounters.get(digits) || 0) + 1;
+        touchCounters.set(digits, touchIndex);
+        const callNumber = (Math.min(touchIndex, 3) as 1 | 2 | 3);
 
-        const { category, score, raw } = normalizeVoiceSentiment(sentiment, note || vapiCall?.summary);
-        const effectiveStatus = status || vapiCall?.status || 'Completed';
-        const isPicked = isCallPickedUp(effectiveStatus, durationSeconds, lead.call_reply_track);
+        const rawCampaignId = lead?.campaign_id !== undefined && lead?.campaign_id !== null ? Number(lead.campaign_id) : null;
+        const { campaignId, campaignKey, campaignName, color } = resolveCampaignInfo(rawCampaignId, lead?.campaign_key || null);
 
-        const effectiveDate = date || vapiCall?.started_at || vapiCall?.created_at || lead.created_at;
+        const durationSeconds = r.duration_seconds ? Math.round(Number(r.duration_seconds)) : 0;
+        const { category, score, raw } = normalizeVoiceSentiment(null, r.summary);
+        const isPicked = isCallPickedUp(r.status, durationSeconds);
 
-        calls.push({
-            id: refId || vapiCall?.id || `${lead.id}-call-${slot}`,
-            callNumber: slot,
-            leadId: lead.id,
-            leadName: lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || 'Unknown Lead',
-            phone: leadPhone || vapiCall?.customer_phone || '—',
-            companyName: lead.company_name || null,
+        return {
+            id: r.id,
+            callNumber,
+            leadId: lead?.id ?? null,
+            leadName: lead
+                ? (lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || 'Unknown Lead')
+                : (r.customer_name || 'Unknown Lead'),
+            phone: r.customer_phone || '—',
+            companyName: lead?.company_name || null,
             campaignId,
             campaignKey,
             campaignName,
             campaignColor: color,
-            callDate: effectiveDate,
+            callDate: r.started_at || r.created_at,
             durationSeconds,
-            status: effectiveStatus,
+            status: r.status || 'Completed',
             sentiment: category,
             rawSentiment: raw,
             sentimentScore: score,
-            summary: vapiCall?.summary || note || null,
-            note: note || null,
-            recordingUrl: recording || vapiCall?.recording_url || null,
-            transcript: vapiCall?.transcript || null,
+            summary: r.summary || null,
+            note: null,
+            recordingUrl: r.recording_url || null,
+            transcript: r.transcript || null,
             isPickedUp: isPicked,
-            costUsd: vapiCall?.cost_usd ? Number(vapiCall.cost_usd) : null,
-            source: vapiCall?.source === 'sarvam' ? 'sarvam' : (vapiCall ? 'vapi' : 'outreach_leads'),
-            vapiCallId: refId || vapiCall?.id || null,
-        });
-    });
-
-    return calls;
+            costUsd: r.cost_usd !== null && r.cost_usd !== undefined ? Number(r.cost_usd) : null,
+            source: 'sarvam',
+            vapiCallId: r.id,
+        } satisfies CampaignVoiceCall;
+    }).sort((a, b) => parseSafeTimestamp(b.callDate) - parseSafeTimestamp(a.callDate));
 }
 
-/** Fetches and normalizes all campaign voice calls from outreach_leads & vapi_call_logs */
-export async function getAllCampaignVoiceCalls(): Promise<CampaignVoiceCall[]> {
-    // 1. Fetch outreach_leads with call activity
-    const { data: leads, error: leadErr } = await supabaseAdmin
-        .from('outreach_leads')
-        .select(`
-            id, full_name, first_name, last_name, mobile_number, mobile_number_2, company_phone, company_name,
-            campaign_id, campaign_key, voice_status, voice_touches, call_reply_track, replied,
-            call_1_date, call_1_status, call_1_sentiment, call_1_note, call_recording_1,
-            call_2_date, call_2_status, call_2_sentiment, call_2_note, call_recording_2,
-            call_3_date, call_3_status, call_3_sentiment, call_3_note, call_recording_3,
-            created_at, updated_at
-        `)
-        .or('call_1_date.not.is.null,call_1_status.not.is.null,call_1_sentiment.not.is.null,call_2_date.not.is.null,call_2_status.not.is.null,call_3_date.not.is.null,call_3_status.not.is.null,voice_status.not.is.null');
-
-    if (leadErr) {
-        console.error('[campaign-voice] outreach_leads fetch error:', leadErr);
-        throw new Error(leadErr.message || 'Failed to fetch outreach_leads for voice');
-    }
-
-    // 2. Fetch vapi_call_logs
-    const { data: vapiLogs, error: vapiErr } = await supabaseAdmin
-        .from('vapi_call_logs')
-        .select('*');
-
-    if (vapiErr) {
-        console.error('[campaign-voice] vapi_call_logs fetch error:', vapiErr);
-    }
-
-    // Index vapi_call_logs by ID and phone suffix
-    const vapiMapByRef = new Map<string, any>();
-    const vapiMapByPhone = new Map<string, any[]>();
-
-    (vapiLogs || []).forEach(v => {
-        if (v.id) vapiMapByRef.set(String(v.id).trim(), v);
-        const digits = (v.customer_phone || '').replace(/\D/g, '').slice(-10);
-        if (digits) {
-            const arr = vapiMapByPhone.get(digits) || [];
-            arr.push(v);
-            vapiMapByPhone.set(digits, arr);
-        }
-    });
-
-    const allCalls: CampaignVoiceCall[] = [];
-    (leads || []).forEach(l => {
-        const leadCalls = buildCampaignVoiceCallsFromLead(l, vapiMapByRef, vapiMapByPhone);
-        allCalls.push(...leadCalls);
-    });
-
-    // Sort calls descending by callDate
-    allCalls.sort((a, b) => {
-        const tA = parseSafeTimestamp(a.callDate);
-        const tB = parseSafeTimestamp(b.callDate);
-        return tB - tA;
-    });
-
-    return allCalls;
-}
-
-/** Filters a list of campaign voice calls using provided parameters */
+/** Filters a list of campaign voice calls using provided parameters (date range is
+ *  already applied at the DB level by fetchSarvamCallsWithAttribution). */
 export function filterCampaignVoiceCalls(calls: CampaignVoiceCall[], filters: CampaignVoiceFilterParams = {}): CampaignVoiceCall[] {
     return calls.filter(c => {
-        // Campaign filter
         if (filters.campaignIds && filters.campaignIds.length > 0) {
             const cId = c.campaignId !== null && c.campaignId !== undefined ? String(c.campaignId) : 'unknown';
             const cKey = (c.campaignKey || '').toLowerCase();
@@ -373,7 +309,6 @@ export function filterCampaignVoiceCalls(calls: CampaignVoiceCall[], filters: Ca
             if (!matches) return false;
         }
 
-        // Search filter (lead name, phone, company, summary, note)
         if (filters.search && filters.search.trim()) {
             const q = filters.search.trim().toLowerCase();
             const phoneDigits = q.replace(/\D/g, '');
@@ -382,18 +317,15 @@ export function filterCampaignVoiceCalls(calls: CampaignVoiceCall[], filters: Ca
                 c.leadName.toLowerCase().includes(q) ||
                 (c.companyName && c.companyName.toLowerCase().includes(q)) ||
                 (c.summary && c.summary.toLowerCase().includes(q)) ||
-                (c.note && c.note.toLowerCase().includes(q)) ||
                 c.status.toLowerCase().includes(q);
             const digitsMatch = phoneDigits && callDigits.includes(phoneDigits);
             if (!textMatch && !digitsMatch) return false;
         }
 
-        // Call Number filter
         if (filters.callNumber && c.callNumber !== filters.callNumber) {
             return false;
         }
 
-        // Status filter
         if (filters.status && filters.status !== 'all') {
             const s = filters.status.toLowerCase();
             if (s === 'picked_up' && !c.isPickedUp) return false;
@@ -401,27 +333,18 @@ export function filterCampaignVoiceCalls(calls: CampaignVoiceCall[], filters: Ca
             if (s !== 'picked_up' && s !== 'missed' && !c.status.toLowerCase().includes(s)) return false;
         }
 
-        // Sentiment filter
         if (filters.sentiment && filters.sentiment !== 'all') {
             if (c.sentiment !== filters.sentiment.toLowerCase()) return false;
         }
-
-        // Date range filter
-        if (!filters.from && !filters.to) return true;
-        const time = parseSafeTimestamp(c.callDate);
-        if (!time) return false;
-        if (filters.from && time < parseSafeTimestamp(filters.from, false)) return false;
-        if (filters.to && time > parseSafeTimestamp(filters.to, true)) return false;
 
         return true;
     });
 }
 
-/** Fetches Overview statistics dynamically for Campaign Voice */
-export async function getCampaignVoiceOverview(filters: CampaignVoiceFilterParams = {}): Promise<CampaignVoiceOverviewStats> {
-    const allCalls = await getAllCampaignVoiceCalls();
-    const filtered = filterCampaignVoiceCalls(allCalls, filters);
-
+/** Pure aggregation step — never re-fetches, so callers that already hold a
+ *  filtered call list (e.g. getCampaignVoiceAnalytics) can reuse it instead
+ *  of hitting Postgres twice. */
+function computeOverviewStats(filtered: CampaignVoiceCall[]): CampaignVoiceOverviewStats {
     let totalCalls = filtered.length;
     let callsPickedUp = 0;
     let callsMissed = 0;
@@ -456,13 +379,10 @@ export async function getCampaignVoiceOverview(filters: CampaignVoiceFilterParam
     for (let h = 0; h < 24; h++) hourMap[h] = 0;
 
     filtered.forEach(c => {
-        uniqueLeadsSet.add(c.leadId);
+        uniqueLeadsSet.add(c.leadId || c.phone);
 
-        if (c.isPickedUp) {
-            callsPickedUp++;
-        } else {
-            callsMissed++;
-        }
+        if (c.isPickedUp) callsPickedUp++;
+        else callsMissed++;
 
         if (c.sentiment === 'positive') positiveSentimentCalls++;
         else if (c.sentiment === 'negative') negativeSentimentCalls++;
@@ -474,7 +394,6 @@ export async function getCampaignVoiceOverview(filters: CampaignVoiceFilterParam
             totalCostUsd += c.costUsd;
         }
 
-        // Campaign breakdown
         const cKey = c.campaignId !== null && c.campaignId !== undefined ? String(c.campaignId) : (c.campaignKey || 'unknown');
         if (!campaignMap[cKey]) {
             campaignMap[cKey] = {
@@ -489,19 +408,17 @@ export async function getCampaignVoiceOverview(filters: CampaignVoiceFilterParam
             };
         }
         campaignMap[cKey].totalCalls++;
-        campaignMap[cKey].leadsSet.add(c.leadId);
+        campaignMap[cKey].leadsSet.add(c.leadId || c.phone);
         if (c.isPickedUp) campaignMap[cKey].pickedUpCalls++;
         if (c.sentiment === 'positive') campaignMap[cKey].positiveCalls++;
         campaignMap[cKey].totalDurationSeconds += c.durationSeconds;
 
-        // Call number breakdown
         if (callNumberMap[c.callNumber]) {
             callNumberMap[c.callNumber].count++;
             if (c.isPickedUp) callNumberMap[c.callNumber].pickedUp++;
             if (c.sentiment === 'positive') callNumberMap[c.callNumber].positive++;
         }
 
-        // Daily trend
         if (c.callDate) {
             const d = new Date(c.callDate);
             if (!isNaN(d.getTime())) {
@@ -569,9 +486,16 @@ export async function getCampaignVoiceOverview(filters: CampaignVoiceFilterParam
     };
 }
 
-/** Fetches paginated campaign voice call logs */
+/** Fetches Overview statistics dynamically for Campaign Voice (sarvam only) */
+export async function getCampaignVoiceOverview(filters: CampaignVoiceFilterParams = {}): Promise<CampaignVoiceOverviewStats> {
+    const allCalls = await fetchSarvamCallsWithAttribution(filters);
+    const filtered = filterCampaignVoiceCalls(allCalls, filters);
+    return computeOverviewStats(filtered);
+}
+
+/** Fetches paginated campaign voice call logs (sarvam only) */
 export async function getCampaignVoiceCallLogs(filters: CampaignVoiceFilterParams = {}) {
-    const allCalls = await getAllCampaignVoiceCalls();
+    const allCalls = await fetchSarvamCallsWithAttribution(filters);
     const filtered = filterCampaignVoiceCalls(allCalls, filters);
 
     const page = filters.page ?? 1;
@@ -589,186 +513,18 @@ export async function getCampaignVoiceCallLogs(filters: CampaignVoiceFilterParam
     };
 }
 
-/** Fetches cold call logs from twilio_call_logs associated with campaign leads */
-export async function getCampaignVoiceColdCalls(filters: CampaignVoiceFilterParams = {}) {
-    const page = filters.page ?? 1;
-    const pageSize = filters.pageSize ?? 15;
-
-    // 1. Fetch twilio_call_logs with date filtering if present
-    let query = supabaseAdmin
-        .from('twilio_call_logs')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-    if (filters.from) {
-        const fromDate = new Date(filters.from);
-        query = query.gte('created_at', fromDate.toISOString());
-    }
-    if (filters.to) {
-        const toDate = new Date(filters.to);
-        toDate.setUTCHours(23, 59, 59, 999);
-        query = query.lte('created_at', toDate.toISOString());
-    }
-    query = query.limit(1000);
-
-    const { data: twilioRows, error: twilioErr } = await query;
-    if (twilioErr) {
-        console.error('[campaign-voice] twilio_call_logs fetch error:', twilioErr);
-        throw new Error(twilioErr.message || 'Failed to fetch twilio_call_logs');
-    }
-
-    // 2. Fetch outreach_leads to match phone numbers
-    const { data: leadRows } = await supabaseAdmin
-        .from('outreach_leads')
-        .select('id, full_name, first_name, last_name, mobile_number, mobile_number_2, company_phone, campaign_id, campaign_key');
-
-    // Index outreach_leads by 10-digit phone, detecting duplicates across leads
-    const phoneToLeadsMap = new Map<string, any[]>();
-    (leadRows || []).forEach(l => {
-        [l.mobile_number, l.mobile_number_2, l.company_phone].forEach(p => {
-            if (!p) return;
-            const digits = String(p).replace(/\D/g, '').slice(-10);
-            if (digits.length >= 7) {
-                const list = phoneToLeadsMap.get(digits) || [];
-                if (!list.some(existing => existing.id === l.id)) {
-                    list.push(l);
-                }
-                phoneToLeadsMap.set(digits, list);
-            }
-        });
-    });
-
-    const mapped: CampaignVoiceColdCall[] = (twilioRows || []).map(row => {
-        const toDigits = String(row.to_number || '').replace(/\D/g, '').slice(-10);
-        const fromDigits = String(row.from_number || '').replace(/\D/g, '').slice(-10);
-
-        const toCandidates = toDigits ? (phoneToLeadsMap.get(toDigits) || []) : [];
-        const fromCandidates = fromDigits ? (phoneToLeadsMap.get(fromDigits) || []) : [];
-        const candidates = toCandidates.length > 0 ? toCandidates : fromCandidates;
-
-        let matchedLead: any = null;
-        let isAmbiguous = false;
-
-        if (candidates.length === 1) {
-            matchedLead = candidates[0];
-        } else if (candidates.length > 1) {
-            isAmbiguous = true;
-        }
-
-        let campaignId: number | null = null;
-        let campaignKey: string | null = null;
-        let campaignName = isAmbiguous
-            ? 'Unattributed (Ambiguous Phone Match)'
-            : 'Unattributed / Direct Dialer';
-        let color: CampaignColor | 'slate' = 'slate';
-        let isAttributed = false;
-
-        if (matchedLead && !isAmbiguous) {
-            isAttributed = true;
-            const rawId = matchedLead.campaign_id !== undefined && matchedLead.campaign_id !== null ? Number(matchedLead.campaign_id) : null;
-            const resolved = resolveCampaignInfo(rawId, matchedLead.campaign_key || null);
-            campaignId = resolved.campaignId;
-            campaignKey = resolved.campaignKey;
-            campaignName = resolved.campaignName;
-            color = resolved.color;
-        }
-
-        const leadName = matchedLead && !isAmbiguous
-            ? (matchedLead.full_name || [matchedLead.first_name, matchedLead.last_name].filter(Boolean).join(' ') || 'Campaign Contact')
-            : (isAmbiguous ? 'Unattributed (Ambiguous Phone Match)' : 'Unattributed Contact');
-
-        return {
-            id: row.call_sid || String(row.id),
-            callSid: row.call_sid,
-            from: row.from_number || '—',
-            to: row.to_number || '—',
-            direction: row.direction || 'outbound',
-            status: row.status || 'unknown',
-            durationSeconds: row.duration_seconds || 0,
-            recordingUrl: row.recording_url || null,
-            transcript: row.transcription_text || null,
-            transcriptionStatus: row.transcription_status || null,
-            startedAt: row.started_at || null,
-            createdAt: row.created_at || null,
-            leadId: matchedLead && !isAmbiguous ? matchedLead.id : null,
-            leadName,
-            campaignId,
-            campaignKey,
-            campaignName,
-            campaignColor: color,
-            isAttributed,
-        };
-    });
-
-    // Apply filtering
-    let filtered = mapped.filter(c => {
-        // Campaign filter
-        if (filters.campaignIds && filters.campaignIds.length > 0) {
-            const cId = c.campaignId !== null && c.campaignId !== undefined ? String(c.campaignId) : 'unattributed';
-            const cKey = (c.campaignKey || '').toLowerCase();
-            const matches = filters.campaignIds.some(fId => {
-                const f = fId.trim().toLowerCase();
-                return f === cId.toLowerCase() || f === cKey || (f === 'unattributed' && !c.isAttributed);
-            });
-            if (!matches) return false;
-        }
-
-        // Search filter
-        if (filters.search && filters.search.trim()) {
-            const q = filters.search.trim().toLowerCase();
-            const digits = q.replace(/\D/g, '');
-            const textMatch =
-                c.leadName.toLowerCase().includes(q) ||
-                c.from.toLowerCase().includes(q) ||
-                c.to.toLowerCase().includes(q) ||
-                (c.transcript && c.transcript.toLowerCase().includes(q)) ||
-                c.status.toLowerCase().includes(q);
-            const digitsMatch = digits && (c.to.replace(/\D/g, '').includes(digits) || c.from.replace(/\D/g, '').includes(digits));
-            if (!textMatch && !digitsMatch) return false;
-        }
-
-        // Status filter
-        if (filters.status && filters.status !== 'all') {
-            if (c.status.toLowerCase() !== filters.status.toLowerCase()) return false;
-        }
-
-        // Date range
-        if (!filters.from && !filters.to) return true;
-        const time = parseSafeTimestamp(c.createdAt || c.startedAt);
-        if (!time) return false;
-        if (filters.from && time < parseSafeTimestamp(filters.from, false)) return false;
-        if (filters.to && time > parseSafeTimestamp(filters.to, true)) return false;
-
-        return true;
-    });
-
-    const totalCount = filtered.length;
-    const startIndex = (page - 1) * pageSize;
-    const paginated = filtered.slice(startIndex, startIndex + pageSize);
-
-    return {
-        data: paginated,
-        totalCount,
-        page,
-        pageSize,
-        totalPages: Math.ceil(totalCount / pageSize) || 1,
-    };
-}
-
-/** Fetches Analytics data for Campaign Voice */
+/** Fetches Analytics data for Campaign Voice (sarvam only) */
 export async function getCampaignVoiceAnalytics(filters: CampaignVoiceFilterParams = {}) {
-    const overview = await getCampaignVoiceOverview(filters);
-    const allCalls = await getAllCampaignVoiceCalls();
+    const allCalls = await fetchSarvamCallsWithAttribution(filters);
     const filtered = filterCampaignVoiceCalls(allCalls, filters);
+    const overview = computeOverviewStats(filtered);
 
-    // Sentiment breakdown
     const sentimentDistribution = [
         { name: 'Positive', count: overview.positiveSentimentCalls, color: 'text-emerald-600 bg-emerald-50' },
         { name: 'Neutral', count: overview.neutralSentimentCalls, color: 'text-slate-600 bg-slate-50' },
         { name: 'Negative', count: overview.negativeSentimentCalls, color: 'text-rose-600 bg-rose-50' },
     ];
 
-    // Outcome breakdown (Interested, Callback, No Answer, etc.)
     const outcomeMap: Record<string, number> = {};
     filtered.forEach(c => {
         const s = c.status || 'Completed';
@@ -790,4 +546,3 @@ export async function getCampaignVoiceAnalytics(filters: CampaignVoiceFilterPara
         hourlyDistribution: overview.hourlyDistribution,
     };
 }
-

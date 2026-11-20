@@ -29,7 +29,7 @@ const STORAGE_KEY_LABEL = 'campaigns_date_label';
 export function getDefaultCampaignDateRange(): CampaignDateRange {
     const today = new Date();
     return {
-        from: subDays(today, 30),
+        from: subDays(today, 7),
         to: today,
     };
 }
@@ -38,7 +38,7 @@ export function CampaignDateProvider({ children }: { children: React.ReactNode }
     const router = useRouter();
     const pathname = usePathname();
 
-    // Initialize from URL searchParams, fallback to sessionStorage, fallback to dynamic default (last 30 days)
+    // Initialize from URL searchParams, fallback to sessionStorage, fallback to dynamic default (last 7 days)
     const [dateRange, setDateRangeState] = useState<CampaignDateRange>(() => {
         const defaultRange = getDefaultCampaignDateRange();
 
@@ -164,7 +164,7 @@ export function CampaignDateProvider({ children }: { children: React.ReactNode }
 
     const resetToDefault = useCallback(() => {
         const defaultRange = getDefaultCampaignDateRange();
-        setDateRange(defaultRange, "Last 30 days");
+        setDateRange(defaultRange, "Last 7 days");
     }, [setDateRange]);
 
     const clearDateFilter = useCallback(() => {
@@ -182,9 +182,8 @@ export function CampaignDateProvider({ children }: { children: React.ReactNode }
 
     const isDefault = useMemo(() => {
         if (!dateRange.from || !dateRange.to) return false;
-        const d = getDefaultCampaignDateRange();
         const diffDays = Math.round((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24));
-        return diffDays >= 29 && diffDays <= 31;
+        return diffDays >= 6 && diffDays <= 8;
     }, [dateRange]);
 
     return (

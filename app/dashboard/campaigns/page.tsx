@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import {
-    Users, Send, Reply, UserMinus, AlertCircle, MessageCircle, Mic, RefreshCw, CheckCircle2, Sparkles, Phone,
+    Users, Send, Reply, MessageCircle, RefreshCw, Sparkles, Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useCallback } from "react";
@@ -46,8 +46,6 @@ interface DashboardStats {
     whatsappContacted?: number;
     whatsappUniqueReplied?: number;
     voiceCalls?: number;
-    voiceSarvamCalls?: number;
-    voiceTwilioCalls?: number;
     voicePickedUp?: number;
     voicePickupRate?: number;
     voicePositive?: number;
@@ -104,7 +102,8 @@ export default function CampaignsDashboardPage() {
                 </div>
             </div>
 
-            {/* Row 1: High Level Campaign Overview */}
+            {/* Core Campaign Metrics — channel-specific breakdowns live on the
+                Email / WhatsApp / Voice dashboards themselves. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
                     title="Total Leads"
@@ -127,95 +126,34 @@ export default function CampaignsDashboardPage() {
                     onClick={() => router.push('/dashboard/campaigns/email')}
                 />
                 <MetricCard
-                    title="Replied"
+                    title="Email Replied"
                     value={stats?.emailReplied ?? "..."}
                     icon={<Reply className="h-5 w-5" />}
                     iconBg="bg-cyan-50 text-cyan-600"
                     onClick={() => router.push('/dashboard/campaigns/email')}
                 />
-            </div>
-
-            {/* Row 2: Lead Acquisition & Lifecycle */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <MetricCard
-                    title="New Leads"
-                    value={stats?.newLeads ?? "..."}
-                    icon={<Users className="h-5 w-5" />}
-                    iconBg="bg-slate-100 text-slate-600"
-                    onClick={() => router.push('/dashboard/campaigns/leads')}
-                />
-                <MetricCard
-                    title="Contacted"
-                    value={stats?.contacted ?? "..."}
-                    icon={<CheckCircle2 className="h-5 w-5" />}
-                    iconBg="bg-emerald-50 text-emerald-600"
-                    onClick={() => router.push('/dashboard/campaigns/leads')}
-                />
-                <MetricCard
-                    title="Unsubscribed"
-                    value={stats?.unsubscribed ?? "..."}
-                    icon={<UserMinus className="h-5 w-5" />}
-                    iconBg="bg-rose-50 text-rose-600"
-                />
-                <MetricCard
-                    title="Bounced"
-                    value={stats?.bounced ?? "..."}
-                    icon={<AlertCircle className="h-5 w-5" />}
-                    iconBg="bg-amber-50 text-amber-600"
-                />
-            </div>
-
-            {/* Row 3: WhatsApp & Voice Multi-Channel Outreach Metrics (Section 2 marked area) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
                     title="WhatsApp Sent"
                     value={stats?.whatsappSent !== undefined ? stats.whatsappSent.toLocaleString() : "..."}
-                    subtitle={`${stats?.whatsappContacted ?? 0} leads contacted`}
                     icon={<MessageCircle className="h-5 w-5" />}
                     iconBg="bg-emerald-50 text-emerald-600"
                     onClick={() => router.push('/dashboard/campaigns/whatsapp')}
                 />
                 <MetricCard
-                    title="WhatsApp Replies"
+                    title="WhatsApp Replied"
                     value={stats?.whatsappReplies !== undefined ? stats.whatsappReplies.toLocaleString() : "..."}
-                    subtitle={`${stats?.whatsappReplyRate ?? 0}% Reply Rate${stats?.whatsappUniqueReplied ? ` (${stats.whatsappUniqueReplied} leads)` : ''}`}
                     icon={<Reply className="h-5 w-5" />}
                     iconBg="bg-teal-50 text-teal-600"
                     onClick={() => router.push('/dashboard/campaigns/whatsapp/chat')}
                 />
                 <MetricCard
-                    title="Voice Calls"
+                    title="Total Voice Calls"
                     value={stats?.voiceCalls !== undefined ? stats.voiceCalls.toLocaleString() : "..."}
-                    subtitle={`Sarvam: ${stats?.voiceSarvamCalls ?? 0} | Twilio: ${stats?.voiceTwilioCalls ?? 0}`}
                     icon={<Phone className="h-5 w-5" />}
                     iconBg="bg-violet-50 text-violet-600"
                     onClick={() => router.push('/dashboard/campaigns/voice')}
                 />
-                <MetricCard
-                    title="Voice Picked Up"
-                    value={stats?.voicePickedUp !== undefined ? stats.voicePickedUp.toLocaleString() : "..."}
-                    subtitle={`${stats?.voicePickupRate ?? 0}% Pickup | ${stats?.voicePositive ?? 0} Positive`}
-                    icon={<CheckCircle2 className="h-5 w-5" />}
-                    iconBg="bg-indigo-50 text-indigo-600"
-                    onClick={() => router.push('/dashboard/campaigns/voice/logs')}
-                />
             </div>
-
-            <Card className="bg-white border-border shadow-sm">
-                <CardContent className="p-6">
-                    <div className="flex items-center justify-between mb-5">
-                        <div>
-                            <h3 className="text-base font-bold text-slate-900">Channel Reach</h3>
-                            <p className="text-xs text-slate-500 mt-0.5">Leads with activity on each outreach channel</p>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <ChannelBox label="Email" value={stats?.emailSent ?? 0} total={stats?.totalLeads ?? 0} icon={Send} color="blue" />
-                        <ChannelBox label="WhatsApp" value={stats?.whatsappActive ?? 0} total={stats?.totalLeads ?? 0} icon={MessageCircle} color="emerald" />
-                        <ChannelBox label="Voice" value={stats?.voiceActive ?? 0} total={stats?.totalLeads ?? 0} icon={Mic} color="violet" />
-                    </div>
-                </CardContent>
-            </Card>
 
             <div>
                 <div className="flex items-center justify-between mb-4">
@@ -262,35 +200,6 @@ function MetricCard({ title, value, subtitle, icon, iconBg, onClick }: {
                 </div>
             </CardContent>
         </Card>
-    );
-}
-
-function ChannelBox({ label, value, total, icon: Icon, color }: {
-    label: string; value: number; total: number; icon: any; color: 'blue' | 'emerald' | 'violet';
-}) {
-    const pct = total > 0 ? (value / total) * 100 : 0;
-    const colorMap = {
-        blue: { bg: 'bg-blue-50', text: 'text-blue-600', bar: 'bg-blue-500' },
-        emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', bar: 'bg-emerald-500' },
-        violet: { bg: 'bg-violet-50', text: 'text-violet-600', bar: 'bg-violet-500' },
-    }[color];
-
-    return (
-        <div className="p-4 rounded-xl border border-border bg-slate-50/50">
-            <div className="flex items-center justify-between mb-3">
-                <div className={cn("p-2 rounded-lg", colorMap.bg, colorMap.text)}>
-                    <Icon className="h-4 w-4" />
-                </div>
-                <span className="text-xs font-bold text-slate-500">{label}</span>
-            </div>
-            <div className="flex items-end justify-between mb-2">
-                <span className="text-2xl font-bold text-slate-900">{value.toLocaleString()}</span>
-                <span className="text-[11px] text-slate-400">{pct.toFixed(1)}% of leads</span>
-            </div>
-            <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
-                <div className={cn("h-full rounded-full transition-all duration-500", colorMap.bar)} style={{ width: `${Math.min(pct, 100)}%` }} />
-            </div>
-        </div>
     );
 }
 

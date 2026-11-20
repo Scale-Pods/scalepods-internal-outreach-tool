@@ -52,6 +52,8 @@ export interface CampaignWaLead {
     updatedAt: string | null;
     outreachMessages: CampaignWaMessage[];
     conversation: CampaignWaMessage[];
+    dispatchedOutreachInRange: CampaignWaMessage[];
+    customerRepliesInRange: CampaignWaMessage[];
     messagesSentCount: number;
     repliesCount: number;
     hasReplied: boolean;
@@ -151,12 +153,16 @@ export function isDispatchedOutreach(msg: CampaignWaMessage): boolean {
     return false;
 }
 
-/** Determines if a lead was genuinely contacted (has at least 1 dispatched outbound message or active non-failed WhatsApp status) */
+/** Determines if a lead was genuinely contacted (has at least 1 dispatched outbound message or active non-failed WhatsApp status).
+ *  `allowStatusFallback` is disabled whenever a date range is active, since
+ *  whatsapp_status reflects the lead's latest lifetime status, not whether
+ *  anything happened inside the selected window. */
 export function isGenuinelyContacted(lead: {
     messagesSentCount: number;
     whatsappStatus?: string | null;
-}): boolean {
+}, allowStatusFallback: boolean = true): boolean {
     if (lead.messagesSentCount > 0) return true;
+    if (!allowStatusFallback) return false;
 
     if (lead.whatsappStatus) {
         const s = String(lead.whatsappStatus).toUpperCase().trim();
@@ -166,6 +172,28 @@ export function isGenuinelyContacted(lead: {
         }
     }
     return false;
+}
+
+/** Keeps only messages whose own timestamp (attempted_at / timestamp) falls
+ *  inside [fromIso, toIso]. A lead can match the date filter via its
+ *  last_contacted_at while still holding months of older conversation
+ *  history in whatsapp_outreach_message / whatsapp_conversation — without
+ *  this, "messages sent/replied in this range" would silently count that
+ *  entire lifetime history instead of just what happened in the window. */
+function filterMessagesByDateRange<T extends { attempted_at?: string | null; timestamp?: string | null }>(
+    messages: T[],
+    fromIso?: string,
+    toIso?: string
+): T[] {
+    if (!fromIso && !toIso) return messages;
+    const fromMs = fromIso ? parseSafeTimestamp(fromIso) : -Infinity;
+    const toMs = toIso ? parseSafeTimestamp(toIso) : Infinity;
+    return messages.filter(m => {
+        const raw = m.attempted_at || m.timestamp;
+        if (!raw) return false;
+        const t = parseSafeTimestamp(raw);
+        return t >= fromMs && t <= toMs;
+    });
 }
 
 /** Resolves campaign details falling back to campaign_key when campaign_id is null */
@@ -337,14 +365,21 @@ export function formatCampaignName(campaignId: number | null, campaignKey: strin
     return 'General Campaign';
 }
 
-/** Normalizes a row from outreach_leads into CampaignWaLead */
-export function normalizeCampaignWaLead(row: any): CampaignWaLead {
+/** Normalizes a row from outreach_leads into CampaignWaLead. When `dateRange`
+ *  is given, messagesSentCount/repliesCount (and hence isContacted/hasReplied)
+ *  are scoped to messages whose own timestamp falls inside that window —
+ *  not just leads whose last_contacted_at happens to fall inside it — so a
+ *  lead with months of chat history doesn't inflate a 7-day count. */
+export function normalizeCampaignWaLead(row: any, dateRange?: { fromIso?: string; toIso?: string }): CampaignWaLead {
     const rawOutreach = parseJsonbArray<CampaignWaMessage>(row.whatsapp_outreach_message);
     const rawConversation = parseJsonbArray<CampaignWaMessage>(row.whatsapp_conversation);
+    const hasDateRange = !!(dateRange?.fromIso || dateRange?.toIso);
 
-    // 1. Genuine dispatched messages count (excludes BLOCKED, FAILED, SIMULATED_SEND, errors)
-    const dispatchedOutreach = rawOutreach.filter(isDispatchedOutreach);
-    const messagesSentCount = dispatchedOutreach.length;
+    // 1. Genuine dispatched messages count (excludes BLOCKED, FAILED, SIMULATED_SEND, errors),
+    // scoped to the selected date range if one is active.
+    const dispatchedOutreachAll = rawOutreach.filter(isDispatchedOutreach);
+    const dispatchedOutreachInRange = filterMessagesByDateRange(dispatchedOutreachAll, dateRange?.fromIso, dateRange?.toIso);
+    const messagesSentCount = dispatchedOutreachInRange.length;
 
     // 2. Deduplicate inbound conversation replies using message IDs (id, message_id or provider_message_id)
     const seenMsgIds = new Set<string>();
@@ -360,9 +395,10 @@ export function normalizeCampaignWaLead(row: any): CampaignWaLead {
         dedupedConversation.push(m);
     });
 
-    const customerReplies = dedupedConversation.filter(isCustomerReply);
-    const repliesCount = customerReplies.length;
-    const hasReplied = repliesCount > 0 || String(row.whatsapp_status || '').toUpperCase() === 'REPLIED';
+    const customerRepliesAll = dedupedConversation.filter(isCustomerReply);
+    const customerRepliesInRange = filterMessagesByDateRange(customerRepliesAll, dateRange?.fromIso, dateRange?.toIso);
+    const repliesCount = customerRepliesInRange.length;
+    const hasReplied = repliesCount > 0 || (!hasDateRange && String(row.whatsapp_status || '').toUpperCase() === 'REPLIED');
 
     // Derive whatsappStatus: use row.whatsapp_status if present, otherwise derive from latest outreach attempt
     let derivedStatus: string | null = row.whatsapp_status ? String(row.whatsapp_status).trim() : null;
@@ -375,11 +411,12 @@ export function normalizeCampaignWaLead(row: any): CampaignWaLead {
         }
     }
 
-    // 3. Lead Contacted Status (at least 1 outbound message dispatched or active non-failed status)
+    // 3. Lead Contacted Status (at least 1 outbound message dispatched in-range, or — only
+    // when there's no date filter — an active non-failed lifetime status).
     const isContacted = isGenuinelyContacted({
         messagesSentCount,
         whatsappStatus: derivedStatus,
-    });
+    }, !hasDateRange);
 
     // 4. Chronological timeline
     const timeline = buildCampaignWaTimeline(row.whatsapp_outreach_message, dedupedConversation);
@@ -414,6 +451,8 @@ export function normalizeCampaignWaLead(row: any): CampaignWaLead {
         updatedAt: row.updated_at || null,
         outreachMessages: rawOutreach,
         conversation: dedupedConversation,
+        dispatchedOutreachInRange,
+        customerRepliesInRange,
         messagesSentCount,
         repliesCount,
         hasReplied,
@@ -465,33 +504,51 @@ export function parseSafeTimestamp(val: any, isEndOfDay: boolean = false): numbe
     return isNaN(t2) ? 0 : t2;
 }
 
-/** Fetches Overview statistics from public.outreach_leads */
-export async function getCampaignWaOverview(filters: CampaignWaFilterParams = {}): Promise<CampaignWaOverviewStats> {
-    // We select leads that have whatsapp activity: outreach messages, conversation, or whatsapp_status
-    const query = supabaseAdmin
+const WA_LEAD_COLUMNS = `
+    id, full_name, first_name, last_name, email, mobile_number, company_name, city, country,
+    campaign_id, campaign_key, lead_status, whatsapp_status, whatsapp_outreach_message,
+    whatsapp_conversation, last_contacted_at, created_at, updated_at, custom_fields
+`;
+
+/** Fetches whatsapp-active leads from outreach_leads, pushing the date range down
+ *  to Postgres whenever one is active (the normal case, since the campaigns module
+ *  defaults to a 7-day range) instead of pulling every whatsapp-active lead ever
+ *  recorded on every request. */
+async function fetchWaLeadsNormalized(filters: Pick<CampaignWaFilterParams, 'from' | 'to'>): Promise<CampaignWaLead[]> {
+    let query = supabaseAdmin
         .from('outreach_leads')
-        .select(`
-            id, full_name, mobile_number, campaign_id, campaign_key,
-            lead_status, whatsapp_status, whatsapp_outreach_message, whatsapp_conversation,
-            last_contacted_at, created_at, custom_fields
-        `)
+        .select(WA_LEAD_COLUMNS)
         .or('whatsapp_status.not.is.null,whatsapp_outreach_message.neq.[],whatsapp_conversation.neq.[]');
+
+    if (filters.from || filters.to) {
+        const fromIso = filters.from || '1970-01-01T00:00:00.000Z';
+        const toIso = filters.to || '2099-12-31T23:59:59.999Z';
+        // last_contacted_at in range, OR (no last_contacted_at but created_at in range) —
+        // mirrors the lastContactedAt-falls-back-to-createdAt rule used everywhere else.
+        query = query.or(`and(last_contacted_at.gte.${fromIso},last_contacted_at.lte.${toIso}),and(last_contacted_at.is.null,created_at.gte.${fromIso},created_at.lte.${toIso})`);
+    }
+
+    query = query.order('last_contacted_at', { ascending: false, nullsFirst: false }).limit(20000);
 
     const { data: leads, error } = await query;
     if (error) {
-        console.error('[campaign-whatsapp] getCampaignWaOverview Supabase query error:', {
+        console.error('[campaign-whatsapp] fetchWaLeadsNormalized Supabase query error:', {
             message: error.message,
             code: error.code,
             details: error.details,
             hint: error.hint,
         });
-        throw new Error(error.message || error.details || 'Failed to query outreach_leads for WhatsApp overview');
+        throw new Error(error.message || error.details || 'Failed to query outreach_leads for WhatsApp');
     }
 
-    const normalized = (leads || []).map(normalizeCampaignWaLead);
+    const dateRange = (filters.from || filters.to) ? { fromIso: filters.from, toIso: filters.to } : undefined;
+    return (leads || []).map(row => normalizeCampaignWaLead(row, dateRange));
+}
 
-    // Apply campaign & date filters in-memory for full reliability across null campaign_ids and key variations
-    const filtered = normalized.filter(l => {
+/** Applies campaign (and, for the leads list, search/reply/PF/positive) filters
+ *  in-memory on an already date-scoped, already-fetched lead list. */
+function filterWaLeads(leads: CampaignWaLead[], filters: CampaignWaFilterParams): CampaignWaLead[] {
+    return leads.filter(l => {
         if (filters.campaignIds && filters.campaignIds.length > 0) {
             const cId = l.campaignId !== null && l.campaignId !== undefined ? String(l.campaignId) : 'unknown';
             const cKey = (l.campaignKey || '').toLowerCase();
@@ -501,17 +558,14 @@ export async function getCampaignWaOverview(filters: CampaignWaFilterParams = {}
             });
             if (!matches) return false;
         }
-
-        if (!filters.from && !filters.to) return true;
-        const ts = l.lastContactedAt || l.createdAt;
-        if (!ts) return false;
-        const time = parseSafeTimestamp(ts);
-        if (!time) return false;
-        if (filters.from && time < parseSafeTimestamp(filters.from, false)) return false;
-        if (filters.to && time > parseSafeTimestamp(filters.to, true)) return false;
         return true;
     });
+}
 
+/** Pure aggregation step — never re-fetches, so getCampaignWaAnalytics can
+ *  reuse one already-fetched, already-filtered lead list for both the
+ *  overview stats and the daily trend instead of hitting Postgres twice. */
+function computeWaOverviewStats(filtered: CampaignWaLead[]): CampaignWaOverviewStats {
     let uniqueLeadsContacted = 0;
     let totalReplies = 0;
     let totalMessagesSent = 0;
@@ -541,7 +595,7 @@ export async function getCampaignWaOverview(filters: CampaignWaFilterParams = {}
         if (lead.isPf) pfLeads++;
         if (lead.isPositive) positiveLeads++;
 
-        lead.outreachMessages.filter(isDispatchedOutreach).forEach(m => {
+        lead.dispatchedOutreachInRange.forEach(m => {
             const step = typeof m.step === 'number' && m.step >= 1 && m.step <= 6 ? m.step : 1;
             stepMap[step] = (stepMap[step] || 0) + 1;
         });
@@ -591,40 +645,20 @@ export async function getCampaignWaOverview(filters: CampaignWaFilterParams = {}
     };
 }
 
+/** Fetches Overview statistics from public.outreach_leads */
+export async function getCampaignWaOverview(filters: CampaignWaFilterParams = {}): Promise<CampaignWaOverviewStats> {
+    const normalized = await fetchWaLeadsNormalized(filters);
+    const filtered = filterWaLeads(normalized, filters);
+    return computeWaOverviewStats(filtered);
+}
+
 /** Fetches paginated leads list from public.outreach_leads */
 export async function getCampaignWaLeads(filters: CampaignWaFilterParams = {}) {
     const page = filters.page ?? 1;
     const pageSize = filters.pageSize ?? 15;
 
-    const query = supabaseAdmin
-        .from('outreach_leads')
-        .select('*')
-        .or('whatsapp_status.not.is.null,whatsapp_outreach_message.neq.[],whatsapp_conversation.neq.[]');
-
-    const { data: rawLeads, error } = await query;
-    if (error) {
-        console.error('[campaign-whatsapp] getCampaignWaLeads Supabase query error:', {
-            message: error.message,
-            code: error.code,
-            details: error.details,
-            hint: error.hint,
-        });
-        throw new Error(error.message || error.details || 'Failed to query outreach_leads for WhatsApp leads');
-    }
-
-    let leads = (rawLeads || []).map(normalizeCampaignWaLead);
-
-    // Apply campaign filter in-memory
-    if (filters.campaignIds && filters.campaignIds.length > 0) {
-        leads = leads.filter(l => {
-            const cId = l.campaignId !== null && l.campaignId !== undefined ? String(l.campaignId) : 'unknown';
-            const cKey = (l.campaignKey || '').toLowerCase();
-            return filters.campaignIds!.some(fId => {
-                const f = fId.trim().toLowerCase();
-                return f === cId.toLowerCase() || f === cKey || (f === 'unknown' && (l.campaignId === null || l.campaignId === undefined));
-            });
-        });
-    }
+    const normalized = await fetchWaLeadsNormalized(filters);
+    let leads = filterWaLeads(normalized, filters);
 
     // Apply search filter
     if (filters.search && filters.search.trim()) {
@@ -649,19 +683,6 @@ export async function getCampaignWaLeads(filters: CampaignWaFilterParams = {}) {
         leads = leads.filter(l => l.isPf);
     } else if (filters.leadStatus === 'positive') {
         leads = leads.filter(l => l.isPositive);
-    }
-
-    // Apply Date Range
-    if (filters.from || filters.to) {
-        leads = leads.filter(l => {
-            const ts = l.lastContactedAt || l.createdAt;
-            if (!ts) return false;
-            const time = parseSafeTimestamp(ts);
-            if (!time) return false;
-            if (filters.from && time < parseSafeTimestamp(filters.from, false)) return false;
-            if (filters.to && time > parseSafeTimestamp(filters.to, true)) return false;
-            return true;
-        });
     }
 
     // Sort by lastContactedAt descending
@@ -699,30 +720,33 @@ export async function getCampaignWaLeadDetail(leadId: string): Promise<CampaignW
     return normalizeCampaignWaLead(data);
 }
 
-/** Fetches Analytics metrics & trend data */
+/** Fetches Analytics metrics & trend data — reuses a single fetch+filter pass
+ *  for both the overview stats and the daily trend. */
 export async function getCampaignWaAnalytics(filters: CampaignWaFilterParams = {}) {
-    const overview = await getCampaignWaOverview(filters);
-    const leadsRes = await getCampaignWaLeads({ ...filters, page: 1, pageSize: 1000 });
-    const leads = leadsRes.data;
+    const normalized = await fetchWaLeadsNormalized(filters);
+    const leads = filterWaLeads(normalized, filters);
+    const overview = computeWaOverviewStats(leads);
 
-    // Daily activity trends
+    // Daily activity trends — built from the already date-scoped
+    // dispatchedOutreachInRange/customerRepliesInRange lists, not the full
+    // lifetime timeline, so the trend never shows activity outside the
+    // selected date range.
     const dailyMap: Record<string, { date: string; sent: number; replies: number }> = {};
 
+    const bumpDaily = (rawDate: string | null | undefined, field: 'sent' | 'replies') => {
+        if (!rawDate) return;
+        const d = new Date(rawDate);
+        if (isNaN(d.getTime())) return;
+        const dateKey = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        if (!dailyMap[dateKey]) {
+            dailyMap[dateKey] = { date: dateKey, sent: 0, replies: 0 };
+        }
+        dailyMap[dateKey][field] += 1;
+    };
+
     leads.forEach(l => {
-        l.timeline.forEach(item => {
-            if (!item.date) return;
-            const d = new Date(item.date);
-            if (isNaN(d.getTime())) return;
-            const dateKey = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-            if (!dailyMap[dateKey]) {
-                dailyMap[dateKey] = { date: dateKey, sent: 0, replies: 0 };
-            }
-            if (item.type === 'bot') {
-                dailyMap[dateKey].sent += 1;
-            } else {
-                dailyMap[dateKey].replies += 1;
-            }
-        });
+        l.dispatchedOutreachInRange.forEach(m => bumpDaily(m.attempted_at || m.timestamp, 'sent'));
+        l.customerRepliesInRange.forEach(m => bumpDaily(m.timestamp || m.attempted_at, 'replies'));
     });
 
     const trendData = Object.values(dailyMap).slice(-14);

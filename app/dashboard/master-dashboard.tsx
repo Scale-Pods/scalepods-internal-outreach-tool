@@ -22,8 +22,6 @@ import {
     Megaphone,
     Send,
     Reply,
-    UserMinus,
-    AlertCircle,
 } from "lucide-react";
 import {
     Tooltip,
@@ -73,8 +71,6 @@ interface CampaignDashboardStats {
     whatsappContacted?: number;
     whatsappUniqueReplied?: number;
     voiceCalls?: number;
-    voiceSarvamCalls?: number;
-    voiceTwilioCalls?: number;
     voicePickedUp?: number;
     voicePickupRate?: number;
     voicePositive?: number;
@@ -132,8 +128,15 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                 const to = searchParams.get('to') || toIso;
                 if (from) params.set('from', from);
                 if (to) params.set('to', to);
+                params.set('skipCampaigns', 'true');
                 const res = await fetch(`/api/campaigns/dashboard?${params.toString()}`);
+                if (!res.ok) {
+                    const errorJson = await res.json().catch(() => ({}));
+                    throw new Error(errorJson.error || `Failed to fetch campaign stats (HTTP ${res.status})`);
+                }
                 const json = await res.json();
+                // Keep the last good numbers on screen rather than zeroing
+                // every card out if a request fails transiently.
                 if (!cancelled) setCampaignStats(json);
             } catch (err) {
                 console.error("Failed to fetch campaign stats for master dashboard:", err);
@@ -177,8 +180,93 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                 </div>
             </div>
 
-            {/* Cold Outreach Section */}
+            {/* Campaigns Section — shown first; only the 7 core metrics,
+                channel-specific breakdowns live on their own dashboards. */}
             <div className="mt-8 mb-4">
+                <h2 className="text-xl font-bold text-slate-800 mb-4">Campaigns</h2>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+                    <MetricCard
+                        title="Active Campaigns"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.totalCampaigns ?? 0).toLocaleString()}
+                        change="Real-time"
+                        isUp={true}
+                        icon={<Megaphone className="h-6 w-6" />}
+                        color="text-violet-600"
+                        bg="bg-violet-50"
+                        border="border-violet-100"
+                        onClick={() => router.push('/dashboard/campaigns')}
+                    />
+                    <MetricCard
+                        title="Total Leads"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.totalLeads ?? 0).toLocaleString()}
+                        change="Real-time"
+                        isUp={true}
+                        icon={<Users className="h-6 w-6" />}
+                        color="text-indigo-600"
+                        bg="bg-indigo-50"
+                        border="border-indigo-100"
+                        onClick={() => router.push('/dashboard/campaigns/leads')}
+                    />
+                    <MetricCard
+                        title="Emails Sent"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.emailSent ?? 0).toLocaleString()}
+                        change="Real-time"
+                        isUp={true}
+                        icon={<Send className="h-6 w-6" />}
+                        color="text-blue-600"
+                        bg="bg-blue-50"
+                        border="border-blue-100"
+                        onClick={() => router.push('/dashboard/campaigns/email')}
+                    />
+                    <MetricCard
+                        title="Email Replied"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.emailReplied ?? 0).toLocaleString()}
+                        change={`${campaignStats && campaignStats.emailSent > 0 ? ((campaignStats.emailReplied / campaignStats.emailSent) * 100).toFixed(1) : 0}% Rate`}
+                        isUp={true}
+                        icon={<Reply className="h-6 w-6" />}
+                        color="text-cyan-600"
+                        bg="bg-cyan-50"
+                        border="border-cyan-100"
+                        onClick={() => router.push('/dashboard/campaigns/email')}
+                    />
+                    <MetricCard
+                        title="WhatsApp Sent"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.whatsappSent ?? 0).toLocaleString()}
+                        change="Real-time"
+                        isUp={true}
+                        icon={<MessageCircle className="h-6 w-6" />}
+                        color="text-purple-600"
+                        bg="bg-purple-50"
+                        border="border-purple-100"
+                        onClick={() => router.push('/dashboard/campaigns/whatsapp')}
+                    />
+                    <MetricCard
+                        title="WhatsApp Replied"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.whatsappReplies ?? 0).toLocaleString()}
+                        change={`${campaignStats?.whatsappReplyRate ?? 0}% Rate`}
+                        isUp={true}
+                        icon={<Reply className="h-6 w-6" />}
+                        color="text-teal-600"
+                        bg="bg-teal-50"
+                        border="border-teal-100"
+                        onClick={() => router.push('/dashboard/campaigns/whatsapp/chat')}
+                    />
+                    <MetricCard
+                        title="Total Voice Calls"
+                        value={campaignStatsLoading ? "..." : (campaignStats?.voiceCalls ?? 0).toLocaleString()}
+                        change={`${campaignStats?.voicePickupRate ?? 0}% Pickup`}
+                        isUp={true}
+                        icon={<Activity className="h-6 w-6" />}
+                        color="text-orange-600"
+                        bg="bg-orange-50"
+                        border="border-orange-100"
+                        onClick={() => router.push('/dashboard/campaigns/voice')}
+                    />
+                </div>
+            </div>
+
+            {/* Cold Outreach Section */}
+            <div className="mb-8 mt-8">
                 <h2 className="text-xl font-bold text-slate-800 mb-4">Cold Outreach bot</h2>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                     <MetricCard
@@ -298,102 +386,6 @@ export default function MasterDashboard({ stats, acquisitionChartData }: { stats
                         border="border-indigo-100"
                         onClick={() => setRepliesModal({ open: true, scope: 'hot' })}
                         subtitle="hubspot_lead: WTS_Reply_Track / Email_Reply_Track"
-                    />
-                </div>
-            </div>
-
-            {/* Campaigns Section */}
-            <div className="mb-8 mt-8">
-                <h2 className="text-xl font-bold text-slate-800 mb-4">Campaigns</h2>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-                    <MetricCard
-                        title="Active Campaigns"
-                        value={campaignStatsLoading ? "..." : (campaignStats?.totalCampaigns ?? 0).toLocaleString()}
-                        change="Real-time"
-                        isUp={true}
-                        icon={<Megaphone className="h-6 w-6" />}
-                        color="text-violet-600"
-                        bg="bg-violet-50"
-                        border="border-violet-100"
-                        onClick={() => router.push('/dashboard/campaigns')}
-                    />
-                    <MetricCard
-                        title="Total Leads"
-                        value={campaignStatsLoading ? "..." : (campaignStats?.totalLeads ?? 0).toLocaleString()}
-                        change="Real-time"
-                        isUp={true}
-                        icon={<Users className="h-6 w-6" />}
-                        color="text-indigo-600"
-                        bg="bg-indigo-50"
-                        border="border-indigo-100"
-                        onClick={() => router.push('/dashboard/campaigns/leads')}
-                        subtitle={`New: ${campaignStats?.newLeads ?? 0} | Contacted: ${campaignStats?.contacted ?? 0}`}
-                    />
-                    <MetricCard
-                        title="Emails Sent"
-                        value={campaignStatsLoading ? "..." : (campaignStats?.emailSent ?? 0).toLocaleString()}
-                        change="Real-time"
-                        isUp={true}
-                        icon={<Send className="h-6 w-6" />}
-                        color="text-blue-600"
-                        bg="bg-blue-50"
-                        border="border-blue-100"
-                        onClick={() => router.push('/dashboard/campaigns/email')}
-                    />
-                    <MetricCard
-                        title="Replied"
-                        value={campaignStatsLoading ? "..." : (campaignStats?.emailReplied ?? 0).toLocaleString()}
-                        change={`${campaignStats && campaignStats.emailSent > 0 ? ((campaignStats.emailReplied / campaignStats.emailSent) * 100).toFixed(1) : 0}% Rate`}
-                        isUp={true}
-                        icon={<Reply className="h-6 w-6" />}
-                        color="text-cyan-600"
-                        bg="bg-cyan-50"
-                        border="border-cyan-100"
-                        onClick={() => router.push('/dashboard/campaigns/email')}
-                    />
-                    <MetricCard
-                        title="WhatsApp Chats"
-                        value={campaignStatsLoading ? "..." : (campaignStats?.whatsappSent ?? 0).toLocaleString()}
-                        change={`${campaignStats?.whatsappReplyRate ?? 0}% Rate`}
-                        isUp={true}
-                        icon={<MessageCircle className="h-6 w-6" />}
-                        color="text-purple-600"
-                        bg="bg-purple-50"
-                        border="border-purple-100"
-                        onClick={() => router.push('/dashboard/campaigns/whatsapp')}
-                        subtitle={`${campaignStats?.whatsappReplies ?? 0} replies | ${campaignStats?.whatsappContacted ?? 0} contacted`}
-                    />
-                    <MetricCard
-                        title="Voice Calls"
-                        value={campaignStatsLoading ? "..." : (campaignStats?.voiceCalls ?? 0).toLocaleString()}
-                        change={`${campaignStats?.voicePickupRate ?? 0}% Pickup`}
-                        isUp={true}
-                        icon={<Activity className="h-6 w-6" />}
-                        color="text-orange-600"
-                        bg="bg-orange-50"
-                        border="border-orange-100"
-                        onClick={() => router.push('/dashboard/campaigns/voice')}
-                        subtitle={`${campaignStats?.voiceDurationString || '0m 0s'} | ${campaignStats?.voicePickedUp ?? 0} answered`}
-                    />
-                    <MetricCard
-                        title="Unsubscribed"
-                        value={campaignStatsLoading ? "..." : (campaignStats?.unsubscribed ?? 0).toLocaleString()}
-                        change="Real-time"
-                        isUp={false}
-                        icon={<UserMinus className="h-6 w-6" />}
-                        color="text-rose-600"
-                        bg="bg-rose-50"
-                        border="border-rose-100"
-                    />
-                    <MetricCard
-                        title="Bounced"
-                        value={campaignStatsLoading ? "..." : (campaignStats?.bounced ?? 0).toLocaleString()}
-                        change="Real-time"
-                        isUp={false}
-                        icon={<AlertCircle className="h-6 w-6" />}
-                        color="text-amber-600"
-                        bg="bg-amber-50"
-                        border="border-amber-100"
                     />
                 </div>
             </div>

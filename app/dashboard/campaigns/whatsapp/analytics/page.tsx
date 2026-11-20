@@ -37,12 +37,13 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { subDays, startOfDay, endOfDay } from "date-fns";
 import { useRouter } from "next/navigation";
 import type { CampaignWaOverviewStats } from "@/lib/services/campaign-whatsapp";
+import { useCampaignDateRange } from "@/context/CampaignDateContext";
 
 export default function CampaignWhatsAppAnalyticsPage() {
     const router = useRouter();
+    const { dateRange, setDateRange, fromIso, toIso } = useCampaignDateRange();
 
     const [stats, setStats] = useState<CampaignWaOverviewStats | null>(null);
     const [trendData, setTrendData] = useState<{ date: string; sent: number; replies: number }[]>([]);
@@ -50,11 +51,6 @@ export default function CampaignWhatsAppAnalyticsPage() {
 
     const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string }[]>([]);
     const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
-
-    const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
-        from: subDays(new Date(), 30),
-        to: new Date(),
-    });
 
     const fetchCampaignOptions = useCallback(async () => {
         try {
@@ -75,10 +71,8 @@ export default function CampaignWhatsAppAnalyticsPage() {
         setLoading(true);
         try {
             const params = new URLSearchParams();
-            if (dateRange.from) {
-                params.set('from', startOfDay(dateRange.from).toISOString());
-                params.set('to', endOfDay(dateRange.to || dateRange.from).toISOString());
-            }
+            if (fromIso) params.set('from', fromIso);
+            if (toIso) params.set('to', toIso);
             selectedCampaigns.forEach(c => params.append('campaignId', c));
 
             const res = await fetch(`/api/campaigns/whatsapp/analytics?${params.toString()}`);
@@ -91,7 +85,7 @@ export default function CampaignWhatsAppAnalyticsPage() {
         } finally {
             setLoading(false);
         }
-    }, [dateRange, selectedCampaigns]);
+    }, [fromIso, toIso, selectedCampaigns]);
 
     useEffect(() => {
         fetchCampaignOptions();
@@ -103,10 +97,9 @@ export default function CampaignWhatsAppAnalyticsPage() {
 
     const handleDateUpdate = (range: any) => {
         if (range?.range?.from) {
-            setDateRange({
-                from: new Date(range.range.from),
-                to: new Date(range.range.to || range.range.from),
-            });
+            setDateRange(range.range, range.label);
+        } else {
+            setDateRange(undefined);
         }
     };
 
@@ -118,7 +111,7 @@ export default function CampaignWhatsAppAnalyticsPage() {
 
     const resetFilters = () => {
         setSelectedCampaigns([]);
-        setDateRange({ from: subDays(new Date(), 30), to: new Date() });
+        setDateRange(undefined);
     };
 
     const hasActiveFilters = selectedCampaigns.length > 0;
@@ -194,7 +187,7 @@ export default function CampaignWhatsAppAnalyticsPage() {
                     </DropdownMenu>
 
                     {/* Date Picker */}
-                    <DateRangePicker onUpdate={handleDateUpdate} />
+                    <DateRangePicker value={dateRange} onUpdate={handleDateUpdate} />
 
                     {hasActiveFilters && (
                         <Button

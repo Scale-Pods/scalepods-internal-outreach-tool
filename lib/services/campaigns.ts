@@ -1,6 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { getCampaignWaOverview } from '@/lib/services/campaign-whatsapp';
-import { getCampaignVoiceOverview, getCampaignVoiceColdCalls, isCallPickedUp } from '@/lib/services/campaign-voice';
+import { getCampaignVoiceOverview } from '@/lib/services/campaign-voice';
 
 // ── shared constants ──────────────────────────────────────────────────────────
 
@@ -296,7 +296,7 @@ export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {
             q = q.eq('is_enriched', true);
         }
         if (filters.channel) {
-            q = q.contains('outreach_channels', [filters.channel]);
+            q = q.contains('outreach_channels', JSON.stringify([filters.channel]));
         }
         if (filters.campaignIds?.length) {
             q = q.in('campaign_id', filters.campaignIds);
@@ -364,7 +364,7 @@ export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {
         `, { count: 'exact' });
 
     if (filters.channel) {
-        q = q.contains('outreach_channels', [filters.channel]);
+        q = q.contains('outreach_channels', JSON.stringify([filters.channel]));
     }
     if (filters.campaignIds?.length) {
         q = q.in('campaign_id', filters.campaignIds);
@@ -424,8 +424,6 @@ export interface CampaignsDashboardStats {
 
     // Voice Metrics
     voiceCalls: number;
-    voiceSarvamCalls: number;
-    voiceTwilioCalls: number;
     voicePickedUp: number;
     voicePickupRate: number;
     voicePositive: number;
@@ -488,39 +486,73 @@ export async function getCampaignsDashboardStats(filters: CampaignsDashboardFilt
         const fromIso = filters.from || '1970-01-01T00:00:00.000Z';
         const toIso = filters.to || '2099-12-31T23:59:59.999Z';
 
-        const [
-            { count: totalCount },
-            { count: newCount },
-            { count: contactedCount },
-            { count: repliedCount },
-            { count: unsubsCount },
-            { count: bouncedCount },
-        ] = await Promise.all([
-            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }),
-            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).gte('created_at', fromIso).lte('created_at', toIso),
-            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
-            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).gte('last_replied_at', fromIso).lte('last_replied_at', toIso),
-            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).eq('unsubscribed', true).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
-            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).eq('bounced', true).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
-        ]);
+        // Single RPC — one sequential/index-assisted scan with FILTER
+        // aggregates — instead of 9 separate round trips. Falls back to the
+        // old per-count queries only if the RPC hasn't been created yet.
+        const { data: rpcData, error: rpcError } = await supabaseAdmin.rpc('get_campaigns_dashboard_stats_filtered', {
+            p_from: fromIso,
+            p_to: toIso,
+        });
 
-        totalLeads = totalCount ?? 0;
-        newLeads = newCount ?? 0;
-        contacted = contactedCount ?? 0;
-        emailSent = contactedCount ?? 0;
-        emailReplied = repliedCount ?? 0;
-        unsubscribed = unsubsCount ?? 0;
-        bounced = bouncedCount ?? 0;
-        totalCampaigns = 10;
-        whatsappActive = 5;
-        voiceActive = 1;
+        if (!rpcError && rpcData) {
+            const row = rpcData[0];
+            totalLeads = row?.total_leads ?? 0;
+            totalCampaigns = row?.total_campaigns ?? 0;
+            emailSent = row?.email_sent ?? 0;
+            emailReplied = row?.email_replied ?? 0;
+            unsubscribed = row?.unsubscribed ?? 0;
+            bounced = row?.bounced ?? 0;
+            whatsappActive = row?.whatsapp_active ?? 0;
+            voiceActive = row?.voice_active ?? 0;
+            contacted = row?.contacted ?? 0;
+            newLeads = row?.new_leads ?? 0;
+        } else {
+            const inRangeOr = `and(created_at.gte.${fromIso},created_at.lte.${toIso}),and(last_contacted_at.gte.${fromIso},last_contacted_at.lte.${toIso}),and(last_replied_at.gte.${fromIso},last_replied_at.lte.${toIso})`;
+
+            const [
+                totalRes,
+                newRes,
+                contactedRes,
+                emailSentRes,
+                emailRepliedRes,
+                unsubsRes,
+                bouncedRes,
+                whatsappActiveRes,
+                voiceActiveRes,
+                activeCampaignsRes,
+            ] = await Promise.all([
+                supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).or(inRangeOr),
+                supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).gte('created_at', fromIso).lte('created_at', toIso),
+                supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
+                supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', JSON.stringify(['email'])).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
+                supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', JSON.stringify(['email'])).gte('last_replied_at', fromIso).lte('last_replied_at', toIso),
+                supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).eq('unsubscribed', true).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
+                supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).eq('bounced', true).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
+                supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', JSON.stringify(['whatsapp'])).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
+                supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', JSON.stringify(['voice'])).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
+                supabaseAdmin.rpc('get_active_campaigns_count'),
+            ]);
+
+            if (totalRes.error) throw new Error(totalRes.error.message);
+            if (emailSentRes.error) throw new Error(emailSentRes.error.message);
+
+            totalLeads = totalRes.count ?? 0;
+            newLeads = newRes.count ?? 0;
+            contacted = contactedRes.count ?? 0;
+            emailSent = emailSentRes.count ?? 0;
+            emailReplied = emailRepliedRes.count ?? 0;
+            unsubscribed = unsubsRes.count ?? 0;
+            bounced = bouncedRes.count ?? 0;
+            whatsappActive = whatsappActiveRes.count ?? 0;
+            voiceActive = voiceActiveRes.count ?? 0;
+            totalCampaigns = activeCampaignsRes.data ?? 0;
+        }
     }
 
     // 2. Query WhatsApp and Voice metrics with date filter
-    const [waOverview, voiceOverview, coldCallsRes] = await Promise.all([
+    const [waOverview, voiceOverview] = await Promise.all([
         getCampaignWaOverview(filters),
         getCampaignVoiceOverview(filters),
-        getCampaignVoiceColdCalls({ ...filters, page: 1, pageSize: 1000 }),
     ]);
 
     // WhatsApp
@@ -530,17 +562,12 @@ export async function getCampaignsDashboardStats(filters: CampaignsDashboardFilt
     const whatsappReplyRate = waOverview.replyRate;
     const whatsappUniqueReplied = waOverview.uniqueRepliedLeads ?? 0;
 
-    // Voice: Attributed calls only (separating Sarvam AI vs Twilio cold calls)
-    const attributedColdCalls = coldCallsRes.data.filter(c => c.isAttributed);
-    const voiceSarvamCalls = voiceOverview.totalCalls;
-    const voiceTwilioCalls = attributedColdCalls.length;
-    const voiceCalls = voiceSarvamCalls + voiceTwilioCalls;
-    const coldPickedUp = attributedColdCalls.filter(c => isCallPickedUp(c.status, c.durationSeconds)).length;
-    const voicePickedUp = voiceOverview.callsPickedUp + coldPickedUp;
-    const voicePickupRate = voiceCalls > 0 ? Math.round((voicePickedUp / voiceCalls) * 1000) / 10 : 0;
+    // Voice: sourced exclusively from vapi_call_logs where vapi_account = 'sarvam'
+    const voiceCalls = voiceOverview.totalCalls;
+    const voicePickedUp = voiceOverview.callsPickedUp;
+    const voicePickupRate = voiceOverview.pickupRate;
     const voicePositive = voiceOverview.positiveSentimentCalls;
-    const coldDuration = attributedColdCalls.reduce((acc, c) => acc + (c.durationSeconds || 0), 0);
-    const voiceDurationSeconds = voiceOverview.totalDurationSeconds + coldDuration;
+    const voiceDurationSeconds = voiceOverview.totalDurationSeconds;
     const voiceDurationString = formatDurationSeconds(voiceDurationSeconds);
 
     return {
@@ -560,8 +587,6 @@ export async function getCampaignsDashboardStats(filters: CampaignsDashboardFilt
         whatsappContacted,
         whatsappUniqueReplied,
         voiceCalls,
-        voiceSarvamCalls,
-        voiceTwilioCalls,
         voicePickedUp,
         voicePickupRate,
         voicePositive,
@@ -609,19 +634,24 @@ export async function getChannelStats(channel: OutreachChannel, filters: { from?
         const fromIso = filters.from || '1970-01-01T00:00:00.000Z';
         const toIso = filters.to || '2099-12-31T23:59:59.999Z';
 
-        const [
-            { count: enrolled },
-            { count: emailSent },
-            { count: emailReplied },
-            { count: unsubs },
-            { count: bounced },
-        ] = await Promise.all([
-            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', [channel]),
-            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', [channel]).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
-            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', [channel]).gte('last_replied_at', fromIso).lte('last_replied_at', toIso),
-            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', [channel]).eq('unsubscribed', true).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
-            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', [channel]).eq('bounced', true).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
+        const channelFilter = JSON.stringify([channel]);
+
+        const [enrolledRes, emailSentRes, emailRepliedRes, unsubsRes, bouncedRes] = await Promise.all([
+            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', channelFilter),
+            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', channelFilter).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
+            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', channelFilter).gte('last_replied_at', fromIso).lte('last_replied_at', toIso),
+            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', channelFilter).eq('unsubscribed', true).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
+            supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', channelFilter).eq('bounced', true).gte('last_contacted_at', fromIso).lte('last_contacted_at', toIso),
         ]);
+
+        if (enrolledRes.error) throw new Error(enrolledRes.error.message);
+        if (emailSentRes.error) throw new Error(emailSentRes.error.message);
+
+        const enrolled = enrolledRes.count;
+        const emailSent = emailSentRes.count;
+        const emailReplied = emailRepliedRes.count;
+        const unsubs = unsubsRes.count;
+        const bounced = bouncedRes.count;
 
         const active = emailSent ?? 0;
         const notStarted = Math.max(0, (enrolled ?? 0) - active);
