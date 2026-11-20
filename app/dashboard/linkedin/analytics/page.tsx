@@ -6,14 +6,14 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     AreaChart, Area, BarChart, Bar, Cell
 } from "recharts";
-import { TrendingUp, Users, MessageSquare, Send, RefreshCw, Gauge, Reply } from "lucide-react";
+import { TrendingUp, Users, MessageSquare, Send, RefreshCw, Gauge, Reply, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SPLoader } from "@/components/sp-loader";
 import { cn } from "@/lib/utils";
 import { LINKEDIN_ACCOUNTS, getAccountMeta, buildConversationThreads, isDateInRange, isLeadInDateRange, normalizeDateBoundary, type LinkedInQuota, type LinkedInLead, type LinkedInMessage, type DataBatch } from "@/lib/services/linkedin-sheets";
 import { LinkedInAccountBadge, LinkedInBatchBadge, accountColorClasses, batchColorClasses } from "@/components/dashboard/linkedin-account-badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import type { DateRange } from "react-day-picker";
+import { useCampaignDateRange } from "@/context/CampaignDateContext";
 
 const BATCH_HEX: Record<DataBatch, string> = {
     old: '#f59e0b',
@@ -34,7 +34,9 @@ export default function LinkedInAnalyticsPage() {
     const [leads, setLeads] = useState<LinkedInLead[]>([]);
     const [messages, setMessages] = useState<LinkedInMessage[]>([]);
     const [loading, setLoading] = useState(true);
-    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const { dateRange, setDateRange } = useCampaignDateRange();
+    const [repliesPage, setRepliesPage] = useState(1);
+    const repliesPerPage = 10;
 
     const fetchData = async () => {
         setLoading(true);
@@ -111,6 +113,11 @@ export default function LinkedInAnalyticsPage() {
                 .sort((a, b) => new Date(b.lastActionSentAt).getTime() - new Date(a.lastActionSentAt).getTime()),
         };
     }, [filteredData]);
+
+    useEffect(() => { setRepliesPage(1); }, [dateRange]);
+
+    const totalRepliesPages = Math.ceil(stats.replies.length / repliesPerPage) || 1;
+    const paginatedReplies = stats.replies.slice((repliesPage - 1) * repliesPerPage, repliesPage * repliesPerPage);
 
     const quotaTrend = useMemo(() => {
         const groups: Record<string, { date: string; sent: number; cap: number }> = {};
@@ -189,19 +196,8 @@ export default function LinkedInAnalyticsPage() {
                 <div className="flex items-center gap-2 flex-wrap shrink-0">
                     <DateRangePicker
                         value={dateRange}
-                        placeholder="All Dates"
-                        onUpdate={(val) => setDateRange(val.range)}
+                        onUpdate={({ range, label }) => setDateRange(range, label)}
                     />
-                    {dateRange?.from && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setDateRange(undefined)}
-                            className="h-10 px-3 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                        >
-                            Reset
-                        </Button>
-                    )}
                     <Button variant="outline" size="sm" onClick={fetchData} className="h-10 px-4 gap-2 border-slate-200">
                         <RefreshCw className="h-4 w-4 text-slate-600" /> Refresh
                     </Button>
@@ -414,23 +410,37 @@ export default function LinkedInAnalyticsPage() {
                     {stats.replies.length === 0 ? (
                         <p className="text-sm text-slate-400 py-6 text-center">{loading ? "Loading..." : "No replies yet"}</p>
                     ) : (
-                        <div className="space-y-3">
-                            {stats.replies.map(r => (
-                                <div key={r.personId} className="rounded-lg border border-border bg-slate-50/60 p-4">
-                                    <div className="flex items-start justify-between gap-3 mb-2">
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-bold text-slate-900 truncate">{r.fullName}</p>
-                                            <p className="text-xs text-slate-500 truncate">{r.companyName}</p>
+                        <>
+                            <div className="space-y-3">
+                                {paginatedReplies.map(r => (
+                                    <div key={r.personId} className="rounded-lg border border-border bg-slate-50/60 p-4">
+                                        <div className="flex items-start justify-between gap-3 mb-2">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-bold text-slate-900 truncate">{r.fullName}</p>
+                                                <p className="text-xs text-slate-500 truncate">{r.companyName}</p>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <LinkedInAccountBadge accountId={r.accountId} />
+                                                <LinkedInBatchBadge batch={r.batch} />
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-1.5 shrink-0">
-                                            <LinkedInAccountBadge accountId={r.accountId} />
-                                            <LinkedInBatchBadge batch={r.batch} />
-                                        </div>
+                                        <p className="text-sm text-slate-700 whitespace-pre-wrap">{r.replyText}</p>
                                     </div>
-                                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{r.replyText}</p>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                            <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
+                                <p className="text-[11px] text-slate-500">
+                                    <span className="font-bold text-slate-900">{stats.replies.length}</span> replies
+                                </p>
+                                {totalRepliesPages > 1 && (
+                                    <div className="flex items-center gap-1">
+                                        <Button variant="outline" size="sm" disabled={repliesPage === 1} onClick={() => setRepliesPage(p => p - 1)} className="h-7 w-7 p-0"><ChevronLeft className="h-3.5 w-3.5" /></Button>
+                                        <span className="text-[11px] font-bold text-slate-600 px-2">{repliesPage}/{totalRepliesPages}</span>
+                                        <Button variant="outline" size="sm" disabled={repliesPage === totalRepliesPages} onClick={() => setRepliesPage(p => p + 1)} className="h-7 w-7 p-0"><ChevronRight className="h-3.5 w-3.5" /></Button>
+                                    </div>
+                                )}
+                            </div>
+                        </>
                     )}
                 </CardContent>
             </Card>

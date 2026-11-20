@@ -15,7 +15,7 @@ import { SPLoader } from "@/components/sp-loader";
 import { LINKEDIN_ACCOUNTS, getAccountMeta, isDateInRange, isLeadInDateRange, normalizeDateBoundary, type LinkedInLead, type DataBatch } from "@/lib/services/linkedin-sheets";
 import { LinkedInAccountBadge, LinkedInBatchBadge } from "@/components/dashboard/linkedin-account-badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import type { DateRange } from "react-day-picker";
+import { useCampaignDateRange } from "@/context/CampaignDateContext";
 
 const STATUS_STYLES: Record<string, string> = {
     connected: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -43,7 +43,7 @@ export default function LinkedInLeadsPage() {
     const [connectionFilter, setConnectionFilter] = useState<string[]>([]);
     const [accountFilter, setAccountFilter] = useState<string[]>([]);
     const [batchFilter, setBatchFilter] = useState<DataBatch[]>([]);
-    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const { dateRange, setDateRange } = useCampaignDateRange();
 
     const fetchData = async () => {
         setLoading(true);
@@ -81,14 +81,13 @@ export default function LinkedInLeadsPage() {
         setBatchFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
     };
 
-    const hasActiveFilters = connectionFilter.length > 0 || accountFilter.length > 0 || batchFilter.length > 0 || !!searchQuery || !!dateRange?.from;
+    const hasActiveFilters = connectionFilter.length > 0 || accountFilter.length > 0 || batchFilter.length > 0 || !!searchQuery;
 
     const resetFilters = () => {
         setConnectionFilter([]);
         setAccountFilter([]);
         setBatchFilter([]);
         setSearchQuery("");
-        setDateRange(undefined);
     };
 
     const filteredLeads = useMemo(() => {
@@ -210,8 +209,7 @@ export default function LinkedInLeadsPage() {
 
                 <DateRangePicker
                     value={dateRange}
-                    placeholder="All Dates"
-                    onUpdate={(val) => setDateRange(val.range)}
+                    onUpdate={({ range, label }) => setDateRange(range, label)}
                     className="w-auto [&>button]:h-8 [&>button]:text-xs [&>button]:sm:w-[220px]"
                 />
 

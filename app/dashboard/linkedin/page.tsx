@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import {
-    Users, MessageCircle, Send, Percent, Gauge, RefreshCw, CheckCircle2, XCircle, Reply,
+    Users, MessageCircle, Send, Percent, Gauge, RefreshCw, CheckCircle2, XCircle, Reply, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SPLoader } from "@/components/sp-loader";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
-import type { DateRange } from "react-day-picker";
+import { useCampaignDateRange } from "@/context/CampaignDateContext";
 import { LinkedInAccountBadge, LinkedInBatchBadge, accountColorClasses, batchColorClasses } from "@/components/dashboard/linkedin-account-badge";
 import type { DataBatch } from "@/lib/services/linkedin-sheets";
 
@@ -74,28 +74,23 @@ interface DashboardStats {
 
 export default function LinkedInDashboardPage() {
     const router = useRouter();
+    const { dateRange, setDateRange, fromIso, toIso } = useCampaignDateRange();
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [loading, setLoading] = useState(true);
-    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [repliesPage, setRepliesPage] = useState(1);
+    const repliesPerPage = 10;
 
-    const fetchData = async (range?: DateRange | undefined) => {
+    const fetchData = async () => {
         setLoading(true);
         try {
-            const activeRange = range !== undefined ? range : dateRange;
-            let url = "/api/linkedin/dashboard";
-            if (activeRange?.from) {
-                const from = new Date(activeRange.from);
-                from.setHours(0, 0, 0, 0);
-                const to = new Date(activeRange.to || activeRange.from);
-                to.setHours(23, 59, 59, 999);
-                const params = new URLSearchParams();
-                params.set('from', from.toISOString());
-                params.set('to', to.toISOString());
-                url += `?${params.toString()}`;
-            }
-            const res = await fetch(url);
+            const params = new URLSearchParams();
+            if (fromIso) params.set('from', fromIso);
+            if (toIso) params.set('to', toIso);
+            const qs = params.toString();
+            const res = await fetch(`/api/linkedin/dashboard${qs ? `?${qs}` : ''}`);
             const json = await res.json();
             setStats(json);
+            setRepliesPage(1);
         } catch (err) {
             console.error("Failed to fetch LinkedIn dashboard stats:", err);
         } finally {
@@ -103,19 +98,12 @@ export default function LinkedInDashboardPage() {
         }
     };
 
-    const handleDateUpdate = (values: { range: DateRange | undefined; label?: string }) => {
-        setDateRange(values.range);
-        fetchData(values.range);
-    };
-
-    const handleResetDate = () => {
-        setDateRange(undefined);
-        fetchData(undefined);
-    };
-
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [fromIso, toIso]);
+
+    const totalRepliesPages = Math.ceil((stats?.replies.length ?? 0) / repliesPerPage) || 1;
+    const paginatedReplies = (stats?.replies ?? []).slice((repliesPage - 1) * repliesPerPage, repliesPage * repliesPerPage);
 
     const connectionRate = stats && stats.requestsSent > 0
         ? ((stats.connectedLeads / stats.requestsSent) * 100).toFixed(1)
@@ -139,19 +127,8 @@ export default function LinkedInDashboardPage() {
                 <div className="flex items-center gap-2 flex-wrap shrink-0">
                     <DateRangePicker
                         value={dateRange}
-                        placeholder="All Dates"
-                        onUpdate={handleDateUpdate}
+                        onUpdate={({ range, label }) => setDateRange(range, label)}
                     />
-                    {dateRange?.from && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleResetDate}
-                            className="h-10 px-3 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                        >
-                            Reset
-                        </Button>
-                    )}
                     <Button variant="outline" size="sm" onClick={() => fetchData()} className="gap-2 h-10 px-4">
                         <RefreshCw className="h-4 w-4" /> Refresh
                     </Button>
@@ -335,23 +312,37 @@ export default function LinkedInDashboardPage() {
                             {loading ? "Loading..." : "No replies yet"}
                         </p>
                     ) : (
-                        <div className="space-y-3">
-                            {stats.replies.map(r => (
-                                <div key={r.personId} className="rounded-lg border border-border bg-slate-50/60 p-4">
-                                    <div className="flex items-start justify-between gap-3 mb-2">
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-bold text-slate-900 truncate">{r.fullName}</p>
-                                            <p className="text-xs text-slate-500 truncate">{r.companyName}</p>
+                        <>
+                            <div className="space-y-3">
+                                {paginatedReplies.map(r => (
+                                    <div key={r.personId} className="rounded-lg border border-border bg-slate-50/60 p-4">
+                                        <div className="flex items-start justify-between gap-3 mb-2">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-bold text-slate-900 truncate">{r.fullName}</p>
+                                                <p className="text-xs text-slate-500 truncate">{r.companyName}</p>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <LinkedInAccountBadge accountId={r.accountId} />
+                                                <LinkedInBatchBadge batch={r.batch} />
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-1.5 shrink-0">
-                                            <LinkedInAccountBadge accountId={r.accountId} />
-                                            <LinkedInBatchBadge batch={r.batch} />
-                                        </div>
+                                        <p className="text-sm text-slate-700 whitespace-pre-wrap">{r.replyText}</p>
                                     </div>
-                                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{r.replyText}</p>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                            <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
+                                <p className="text-[11px] text-slate-500">
+                                    <span className="font-bold text-slate-900">{stats.replies.length}</span> replies
+                                </p>
+                                {totalRepliesPages > 1 && (
+                                    <div className="flex items-center gap-1">
+                                        <Button variant="outline" size="sm" disabled={repliesPage === 1} onClick={() => setRepliesPage(p => p - 1)} className="h-7 w-7 p-0"><ChevronLeft className="h-3.5 w-3.5" /></Button>
+                                        <span className="text-[11px] font-bold text-slate-600 px-2">{repliesPage}/{totalRepliesPages}</span>
+                                        <Button variant="outline" size="sm" disabled={repliesPage === totalRepliesPages} onClick={() => setRepliesPage(p => p + 1)} className="h-7 w-7 p-0"><ChevronRight className="h-3.5 w-3.5" /></Button>
+                                    </div>
+                                )}
+                            </div>
+                        </>
                     )}
                 </CardContent>
             </Card>

@@ -290,20 +290,48 @@ function parseCsv(text: string): string[][] {
     return rows.filter(r => r.some(cell => cell.trim() !== ''));
 }
 
+// The LinkedIn panel has no query-able backend — every page load has to pull
+// the full CSV export of every tab, which is what made it take 8-9s per
+// request (up to 7 Google Sheets round trips, every single time, even just
+// navigating Dashboard -> Leads -> Chat). A short in-memory cache (shared by
+// every route in this server process) turns repeat loads within the TTL
+// into an instant in-memory hit, and in-flight de-duping collapses
+// concurrent requests for the same tab into a single network call.
+const SHEET_CACHE_TTL_MS = 60_000;
+const sheetCache = new Map<string, { timestamp: number; rows: string[][] }>();
+const sheetInFlight = new Map<string, Promise<string[][]>>();
+
 async function fetchSheetRows(sheetName: string): Promise<string[][]> {
-    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
-    try {
-        const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) {
-            console.warn(`[LinkedIn Sheets] Failed to fetch "${sheetName}" sheet (${res.status}). Returning empty rows.`);
-            return [];
-        }
-        const text = await res.text();
-        return parseCsv(text);
-    } catch (err: any) {
-        console.error(`[LinkedIn Sheets] Network or fetch error for "${sheetName}":`, err?.message || err);
-        return [];
+    const cached = sheetCache.get(sheetName);
+    if (cached && Date.now() - cached.timestamp < SHEET_CACHE_TTL_MS) {
+        return cached.rows;
     }
+
+    const existing = sheetInFlight.get(sheetName);
+    if (existing) return existing;
+
+    const promise = (async () => {
+        const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+        try {
+            const res = await fetch(url, { cache: 'no-store' });
+            if (!res.ok) {
+                console.warn(`[LinkedIn Sheets] Failed to fetch "${sheetName}" sheet (${res.status}).${cached ? ' Serving last known rows.' : ' Returning empty rows.'}`);
+                return cached?.rows ?? [];
+            }
+            const text = await res.text();
+            const rows = parseCsv(text);
+            sheetCache.set(sheetName, { timestamp: Date.now(), rows });
+            return rows;
+        } catch (err: any) {
+            console.error(`[LinkedIn Sheets] Network or fetch error for "${sheetName}":`, err?.message || err);
+            return cached?.rows ?? [];
+        } finally {
+            sheetInFlight.delete(sheetName);
+        }
+    })();
+
+    sheetInFlight.set(sheetName, promise);
+    return promise;
 }
 
 function rowsToObjects<T>(rows: string[][], columnMap: Record<string, keyof T>, batch?: DataBatch): T[] {
