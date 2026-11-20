@@ -5,7 +5,7 @@ import {
     Users, MessageCircle, Send, Percent, Gauge, RefreshCw, CheckCircle2, XCircle, Reply, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SPLoader } from "@/components/sp-loader";
@@ -13,6 +13,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useCampaignDateRange } from "@/context/CampaignDateContext";
 import { LinkedInAccountBadge, LinkedInBatchBadge, accountColorClasses, batchColorClasses } from "@/components/dashboard/linkedin-account-badge";
 import type { DataBatch } from "@/lib/services/linkedin-sheets";
+import { getLinkedInClientCache, fetchLinkedInClient, prefetchLinkedInSections } from "@/lib/services/linkedin-client-cache";
 
 interface BatchBreakdown {
     batch: DataBatch;
@@ -75,32 +76,47 @@ interface DashboardStats {
 export default function LinkedInDashboardPage() {
     const router = useRouter();
     const { dateRange, setDateRange, fromIso, toIso } = useCampaignDateRange();
-    const [stats, setStats] = useState<DashboardStats | null>(null);
-    const [loading, setLoading] = useState(true);
+    const qs = useMemo(() => {
+        const params = new URLSearchParams();
+        if (fromIso) params.set('from', fromIso);
+        if (toIso) params.set('to', toIso);
+        return params.toString();
+    }, [fromIso, toIso]);
+
+    const cacheKey = `/api/linkedin/dashboard${qs ? `?${qs}` : ''}`;
+    const [stats, setStats] = useState<DashboardStats | null>(() => getLinkedInClientCache<DashboardStats>(cacheKey));
+    const [loading, setLoading] = useState(() => !getLinkedInClientCache<DashboardStats>(cacheKey));
+    const [refreshing, setRefreshing] = useState(false);
     const [repliesPage, setRepliesPage] = useState(1);
     const repliesPerPage = 10;
 
-    const fetchData = async () => {
-        setLoading(true);
+    const fetchData = async (force = false) => {
+        const cached = getLinkedInClientCache<DashboardStats>(cacheKey);
+        if (force) {
+            setRefreshing(true);
+        } else if (!cached) {
+            setLoading(true);
+        }
+
         try {
-            const params = new URLSearchParams();
-            if (fromIso) params.set('from', fromIso);
-            if (toIso) params.set('to', toIso);
-            const qs = params.toString();
-            const res = await fetch(`/api/linkedin/dashboard${qs ? `?${qs}` : ''}`);
-            const json = await res.json();
+            const json = await fetchLinkedInClient<DashboardStats>(cacheKey, force);
             setStats(json);
             setRepliesPage(1);
         } catch (err) {
             console.error("Failed to fetch LinkedIn dashboard stats:", err);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
 
     useEffect(() => {
-        fetchData();
-    }, [fromIso, toIso]);
+        fetchData(false);
+    }, [cacheKey]);
+
+    useEffect(() => {
+        prefetchLinkedInSections();
+    }, []);
 
     const totalRepliesPages = Math.ceil((stats?.replies.length ?? 0) / repliesPerPage) || 1;
     const paginatedReplies = (stats?.replies ?? []).slice((repliesPage - 1) * repliesPerPage, repliesPage * repliesPerPage);
@@ -129,8 +145,8 @@ export default function LinkedInDashboardPage() {
                         value={dateRange}
                         onUpdate={({ range, label }) => setDateRange(range, label)}
                     />
-                    <Button variant="outline" size="sm" onClick={() => fetchData()} className="gap-2 h-10 px-4">
-                        <RefreshCw className="h-4 w-4" /> Refresh
+                    <Button variant="outline" size="sm" onClick={() => fetchData(true)} disabled={refreshing} className="gap-2 h-10 px-4">
+                        <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} /> {refreshing ? "Refreshing..." : "Refresh"}
                     </Button>
                 </div>
             </div>

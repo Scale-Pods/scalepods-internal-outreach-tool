@@ -290,24 +290,52 @@ function parseCsv(text: string): string[][] {
     return rows.filter(r => r.some(cell => cell.trim() !== ''));
 }
 
-// The LinkedIn panel has no query-able backend — every page load has to pull
-// the full CSV export of every tab, which is what made it take 8-9s per
-// request (up to 7 Google Sheets round trips, every single time, even just
-// navigating Dashboard -> Leads -> Chat). A short in-memory cache (shared by
-// every route in this server process) turns repeat loads within the TTL
-// into an instant in-memory hit, and in-flight de-duping collapses
-// concurrent requests for the same tab into a single network call.
-const SHEET_CACHE_TTL_MS = 60_000;
-const sheetCache = new Map<string, { timestamp: number; rows: string[][] }>();
-const sheetInFlight = new Map<string, Promise<string[][]>>();
+// Shared in-memory cache and in-flight de-duping stored on globalThis so that
+// all Next.js API routes (/api/linkedin/dashboard, /api/linkedin/leads,
+// /api/linkedin/conversations, /api/linkedin/quota) share the exact same parsed
+// datasets without separate re-fetches from Google Sheets.
+const SHEET_CACHE_TTL_MS = 180_000; // 3 minutes fresh
+const STALE_MAX_AGE_MS = 900_000; // 15 minutes stale-while-revalidate
 
-async function fetchSheetRows(sheetName: string): Promise<string[][]> {
-    const cached = sheetCache.get(sheetName);
-    if (cached && Date.now() - cached.timestamp < SHEET_CACHE_TTL_MS) {
-        return cached.rows;
-    }
+interface GlobalLinkedInServerCache {
+    sheetCache: Map<string, { timestamp: number; rows: string[][] }>;
+    sheetInFlight: Map<string, Promise<string[][]>>;
+    parsedLeads?: { timestamp: number; data: LinkedInLead[] };
+    parsedConversations?: { timestamp: number; data: LinkedInMessage[] };
+    parsedQuota?: { timestamp: number; data: LinkedInQuota[] };
+    parsedThreads?: { timestamp: number; data: LinkedInConversationThread[] };
+}
 
-    const existing = sheetInFlight.get(sheetName);
+const globalForLinkedIn = globalThis as unknown as {
+    __linkedInServerCache?: GlobalLinkedInServerCache;
+};
+
+if (!globalForLinkedIn.__linkedInServerCache) {
+    globalForLinkedIn.__linkedInServerCache = {
+        sheetCache: new Map(),
+        sheetInFlight: new Map(),
+    };
+}
+
+const serverCache = globalForLinkedIn.__linkedInServerCache;
+
+export function clearLinkedInCache() {
+    serverCache.sheetCache.clear();
+    serverCache.sheetInFlight.clear();
+    delete serverCache.parsedLeads;
+    delete serverCache.parsedConversations;
+    delete serverCache.parsedQuota;
+    delete serverCache.parsedThreads;
+}
+
+function triggerBackgroundFetch(sheetName: string) {
+    executeSheetFetch(sheetName).catch((err) => {
+        console.warn(`[LinkedIn Sheets] Background revalidation failed for "${sheetName}":`, err?.message || err);
+    });
+}
+
+async function executeSheetFetch(sheetName: string): Promise<string[][]> {
+    const existing = serverCache.sheetInFlight.get(sheetName);
     if (existing) return existing;
 
     const promise = (async () => {
@@ -315,23 +343,49 @@ async function fetchSheetRows(sheetName: string): Promise<string[][]> {
         try {
             const res = await fetch(url, { cache: 'no-store' });
             if (!res.ok) {
+                const cached = serverCache.sheetCache.get(sheetName);
                 console.warn(`[LinkedIn Sheets] Failed to fetch "${sheetName}" sheet (${res.status}).${cached ? ' Serving last known rows.' : ' Returning empty rows.'}`);
                 return cached?.rows ?? [];
             }
             const text = await res.text();
             const rows = parseCsv(text);
-            sheetCache.set(sheetName, { timestamp: Date.now(), rows });
+            serverCache.sheetCache.set(sheetName, { timestamp: Date.now(), rows });
             return rows;
         } catch (err: any) {
+            const cached = serverCache.sheetCache.get(sheetName);
             console.error(`[LinkedIn Sheets] Network or fetch error for "${sheetName}":`, err?.message || err);
             return cached?.rows ?? [];
         } finally {
-            sheetInFlight.delete(sheetName);
+            serverCache.sheetInFlight.delete(sheetName);
         }
     })();
 
-    sheetInFlight.set(sheetName, promise);
+    serverCache.sheetInFlight.set(sheetName, promise);
     return promise;
+}
+
+async function fetchSheetRows(sheetName: string, force = false): Promise<string[][]> {
+    const cached = serverCache.sheetCache.get(sheetName);
+    const now = Date.now();
+
+    // 1. Fresh cache hit: return immediately
+    if (!force && cached && now - cached.timestamp < SHEET_CACHE_TTL_MS) {
+        return cached.rows;
+    }
+
+    // 2. Stale-while-revalidate: return last known rows instantly, trigger background fetch
+    if (!force && cached && now - cached.timestamp < STALE_MAX_AGE_MS && cached.rows.length > 0) {
+        if (!serverCache.sheetInFlight.has(sheetName)) {
+            triggerBackgroundFetch(sheetName);
+        }
+        return cached.rows;
+    }
+
+    // 3. In-flight de-duping
+    const existing = serverCache.sheetInFlight.get(sheetName);
+    if (!force && existing) return existing;
+
+    return executeSheetFetch(sheetName);
 }
 
 function rowsToObjects<T>(rows: string[][], columnMap: Record<string, keyof T>, batch?: DataBatch): T[] {
@@ -355,11 +409,16 @@ function rowsToObjects<T>(rows: string[][], columnMap: Record<string, keyof T>, 
 }
 
 /** Fetches "Leads" (old), "New Leads" (new), and "New Leads_1" (new_1) tabs and merges them, each row tagged with its batch. */
-export async function getLinkedInLeads(): Promise<LinkedInLead[]> {
+export async function getLinkedInLeads(force = false): Promise<LinkedInLead[]> {
+    const now = Date.now();
+    if (!force && serverCache.parsedLeads && now - serverCache.parsedLeads.timestamp < SHEET_CACHE_TTL_MS) {
+        return serverCache.parsedLeads.data;
+    }
+
     const [oldRows, newRows, new1Rows] = await Promise.all([
-        fetchSheetRows(OLD_LEADS_SHEET_NAME),
-        fetchSheetRows(NEW_LEADS_SHEET_NAME),
-        fetchSheetRows(NEW_LEADS_1_SHEET_NAME),
+        fetchSheetRows(OLD_LEADS_SHEET_NAME, force),
+        fetchSheetRows(NEW_LEADS_SHEET_NAME, force),
+        fetchSheetRows(NEW_LEADS_1_SHEET_NAME, force),
     ]);
     const leads = [
         ...rowsToObjects<LinkedInLead>(oldRows, LEADS_COLUMNS, 'old'),
@@ -369,32 +428,50 @@ export async function getLinkedInLeads(): Promise<LinkedInLead[]> {
     for (const lead of leads) {
         lead.invitationSentAt = extractSnowflakeDate(lead.invitationId) || '';
     }
+
+    serverCache.parsedLeads = { timestamp: Date.now(), data: leads };
     return leads;
 }
 
 /** Fetches "Old Conversations", "New Conversations", and "New Conversations_1" tabs and merges them, each row tagged with its batch. */
-export async function getLinkedInConversations(): Promise<LinkedInMessage[]> {
+export async function getLinkedInConversations(force = false): Promise<LinkedInMessage[]> {
+    const now = Date.now();
+    if (!force && serverCache.parsedConversations && now - serverCache.parsedConversations.timestamp < SHEET_CACHE_TTL_MS) {
+        return serverCache.parsedConversations.data;
+    }
+
     const [oldRows, newRows, new1Rows] = await Promise.all([
-        fetchSheetRows(OLD_CONVERSATIONS_SHEET_NAME),
-        fetchSheetRows(NEW_CONVERSATIONS_SHEET_NAME),
-        fetchSheetRows(NEW_CONVERSATIONS_1_SHEET_NAME),
+        fetchSheetRows(OLD_CONVERSATIONS_SHEET_NAME, force),
+        fetchSheetRows(NEW_CONVERSATIONS_SHEET_NAME, force),
+        fetchSheetRows(NEW_CONVERSATIONS_1_SHEET_NAME, force),
     ]);
-    return [
+    const messages = [
         ...rowsToObjects<LinkedInMessage>(oldRows, CONVERSATIONS_COLUMNS, 'old'),
         ...rowsToObjects<LinkedInMessage>(newRows, CONVERSATIONS_COLUMNS, 'new'),
         ...rowsToObjects<LinkedInMessage>(new1Rows, CONVERSATIONS_COLUMNS, 'new_1'),
     ];
+
+    serverCache.parsedConversations = { timestamp: Date.now(), data: messages };
+    return messages;
 }
 
-export async function getLinkedInQuota(): Promise<LinkedInQuota[]> {
-    const rows = await fetchSheetRows(QUOTA_SHEET_NAME);
+export async function getLinkedInQuota(force = false): Promise<LinkedInQuota[]> {
+    const now = Date.now();
+    if (!force && serverCache.parsedQuota && now - serverCache.parsedQuota.timestamp < SHEET_CACHE_TTL_MS) {
+        return serverCache.parsedQuota.data;
+    }
+
+    const rows = await fetchSheetRows(QUOTA_SHEET_NAME, force);
     const objs = rowsToObjects<any>(rows, QUOTA_COLUMNS);
-    return objs.map(o => ({
+    const quota = objs.map(o => ({
         ...o,
         dailyCap: Number(o.dailyCap) || 0,
         sentCount: Number(o.sentCount) || 0,
         remainingQuota: Number(o.remainingQuota) || 0,
     }));
+
+    serverCache.parsedQuota = { timestamp: Date.now(), data: quota };
+    return quota;
 }
 
 export interface LinkedInConversationThread {
@@ -411,8 +488,14 @@ export interface LinkedInConversationThread {
 /** Groups raw conversation messages into per-lead threads, joined against the leads list (which carries Account ID). */
 export function buildConversationThreads(
     messages: LinkedInMessage[],
-    leads: LinkedInLead[]
+    leads: LinkedInLead[],
+    force = false
 ): LinkedInConversationThread[] {
+    const now = Date.now();
+    if (!force && serverCache.parsedThreads && now - serverCache.parsedThreads.timestamp < SHEET_CACHE_TTL_MS) {
+        return serverCache.parsedThreads.data;
+    }
+
     const leadsByPersonId = new Map(leads.map(l => [l.personId, l]));
     const threads = new Map<string, LinkedInConversationThread>();
 
@@ -447,9 +530,12 @@ export function buildConversationThreads(
         thread.lastMessageAt = last?.sentAt || null;
     }
 
-    return Array.from(threads.values()).sort((a, b) => {
+    const result = Array.from(threads.values()).sort((a, b) => {
         const dateA = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
         const dateB = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
         return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
     });
+
+    serverCache.parsedThreads = { timestamp: Date.now(), data: result };
+    return result;
 }

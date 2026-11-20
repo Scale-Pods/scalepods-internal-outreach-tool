@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
-import { getLinkedInLeads, LINKEDIN_ACCOUNTS } from '@/lib/services/linkedin-sheets';
+import { getLinkedInLeads, LINKEDIN_ACCOUNTS, clearLinkedInCache } from '@/lib/services/linkedin-sheets';
 
-export async function GET() {
+export async function GET(req: Request) {
     try {
-        const leads = await getLinkedInLeads();
-        return NextResponse.json({ data: leads, accounts: LINKEDIN_ACCOUNTS });
+        const { searchParams } = new URL(req.url);
+        const refresh = searchParams.get('refresh') === 'true';
+        if (refresh) {
+            clearLinkedInCache();
+        }
+        const leads = await getLinkedInLeads(refresh);
+        return NextResponse.json(
+            { data: leads, accounts: LINKEDIN_ACCOUNTS },
+            { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=180' } }
+        );
     } catch (error: any) {
         return NextResponse.json({ data: [], accounts: LINKEDIN_ACCOUNTS, error: error.message }, { status: 500 });
     }

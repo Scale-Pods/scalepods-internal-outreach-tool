@@ -15,14 +15,20 @@ import {
     Search, RefreshCw, MessageSquare, User, Send, ExternalLink, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { SPLoader } from "@/components/sp-loader";
+import { cn } from "@/lib/utils";
 import { LINKEDIN_ACCOUNTS, isDateInRange, isLeadInDateRange, normalizeDateBoundary, type LinkedInConversationThread, type DataBatch } from "@/lib/services/linkedin-sheets";
 import { LinkedInAccountBadge, LinkedInBatchBadge } from "@/components/dashboard/linkedin-account-badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useCampaignDateRange } from "@/context/CampaignDateContext";
+import { getLinkedInClientCache, fetchLinkedInClient, prefetchLinkedInSections } from "@/lib/services/linkedin-client-cache";
 
 export default function LinkedInChatPage() {
-    const [threads, setThreads] = useState<LinkedInConversationThread[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [threads, setThreads] = useState<LinkedInConversationThread[]>(() => {
+        const cached = getLinkedInClientCache<{ threads: LinkedInConversationThread[] }>("/api/linkedin/conversations");
+        return cached?.threads || [];
+    });
+    const [loading, setLoading] = useState(() => !getLinkedInClientCache("/api/linkedin/conversations"));
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedThread, setSelectedThread] = useState<LinkedInConversationThread | null>(null);
@@ -32,29 +38,32 @@ export default function LinkedInChatPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const threadsPerPage = 15;
 
-    const fetchData = async () => {
-        setLoading(true);
+    const fetchData = async (force = false) => {
+        const cached = getLinkedInClientCache<{ threads: LinkedInConversationThread[] }>("/api/linkedin/conversations");
+        if (force) {
+            setRefreshing(true);
+        } else if (!cached) {
+            setLoading(true);
+        }
         setError(null);
         try {
-            const res = await fetch("/api/linkedin/conversations");
-            const json = await res.json();
-            if (!res.ok) {
-                throw new Error(json.error || `Server returned ${res.status}`);
-            }
-            if (json.error) {
-                console.warn("LinkedIn conversations API warning:", json.error);
-            }
+            const json = await fetchLinkedInClient<{ threads: LinkedInConversationThread[] }>("/api/linkedin/conversations", force);
             setThreads(json.threads || []);
         } catch (err: any) {
             console.error("Failed to fetch LinkedIn conversations:", err);
             setError(err?.message || "Failed to fetch conversations");
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
 
     useEffect(() => {
-        fetchData();
+        fetchData(false);
+    }, []);
+
+    useEffect(() => {
+        prefetchLinkedInSections();
     }, []);
 
     const toggleAccountFilter = (value: string) => {
@@ -115,8 +124,8 @@ export default function LinkedInChatPage() {
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">LinkedIn Chats</h1>
                     <p className="text-slate-500 text-sm mt-1">All LinkedIn conversations across accounts and batches</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={fetchData} className="gap-2 h-10 px-4">
-                    <RefreshCw className="h-4 w-4" /> Refresh Chat
+                <Button variant="outline" size="sm" onClick={() => fetchData(true)} disabled={refreshing} className="gap-2 h-10 px-4">
+                    <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} /> {refreshing ? "Refreshing..." : "Refresh Chat"}
                 </Button>
             </div>
 
@@ -182,7 +191,7 @@ export default function LinkedInChatPage() {
             {error && (
                 <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg text-sm flex items-center justify-between">
                     <span>{error}</span>
-                    <Button variant="outline" size="sm" onClick={fetchData} className="text-xs h-7">Retry</Button>
+                    <Button variant="outline" size="sm" onClick={() => fetchData(true)} className="text-xs h-7">Retry</Button>
                 </div>
             )}
 
