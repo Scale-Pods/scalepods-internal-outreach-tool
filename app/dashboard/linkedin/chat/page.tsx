@@ -113,7 +113,7 @@ export default function LinkedInChatPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">LinkedIn Chats</h1>
-                    <p className="text-slate-500 text-sm mt-1">Conversations synced from the &quot;Old Conversations&quot;, &quot;New Conversations&quot; &amp; &quot;New Conversations_1&quot; Google Sheet tabs</p>
+                    <p className="text-slate-500 text-sm mt-1">All LinkedIn conversations across accounts and batches</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={fetchData} className="gap-2 h-10 px-4">
                     <RefreshCw className="h-4 w-4" /> Refresh Chat

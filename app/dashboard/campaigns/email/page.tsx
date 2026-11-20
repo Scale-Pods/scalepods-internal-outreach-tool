@@ -113,7 +113,7 @@ export default function CampaignEmailPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0">
                 <div>
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight">Campaign Emails</h1>
-                    <p className="text-slate-500 text-xs">Email sequence activity across all campaigns, from &quot;outreach_leads&quot;</p>
+                    <p className="text-slate-500 text-xs">Email sequence activity across all campaigns</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <DateRangePicker value={dateRange} onUpdate={({ range, label }) => setDateRange(range, label)} />

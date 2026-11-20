@@ -155,7 +155,7 @@ function CampaignWhatsAppOverviewContent() {
                         Campaign WhatsApp Overview
                     </h1>
                     <p className="text-sm text-slate-500 mt-1">
-                        Real-time WhatsApp outreach performance across all campaigns from outreach_leads
+                        Real-time WhatsApp outreach performance across all campaigns
                     </p>
                 </div>
 

@@ -129,7 +129,7 @@ export default function LinkedInLeadsPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0">
                 <div>
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight">LinkedIn Leads</h1>
-                    <p className="text-slate-500 text-xs">Synced from the &quot;Leads&quot; (Old), &quot;New Leads&quot; (New) &amp; &quot;New Leads_1&quot; (New 1) Google Sheet tabs</p>
+                    <p className="text-slate-500 text-xs">All LinkedIn connection requests across accounts and batches</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-3 text-[11px] font-semibold text-slate-500">

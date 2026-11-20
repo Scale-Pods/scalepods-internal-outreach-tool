@@ -191,7 +191,7 @@ export default function LinkedInAnalyticsPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">LinkedIn Analytics</h1>
-                    <p className="text-slate-500 text-sm">Quota usage, connections and messaging performance from Google Sheets</p>
+                    <p className="text-slate-500 text-sm">Quota usage, connections and messaging performance</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap shrink-0">
                     <DateRangePicker
@@ -280,7 +280,7 @@ export default function LinkedInAnalyticsPage() {
             <Card className="border-slate-200/60 shadow-sm bg-white overflow-hidden">
                 <CardHeader className="px-6 py-4 border-b border-slate-50">
                     <CardTitle className="text-sm font-bold text-slate-800">Data by Batch</CardTitle>
-                    <CardDescription className="text-[11px]">&quot;Leads&quot;/&quot;Old Conversations&quot; (Old) vs &quot;New Leads&quot;/&quot;New Conversations&quot; (New) vs &quot;New Leads_1&quot;/&quot;New Conversations_1&quot; (New 1) sheet tabs</CardDescription>
+                    <CardDescription className="text-[11px]">Old vs New vs New 1 batch performance breakdown</CardDescription>
                 </CardHeader>
                 <CardContent className="p-6 space-y-6">
                     <div className="h-[220px] w-full">

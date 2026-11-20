@@ -88,7 +88,7 @@ export default function CampaignsDashboardPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Campaigns</h1>
                     <p className="text-sm text-slate-500 mt-1">
-                        Multi-channel outreach performance across all campaigns, synced from Supabase
+                        Multi-channel outreach performance across all campaigns
                     </p>
                 </div>
                 <div className="flex items-center gap-3">

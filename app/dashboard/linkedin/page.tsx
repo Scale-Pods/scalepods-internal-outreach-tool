@@ -121,7 +121,7 @@ export default function LinkedInDashboardPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight">LinkedIn Outreach Center</h1>
                     <p className="text-sm text-slate-500 mt-1">
-                        Connection requests, conversations and daily quota synced from Google Sheets
+                        Connection requests, conversations and daily quota
                     </p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap shrink-0">
@@ -213,7 +213,7 @@ export default function LinkedInDashboardPage() {
                     <div className="flex items-center justify-between mb-5">
                         <div>
                             <h3 className="text-base font-bold text-slate-900">Data by Batch</h3>
-                            <p className="text-xs text-slate-500 mt-0.5">&quot;Leads&quot;/&quot;Old Conversations&quot; (Old) vs &quot;New Leads&quot;/&quot;New Conversations&quot; (New) vs &quot;New Leads_1&quot;/&quot;New Conversations_1&quot; (New 1) sheet tabs</p>
+                            <p className="text-xs text-slate-500 mt-0.5">Old vs New vs New 1 batch performance breakdown</p>
                         </div>
                         <Users className="h-4 w-4 text-slate-400" />
                     </div>

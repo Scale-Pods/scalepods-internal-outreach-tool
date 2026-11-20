@@ -161,7 +161,7 @@ export default function CampaignVoiceOverviewPage() {
                         Campaign Voice Overview
                     </h1>
                     <p className="text-sm text-slate-500 mt-1">
-                        AI voice outreach tracking from &quot;vapi_call_logs&quot; (Sarvam)
+                        AI voice outreach &amp; dialer campaign tracking
                     </p>
                 </div>
 

@@ -186,7 +186,7 @@ function LeadsPageInner() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0">
                 <div>
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight">Campaign Leads</h1>
-                    <p className="text-slate-500 text-xs">Synced from the &quot;outreach_leads&quot; table — Email, WhatsApp &amp; Voice in one view</p>
+                    <p className="text-slate-500 text-xs">Email, WhatsApp &amp; Voice activity in one view</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <DateRangePicker value={dateRange} onUpdate={({ range, label }) => setDateRange(range, label)} />
