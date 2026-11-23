@@ -91,8 +91,16 @@ export default function AssignPersonPage() {
         }
     };
 
+    useEffect(() => {
+        if (loading) {
+            const main = document.querySelector('main');
+            if (main) main.scrollTop = 0;
+        }
+    }, [loading]);
+
     return (
-        <div className="space-y-6 pb-10 pt-6 px-6">
+        <div className={`space-y-6 pb-10 pt-6 px-6 relative ${loading ? 'h-[calc(100vh-6rem)] overflow-hidden' : 'min-h-[500px]'}`}>
+            {loading && <SPLoader />}
             <div className="flex items-center gap-3">
                 <Button variant="ghost" size="sm" className="gap-1.5 text-slate-500 -ml-2" onClick={() => router.push("/dashboard/campaigns")}>
                     <ChevronLeft className="h-4 w-4" /> Back to Campaigns
@@ -119,10 +127,7 @@ export default function AssignPersonPage() {
                 <Input className="pl-10 bg-white" placeholder="Search campaigns..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
 
-            {loading ? (
-                <SPLoader />
-            ) : (
-                <Card className="border-border overflow-hidden shadow-sm">
+            <Card className="border-border overflow-hidden shadow-sm">
                     <CardContent className="p-0">
                         <div className="overflow-auto">
                             <table className="w-full text-left text-sm">
@@ -183,7 +188,6 @@ export default function AssignPersonPage() {
                         </div>
                     </CardContent>
                 </Card>
-            )}
         </div>
     );
 }

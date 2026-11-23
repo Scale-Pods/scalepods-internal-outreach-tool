@@ -80,8 +80,15 @@ export default function CampaignsDashboardPage() {
         fetchData();
     }, [fetchData]);
 
+    useEffect(() => {
+        if (loading) {
+            const main = document.querySelector('main');
+            if (main) main.scrollTop = 0;
+        }
+    }, [loading]);
+
     return (
-        <div className="space-y-8 pb-10 pt-6 relative min-h-[500px] px-6">
+        <div className={`space-y-8 pb-10 pt-6 relative px-6 ${loading ? 'h-[calc(100vh-6rem)] overflow-hidden' : 'min-h-[500px]'}`}>
             {loading && <SPLoader />}
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">

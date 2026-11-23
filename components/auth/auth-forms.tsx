@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
 import { login, forgotPassword } from '@/app/actions/auth';
 
 type AuthMode = 'login' | 'forgot';
@@ -15,6 +15,7 @@ import Image from 'next/image';
 export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: AuthMode, onSuccess?: () => void }) {
     const [mode, setMode] = useState<AuthMode>(defaultMode);
     const [email, setEmail] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const router = useRouter();
 
     const [loginState, loginAction, isLoginPending] = useActionState(login, null as any);
@@ -95,7 +96,7 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
                             <button
                                 type="button"
                                 onClick={() => setMode('forgot')}
-                                className="text-emerald-400 text-xs font-bold hover:underline"
+                                className="text-emerald-400 text-xs font-bold hover:underline hover:text-emerald-300 transition-colors"
                             >
                                 Forgot password?
                             </button>
@@ -105,11 +106,23 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
                             <Input
                                 id="password"
                                 name="password"
-                                type="password"
+                                type={showPassword ? "text" : "password"}
                                 placeholder="••••••••"
                                 required
-                                className="pl-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all"
+                                className="pl-10 pr-10 h-11 bg-white/5 border-white/10 text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:ring-emerald-500/20 rounded-xl transition-all"
                             />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword((prev) => !prev)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 focus:outline-none transition-colors p-1"
+                                aria-label={showPassword ? "Hide password" : "Show password"}
+                            >
+                                {showPassword ? (
+                                    <EyeOff className="h-4 w-4" />
+                                ) : (
+                                    <Eye className="h-4 w-4" />
+                                )}
+                            </button>
                         </div>
                     </div>
                 )}
@@ -117,7 +130,7 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
                 <Button
                     type="submit"
                     disabled={isPending}
-                    className="w-full h-11 bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-slate-600 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all gap-2 group"
+                    className="w-full h-11 bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 text-white hover:text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all gap-2 group"
                 >
                     {isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -135,7 +148,7 @@ export function AuthForms({ defaultMode = 'login', onSuccess }: { defaultMode?: 
                 <div className="text-center">
                     <button
                         onClick={() => setMode('login')}
-                        className="text-emerald-400 text-xs font-bold hover:underline"
+                        className="text-emerald-400 text-xs font-bold hover:underline hover:text-emerald-300 transition-colors"
                     >
                         Back to Login
                     </button>

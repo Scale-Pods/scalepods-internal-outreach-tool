@@ -94,8 +94,8 @@ export default function CampaignVoiceOverviewPage() {
             .then(r => r.json())
             .then(json => {
                 const opts = (json.campaignOptions || []).map((c: any) => ({
-                    id: String(c.campaign_id),
-                    name: c.campaign_name,
+                    id: String(c.id || c.campaign_id),
+                    name: c.name || c.campaign_name || `Campaign ${c.id || c.campaign_id}`,
                 }));
                 setCampaignOptions(opts);
             })

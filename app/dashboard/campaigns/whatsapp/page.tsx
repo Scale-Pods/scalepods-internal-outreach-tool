@@ -98,8 +98,8 @@ function CampaignWhatsAppOverviewContent() {
             .then(r => r.json())
             .then(json => {
                 const opts = (json.campaignOptions || []).map((c: any) => ({
-                    id: String(c.campaign_id),
-                    name: c.campaign_name,
+                    id: String(c.id || c.campaign_id),
+                    name: c.name || c.campaign_name || `Campaign ${c.id || c.campaign_id}`,
                 }));
                 setCampaignOptions(opts);
             })
@@ -143,8 +143,15 @@ function CampaignWhatsAppOverviewContent() {
 
     const hasActiveFilters = selectedCampaigns.length > 0;
 
+    useEffect(() => {
+        if (loading) {
+            const main = document.querySelector('main');
+            if (main) main.scrollTop = 0;
+        }
+    }, [loading]);
+
     return (
-        <div className="space-y-6 pb-12 pt-4 px-6 relative min-h-[500px]">
+        <div className={`space-y-6 pb-12 pt-4 px-6 relative ${loading ? 'h-[calc(100vh-6rem)] overflow-hidden' : 'min-h-[500px]'}`}>
             {loading && <SPLoader />}
 
             {/* Top Header */}
@@ -170,25 +177,29 @@ function CampaignWhatsAppOverviewContent() {
                                     : `${selectedCampaigns.length} Campaign${selectedCampaigns.length > 1 ? 's' : ''}`}
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56 bg-white p-1">
+                        <DropdownMenuContent align="end" className="w-56 bg-white p-1 border border-border shadow-md">
                             <DropdownMenuItem
-                                className="text-xs font-bold cursor-pointer"
+                                className="text-xs font-bold cursor-pointer text-slate-800 hover:text-slate-900 hover:bg-slate-100"
                                 onClick={() => setSelectedCampaigns([])}
                             >
                                 All Campaigns
                             </DropdownMenuItem>
-                            {campaignOptions.map(c => (
-                                <DropdownMenuItem
-                                    key={c.id}
-                                    className="text-xs cursor-pointer flex items-center justify-between"
-                                    onClick={() => toggleCampaign(c.id)}
-                                >
-                                    <span className="truncate">{c.name}</span>
-                                    {selectedCampaigns.includes(c.id) && (
-                                        <Badge className="h-4 px-1 text-[9px] bg-cyan-600">Active</Badge>
-                                    )}
-                                </DropdownMenuItem>
-                            ))}
+                            {campaignOptions.length === 0 ? (
+                                <div className="px-2 py-1.5 text-xs text-slate-400 italic">No campaigns found</div>
+                            ) : (
+                                campaignOptions.map(c => (
+                                    <DropdownMenuItem
+                                        key={c.id}
+                                        className="text-xs cursor-pointer flex items-center justify-between text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+                                        onClick={() => toggleCampaign(c.id)}
+                                    >
+                                        <span className="truncate">{c.name}</span>
+                                        {selectedCampaigns.includes(c.id) && (
+                                            <Badge className="h-4 px-1 text-[9px] bg-cyan-600 text-white">Active</Badge>
+                                        )}
+                                    </DropdownMenuItem>
+                                ))
+                            )}
                         </DropdownMenuContent>
                     </DropdownMenu>
 

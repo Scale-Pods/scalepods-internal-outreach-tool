@@ -66,8 +66,8 @@ export default function CampaignVoiceCallLogsPage() {
             if (res.ok) {
                 const json = await res.json();
                 setCampaignOptions((json.campaignOptions || []).map((c: any) => ({
-                    id: String(c.campaign_id),
-                    name: c.campaign_name,
+                    id: String(c.id || c.campaign_id),
+                    name: c.name || c.campaign_name || `Campaign ${c.id || c.campaign_id}`,
                 })));
             }
         } catch (e) {
@@ -163,8 +163,15 @@ export default function CampaignVoiceCallLogsPage() {
         setModalOpen(true);
     };
 
+    useEffect(() => {
+        if (loading) {
+            const main = document.querySelector('main');
+            if (main) main.scrollTop = 0;
+        }
+    }, [loading]);
+
     return (
-        <div className="space-y-6 pb-12 pt-4 px-6 relative min-h-[500px]">
+        <div className={`space-y-6 pb-12 pt-4 px-6 relative ${loading ? 'h-[calc(100vh-6rem)] overflow-hidden' : 'min-h-[500px]'}`}>
             {loading && <SPLoader />}
 
             {/* Header */}

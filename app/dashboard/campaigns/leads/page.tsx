@@ -180,8 +180,15 @@ function LeadsPageInner() {
 
     const totalPages = Math.ceil(totalCount / LEADS_PER_PAGE) || 1;
 
+    useEffect(() => {
+        if (loading) {
+            const main = document.querySelector('main');
+            if (main) main.scrollTop = 0;
+        }
+    }, [loading]);
+
     return (
-        <div className="h-full flex flex-col overflow-hidden p-4 space-y-3 relative min-h-[400px]">
+        <div className={`h-full flex flex-col p-4 space-y-3 relative ${loading ? 'h-[calc(100vh-6rem)] overflow-hidden' : 'overflow-hidden min-h-[400px]'}`}>
             {loading && <SPLoader />}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0">
                 <div>

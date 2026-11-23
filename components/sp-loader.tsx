@@ -2,14 +2,22 @@
 
 import React from "react";
 import Image from "next/image";
+import { cn } from "@/lib/utils";
 
 interface SPLoaderProps {
     fullScreen?: boolean;
+    className?: string;
 }
 
-export const SPLoader = ({ fullScreen = false }: SPLoaderProps) => {
+export const SPLoader = ({ fullScreen = false, className }: SPLoaderProps) => {
     return (
-        <div className={`${fullScreen ? 'fixed inset-0' : 'absolute inset-0 min-h-[400px]'} z-[50] flex items-center justify-center bg-white/80 backdrop-blur-md transition-all duration-500`}>
+        <div
+            className={cn(
+                "z-[50] flex items-center justify-center bg-white/80 backdrop-blur-md transition-all duration-500",
+                fullScreen ? "fixed inset-0" : "fixed inset-0 top-14 md:top-0 md:left-64",
+                className
+            )}
+        >
             <div className="relative flex flex-col items-center justify-center">
 
                 {/* Animated Background Glow */}
@@ -48,10 +56,10 @@ export const SPLoader = ({ fullScreen = false }: SPLoaderProps) => {
                         <div className="h-[2px] w-24 bg-gradient-to-r from-transparent via-slate-400 to-transparent mt-1"></div>
                     </div>
 
-                    <p className="text-[10px] font-bold tracking-[0.4em] text-slate-600 uppercase">
+                    <p className="text-[10px] font-bold tracking-[0.4em] text-slate-600 uppercase pl-[0.4em]">
                         AI Automation Infrastructure
                     </p>
-                    <p className="text-[10px] font-bold tracking-[0.4em] text-slate-500 uppercase">
+                    <p className="text-[10px] font-bold tracking-[0.4em] text-slate-500 uppercase pl-[0.4em]">
                         Please wait loading...
                     </p>
 

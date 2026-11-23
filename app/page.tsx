@@ -36,13 +36,13 @@ export default function LandingPage() {
                     <div className="flex items-center gap-2 sm:gap-4">
                         <Button
                             variant="ghost"
-                            className="text-zinc-400 hover:text-white font-bold text-xs sm:text-sm px-2 sm:px-4"
+                            className="text-zinc-400 hover:text-white hover:bg-white/10 font-bold text-xs sm:text-sm px-3 sm:px-4 rounded-full transition-colors"
                             onClick={openAuth}
                         >
                             Sign In
                         </Button>
                         <Button
-                            className="bg-white text-black hover:bg-zinc-200 font-bold rounded-full px-4 sm:px-6 text-xs sm:text-sm"
+                            className="bg-white text-black hover:bg-zinc-200 hover:text-black font-bold rounded-full px-4 sm:px-6 text-xs sm:text-sm transition-all"
                             onClick={openAuth}
                         >
                             Get Started
@@ -107,7 +107,7 @@ export default function LandingPage() {
 
                     <div className="mt-10 sm:mt-16 text-center">
                         <Button
-                            className="h-12 px-6 sm:px-8 w-full sm:w-auto bg-white text-black hover:bg-zinc-200 font-bold rounded-full gap-2 text-sm sm:text-base shadow-[0_0_20px_-5px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_-5px_rgba(255,255,255,0.4)] transition-all"
+                            className="h-12 px-6 sm:px-8 w-full sm:w-auto bg-white text-black hover:bg-zinc-200 hover:text-black font-bold rounded-full gap-2 text-sm sm:text-base shadow-[0_0_20px_-5px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_-5px_rgba(255,255,255,0.4)] transition-all"
                             onClick={openAuth}
                         >
                             Get Started Now <ArrowRight className="h-4 w-4" />
