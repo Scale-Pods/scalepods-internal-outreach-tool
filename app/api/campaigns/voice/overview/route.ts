@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
         const to = searchParams.get('to') || undefined;
         const status = searchParams.get('status') || undefined;
         const sentiment = searchParams.get('sentiment') || undefined;
+        const direction = searchParams.get('direction') || undefined;
         const campaignIds = searchParams.getAll('campaignId');
 
         const stats = await getCampaignVoiceOverview({
@@ -17,6 +18,7 @@ export async function GET(req: NextRequest) {
             to,
             status,
             sentiment,
+            direction,
             campaignIds: campaignIds.length > 0 ? campaignIds : undefined,
         });
 

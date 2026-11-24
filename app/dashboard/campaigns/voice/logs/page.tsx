@@ -56,6 +56,7 @@ export default function CampaignVoiceCallLogsPage() {
     const [callSlotFilter, setCallSlotFilter] = useState<string>("all"); // 'all' | '1' | '2' | '3'
     const [sentimentFilter, setSentimentFilter] = useState<string>("all"); // 'all' | 'positive' | 'negative' | 'neutral'
     const [statusFilter, setStatusFilter] = useState<string>("all"); // 'all' | 'picked_up' | 'missed'
+    const [directionFilter, setDirectionFilter] = useState<string>("all"); // 'all' | 'inbound' | 'outbound'
 
     const [selectedCall, setSelectedCall] = useState<any>(null);
     const [modalOpen, setModalOpen] = useState(false);
@@ -85,6 +86,7 @@ export default function CampaignVoiceCallLogsPage() {
             if (callSlotFilter !== 'all') params.set('callNumber', callSlotFilter);
             if (sentimentFilter !== 'all') params.set('sentiment', sentimentFilter);
             if (statusFilter !== 'all') params.set('status', statusFilter);
+            if (directionFilter !== 'all') params.set('direction', directionFilter);
             if (fromIso) params.set('from', fromIso);
             if (toIso) params.set('to', toIso);
             selectedCampaigns.forEach(c => params.append('campaignId', c));
@@ -99,7 +101,7 @@ export default function CampaignVoiceCallLogsPage() {
         } finally {
             setLoading(false);
         }
-    }, [currentPage, searchInput, callSlotFilter, sentimentFilter, statusFilter, fromIso, toIso, selectedCampaigns]);
+    }, [currentPage, searchInput, callSlotFilter, sentimentFilter, statusFilter, directionFilter, fromIso, toIso, selectedCampaigns]);
 
     useEffect(() => {
         fetchCampaignOptions();
@@ -131,6 +133,7 @@ export default function CampaignVoiceCallLogsPage() {
         setCallSlotFilter("all");
         setSentimentFilter("all");
         setStatusFilter("all");
+        setDirectionFilter("all");
         setDateRange(undefined);
         setCurrentPage(1);
     };
@@ -140,7 +143,8 @@ export default function CampaignVoiceCallLogsPage() {
         selectedCampaigns.length > 0 ||
         callSlotFilter !== "all" ||
         sentimentFilter !== "all" ||
-        statusFilter !== "all";
+        statusFilter !== "all" ||
+        directionFilter !== "all";
 
     const totalPages = Math.ceil(totalCount / CALLS_PER_PAGE) || 1;
 
@@ -353,6 +357,28 @@ export default function CampaignVoiceCallLogsPage() {
                             Negative
                         </button>
                     </div>
+
+                    {/* Direction filter */}
+                    <div className="flex items-center rounded-lg border border-slate-200 p-0.5 bg-white">
+                        <button
+                            onClick={() => { setDirectionFilter("all"); setCurrentPage(1); }}
+                            className={`px-2.5 py-1 text-xs font-semibold rounded ${directionFilter === "all" ? "bg-slate-100 text-slate-800" : "text-slate-500 hover:text-slate-800"}`}
+                        >
+                            All Directions
+                        </button>
+                        <button
+                            onClick={() => { setDirectionFilter("inbound"); setCurrentPage(1); }}
+                            className={`px-2.5 py-1 text-xs font-semibold rounded ${directionFilter === "inbound" ? "bg-indigo-50 text-indigo-700 font-bold" : "text-slate-500 hover:text-indigo-700"}`}
+                        >
+                            Inbound
+                        </button>
+                        <button
+                            onClick={() => { setDirectionFilter("outbound"); setCurrentPage(1); }}
+                            className={`px-2.5 py-1 text-xs font-semibold rounded ${directionFilter === "outbound" ? "bg-cyan-50 text-cyan-700 font-bold" : "text-slate-500 hover:text-cyan-700"}`}
+                        >
+                            Outbound
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -366,6 +392,7 @@ export default function CampaignVoiceCallLogsPage() {
                                 <th className="px-4 py-3">Lead Name</th>
                                 <th className="px-4 py-3">Phone</th>
                                 <th className="px-4 py-3 text-center">Touch</th>
+                                <th className="px-4 py-3 text-center">Direction</th>
                                 <th className="px-4 py-3 text-center">Status</th>
                                 <th className="px-4 py-3 text-center">Sentiment</th>
                                 <th className="px-4 py-3 text-center">Duration</th>
@@ -379,7 +406,7 @@ export default function CampaignVoiceCallLogsPage() {
                         <tbody className="divide-y divide-border">
                             {calls.length === 0 ? (
                                 <tr>
-                                    <td colSpan={12} className="px-4 py-12 text-center text-slate-400">
+                                    <td colSpan={13} className="px-4 py-12 text-center text-slate-400">
                                         No voice campaign calls found.
                                     </td>
                                 </tr>
@@ -414,6 +441,19 @@ export default function CampaignVoiceCallLogsPage() {
                                         <td className="px-4 py-3 text-center">
                                             <Badge variant="outline" className="text-[9px] font-bold bg-slate-50 text-slate-700 border-slate-200">
                                                 Call {call.callNumber}
+                                            </Badge>
+                                        </td>
+
+                                        <td className="px-4 py-3 text-center">
+                                            <Badge
+                                                variant="outline"
+                                                className={`text-[9px] font-bold uppercase ${
+                                                    call.isInbound
+                                                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                                        : 'bg-slate-50 text-slate-600 border-slate-200'
+                                                }`}
+                                            >
+                                                {call.isInbound ? 'Inbound' : 'Outbound'}
                                             </Badge>
                                         </td>
 

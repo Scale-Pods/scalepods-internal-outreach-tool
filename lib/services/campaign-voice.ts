@@ -16,6 +16,7 @@ export interface CampaignVoiceFilterParams {
     to?: string;
     status?: string;
     sentiment?: string; // 'all' | 'positive' | 'negative' | 'neutral'
+    direction?: string; // 'all' | 'inbound' | 'outbound'
     page?: number;
     pageSize?: number;
     callNumber?: number; // 1 | 2 | 3
@@ -46,6 +47,8 @@ export interface CampaignVoiceCall {
     costUsd: number | null;
     source: 'sarvam';
     vapiCallId: string | null;
+    callType: string | null;
+    isInbound: boolean;
 }
 
 export interface CampaignVoiceOverviewStats {
@@ -61,6 +64,10 @@ export interface CampaignVoiceOverviewStats {
     totalCostUsd: number | null;
     pickupRate: number; // percentage
     completionRate: number; // percentage
+    inboundCalls: number;
+    outboundCalls: number;
+    inboundPickedUp: number;
+    inboundRate: number; // percentage
     campaignBreakdown: {
         campaignId: string;
         campaignName: string;
@@ -192,7 +199,7 @@ function last10Digits(phone?: string | null): string {
 async function fetchSarvamCallsWithAttribution(filters: Pick<CampaignVoiceFilterParams, 'from' | 'to'>): Promise<CampaignVoiceCall[]> {
     let query = supabaseAdmin
         .from('vapi_call_logs')
-        .select('id, started_at, customer_phone, customer_name, duration_seconds, status, cost_usd, summary, recording_url, transcript, created_at, vapi_account')
+        .select('id, started_at, customer_phone, customer_name, duration_seconds, status, cost_usd, summary, recording_url, transcript, created_at, vapi_account, type')
         .ilike('vapi_account', SARVAM_ACCOUNT)
         .order('started_at', { ascending: true })
         .limit(10000);
@@ -291,6 +298,8 @@ async function fetchSarvamCallsWithAttribution(filters: Pick<CampaignVoiceFilter
             costUsd: r.cost_usd !== null && r.cost_usd !== undefined ? Number(r.cost_usd) : null,
             source: 'sarvam',
             vapiCallId: r.id,
+            callType: r.type || null,
+            isInbound: String(r.type || '').toLowerCase() === 'inboundphonecall',
         } satisfies CampaignVoiceCall;
     }).sort((a, b) => parseSafeTimestamp(b.callDate) - parseSafeTimestamp(a.callDate));
 }
@@ -337,6 +346,12 @@ export function filterCampaignVoiceCalls(calls: CampaignVoiceCall[], filters: Ca
             if (c.sentiment !== filters.sentiment.toLowerCase()) return false;
         }
 
+        if (filters.direction && filters.direction !== 'all') {
+            const d = filters.direction.toLowerCase();
+            if (d === 'inbound' && !c.isInbound) return false;
+            if (d === 'outbound' && c.isInbound) return false;
+        }
+
         return true;
     });
 }
@@ -354,6 +369,8 @@ function computeOverviewStats(filtered: CampaignVoiceCall[]): CampaignVoiceOverv
     let totalDurationSeconds = 0;
     let hasCostData = false;
     let totalCostUsd = 0;
+    let inboundCalls = 0;
+    let inboundPickedUp = 0;
 
     const uniqueLeadsSet = new Set<string>();
 
@@ -383,6 +400,11 @@ function computeOverviewStats(filtered: CampaignVoiceCall[]): CampaignVoiceOverv
 
         if (c.isPickedUp) callsPickedUp++;
         else callsMissed++;
+
+        if (c.isInbound) {
+            inboundCalls++;
+            if (c.isPickedUp) inboundPickedUp++;
+        }
 
         if (c.sentiment === 'positive') positiveSentimentCalls++;
         else if (c.sentiment === 'negative') negativeSentimentCalls++;
@@ -441,6 +463,8 @@ function computeOverviewStats(filtered: CampaignVoiceCall[]): CampaignVoiceOverv
     const pickupRate = totalCalls > 0 ? Math.round((callsPickedUp / totalCalls) * 1000) / 10 : 0;
     const completedCount = filtered.filter(c => c.status.toLowerCase().includes('completed') || c.status.toLowerCase().includes('interested')).length;
     const completionRate = totalCalls > 0 ? Math.round((completedCount / totalCalls) * 1000) / 10 : 0;
+    const outboundCalls = totalCalls - inboundCalls;
+    const inboundRate = totalCalls > 0 ? Math.round((inboundCalls / totalCalls) * 1000) / 10 : 0;
 
     const campaignBreakdown = Object.values(campaignMap).map(c => ({
         campaignId: c.campaignId,
@@ -479,6 +503,10 @@ function computeOverviewStats(filtered: CampaignVoiceCall[]): CampaignVoiceOverv
         totalCostUsd: hasCostData ? Math.round(totalCostUsd * 100) / 100 : null,
         pickupRate,
         completionRate,
+        inboundCalls,
+        outboundCalls,
+        inboundPickedUp,
+        inboundRate,
         campaignBreakdown,
         callNumberBreakdown,
         dailyVolume,

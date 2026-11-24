@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
         const to = searchParams.get('to') || undefined;
         const status = searchParams.get('status') || undefined;
         const sentiment = searchParams.get('sentiment') || undefined;
+        const direction = searchParams.get('direction') || undefined;
         const callNumberParam = searchParams.get('callNumber');
         const callNumber = callNumberParam ? parseInt(callNumberParam, 10) : undefined;
         const campaignIds = searchParams.getAll('campaignId');
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest) {
             to,
             status,
             sentiment,
+            direction,
             callNumber,
             campaignIds: campaignIds.length > 0 ? campaignIds : undefined,
         });

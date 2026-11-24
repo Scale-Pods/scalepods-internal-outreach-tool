@@ -17,6 +17,7 @@ import {
     Building2,
     Phone,
     AlertCircle,
+    PhoneIncoming,
 } from "lucide-react";
 import { SPLoader } from "@/components/sp-loader";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -265,7 +266,7 @@ export default function CampaignVoiceOverviewPage() {
             )}
 
             {/* Primary KPI Metrics */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
                 <MetricCard
                     title="Total Calls"
                     value={stats?.totalCalls ?? 0}
@@ -300,6 +301,15 @@ export default function CampaignVoiceOverviewPage() {
                     icon={PhoneOff}
                     iconColor="text-slate-600"
                     iconBg="bg-slate-100"
+                />
+
+                <MetricCard
+                    title="Inbound Calls"
+                    value={stats?.inboundCalls ?? 0}
+                    subtitle={`${stats?.inboundRate ?? 0}% of total · ${stats?.inboundPickedUp ?? 0} picked up`}
+                    icon={PhoneIncoming}
+                    iconColor="text-indigo-600"
+                    iconBg="bg-indigo-50"
                 />
 
                 <MetricCard
@@ -407,6 +417,7 @@ export default function CampaignVoiceOverviewPage() {
                                     <th className="px-4 py-3">Lead Name</th>
                                     <th className="px-4 py-3">Phone</th>
                                     <th className="px-4 py-3 text-center">Touch</th>
+                                    <th className="px-4 py-3 text-center">Direction</th>
                                     <th className="px-4 py-3 text-center">Status</th>
                                     <th className="px-4 py-3 text-center">Sentiment</th>
                                     <th className="px-4 py-3 text-center">Duration</th>
@@ -417,7 +428,7 @@ export default function CampaignVoiceOverviewPage() {
                             <tbody className="divide-y divide-border">
                                 {recentCalls.length === 0 ? (
                                     <tr>
-                                        <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                                        <td colSpan={10} className="px-4 py-8 text-center text-slate-400">
                                             No recent call activity found.
                                         </td>
                                     </tr>
@@ -442,6 +453,18 @@ export default function CampaignVoiceOverviewPage() {
                                             </td>
                                             <td className="px-4 py-3 text-center font-bold text-slate-700">
                                                 Call {c.callNumber}
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                                <Badge
+                                                    variant="outline"
+                                                    className={`text-[9px] font-bold uppercase ${
+                                                        c.isInbound
+                                                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                                            : 'bg-slate-50 text-slate-600 border-slate-200'
+                                                    }`}
+                                                >
+                                                    {c.isInbound ? 'Inbound' : 'Outbound'}
+                                                </Badge>
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 <Badge

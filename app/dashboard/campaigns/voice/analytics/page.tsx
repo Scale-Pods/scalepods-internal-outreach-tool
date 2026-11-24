@@ -21,6 +21,7 @@ import {
     Meh,
     Frown,
     Radio,
+    PhoneIncoming,
 } from "lucide-react";
 import {
     ResponsiveContainer,
@@ -256,7 +257,7 @@ export default function CampaignVoiceAnalyticsPage() {
             </div>
 
             {/* Top KPI Cards Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
                 <Card className="border-border shadow-xs bg-white p-4">
                     <div className="flex items-center justify-between text-xs text-slate-500 font-semibold uppercase">
                         <span>Total Calls</span>
@@ -288,6 +289,19 @@ export default function CampaignVoiceAnalyticsPage() {
                         {stats?.pickupRate ?? 0}%
                     </div>
                     <div className="text-[11px] text-slate-400 mt-0.5">{stats?.callsPickedUp ?? 0} answered</div>
+                </Card>
+
+                <Card className="border-border shadow-xs bg-white p-4">
+                    <div className="flex items-center justify-between text-xs text-slate-500 font-semibold uppercase">
+                        <span>Inbound Calls</span>
+                        <PhoneIncoming className="h-4 w-4 text-indigo-600" />
+                    </div>
+                    <div className="text-2xl font-bold text-indigo-600 mt-2">
+                        {stats?.inboundCalls ?? 0}
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                        {stats?.inboundRate ?? 0}% of total · {stats?.inboundPickedUp ?? 0} picked up
+                    </div>
                 </Card>
 
                 <Card className="border-border shadow-xs bg-white p-4">
@@ -626,7 +640,7 @@ export default function CampaignVoiceAnalyticsPage() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-4">
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                             <div className="p-4 rounded-xl border border-cyan-200 bg-cyan-50/40">
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs font-semibold text-cyan-800">Picked Up / Completed</span>
@@ -644,6 +658,17 @@ export default function CampaignVoiceAnalyticsPage() {
                                 <p className="text-2xl font-bold text-rose-900 mt-2">{stats?.callsMissed ?? 0}</p>
                                 <p className="text-[11px] text-rose-700 mt-0.5">
                                     {stats && stats.totalCalls > 0 ? Math.round((stats.callsMissed / stats.totalCalls) * 100) : 0}% missed rate
+                                </p>
+                            </div>
+
+                            <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/40">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-indigo-800">Inbound Received</span>
+                                    <PhoneIncoming className="h-4 w-4 text-indigo-600" />
+                                </div>
+                                <p className="text-2xl font-bold text-indigo-900 mt-2">{stats?.inboundCalls ?? 0}</p>
+                                <p className="text-[11px] text-indigo-700 mt-0.5">
+                                    {stats?.inboundRate ?? 0}% of all calls · {stats?.outboundCalls ?? 0} outbound
                                 </p>
                             </div>
                         </div>
