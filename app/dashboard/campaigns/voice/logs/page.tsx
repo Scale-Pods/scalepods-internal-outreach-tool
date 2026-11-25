@@ -159,7 +159,7 @@ export default function CampaignVoiceCallLogsPage() {
             startedAt: call.callDate,
             durationSeconds: call.durationSeconds,
             status: call.status,
-            cost: call.costUsd !== null && call.costUsd !== undefined ? `$${call.costUsd.toFixed(2)}` : 'N/A',
+            cost: call.costUsd !== null && call.costUsd !== undefined ? `₹${call.costUsd.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}` : 'N/A',
             callSummary: call.summary,
             audio_url: call.recordingUrl,
             transcript: call.transcript,
@@ -496,7 +496,7 @@ export default function CampaignVoiceCallLogsPage() {
                                         </td>
 
                                         <td className="px-4 py-3 text-center font-mono text-slate-700">
-                                            {call.costUsd !== null && call.costUsd !== undefined ? `$${call.costUsd.toFixed(2)}` : 'N/A'}
+                                            {call.costUsd !== null && call.costUsd !== undefined ? `₹${call.costUsd.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}` : 'N/A'}
                                         </td>
 
                                         <td className="px-4 py-3 max-w-[220px]">

@@ -32,7 +32,7 @@ export default function SharedCampaignCallPage({ params }: { params: Promise<{ l
                         startedAt: c.callDate,
                         durationSeconds: c.durationSeconds,
                         status: c.status,
-                        cost: c.costUsd !== null && c.costUsd !== undefined ? `$${c.costUsd.toFixed(2)}` : 'N/A',
+                        cost: c.costUsd !== null && c.costUsd !== undefined ? `₹${c.costUsd.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}` : 'N/A',
                         callSummary: c.summary,
                         audio_url: c.recordingUrl,
                         transcript: c.transcript,

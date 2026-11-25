@@ -14,6 +14,7 @@ interface DataContextType {
     vapiHotBalance: any;
     vapiColdBalance: any;
     twilioBalance: any;
+    sarvamCost: { totalCostInr: number; totalCalls: number } | null;
     error: string | null;
     refreshLeads: (from?: Date, to?: Date, type?: 'email' | 'whatsapp') => Promise<void>;
 
@@ -35,6 +36,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const [vapiHotBalance, setVapiHotBalance] = useState<any>(null);
     const [vapiColdBalance, setVapiColdBalance] = useState<any>(null);
     const [twilioBalance, setTwilioBalance] = useState<any>(null);
+    const [sarvamCost, setSarvamCost] = useState<{ totalCostInr: number; totalCalls: number } | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     const fetchLeads = useCallback(async (from?: Date, to?: Date, type?: 'email' | 'whatsapp') => {
@@ -88,9 +90,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
     const fetchBalances = useCallback(async () => {
         try {
-            const [vapiRes, twilioRes] = await Promise.all([
+            const [vapiRes, twilioRes, sarvamRes] = await Promise.all([
                 fetch('/api/vapi/balance'),
-                fetch('/api/twilio/balance')
+                fetch('/api/twilio/balance'),
+                fetch('/api/campaigns/voice/sarvam-cost')
             ]);
             if (vapiRes.ok) {
                 const vapiJson = await vapiRes.json();
@@ -99,6 +102,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 setVapiColdBalance(vapiJson.vapiCold);
             }
             if (twilioRes.ok) setTwilioBalance(await twilioRes.json());
+            if (sarvamRes.ok) setSarvamCost(await sarvamRes.json());
         } catch (err) { }
         finally { setLoadingBalances(false); }
     }, []);
@@ -123,6 +127,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             vapiHotBalance,
             vapiColdBalance,
             twilioBalance,
+            sarvamCost,
             error,
             refreshLeads: fetchLeads,
             refreshCalls: fetchCalls,

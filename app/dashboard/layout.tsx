@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, ChevronRight, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity, Building2, Phone, Menu, X, Linkedin, Gauge, Megaphone, UploadCloud, UserPlus } from "lucide-react";
+import { LayoutDashboard, Mail, MessageCircle, Mic, Settings, LogOut, ChevronDown, ChevronRight, Wallet, BarChart2, Users, Send, Key, ExternalLink, Smartphone, AlertCircle, Inbox, UserMinus, Search, Activity, Building2, Phone, Menu, X, Linkedin, Gauge, Megaphone, UploadCloud, UserPlus, IndianRupee } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import {
@@ -53,13 +53,14 @@ const sidebarItems = [
     },
 ];
 
-function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolean, onClose: () => void, type: 'vapi' | 'twilio', details?: any, calls?: any[] }) {
+function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolean, onClose: () => void, type: 'vapi' | 'twilio' | 'sarvam', details?: any, calls?: any[] }) {
     const { voiceBalance, vapiHotBalance, vapiColdBalance } = useData();
 
     const title = (() => {
         switch (type) {
             case 'vapi': return 'Vapi Wallet';
             case 'twilio': return 'Twilio Account';
+            case 'sarvam': return 'Sarvam Voice Cost';
             default: return 'Balance Detail';
         }
     })();
@@ -68,6 +69,7 @@ function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolea
         switch (type) {
             case 'vapi': return <Mic className="h-5 w-5 text-blue-600" />;
             case 'twilio': return <Smartphone className="h-5 w-5 text-rose-600" />;
+            case 'sarvam': return <IndianRupee className="h-5 w-5 text-orange-600" />;
             default: return <Wallet className="h-5 w-5" />;
         }
     })();
@@ -182,6 +184,23 @@ function WalletModal({ isOpen, onClose, type, details, calls }: { isOpen: boolea
                             <Button className="bg-rose-600 hover:bg-rose-700 text-white gap-2" onClick={() => window.open('https://console.twilio.com', '_blank')}>
                                 <ExternalLink className="h-4 w-4" /> Add Funds to Twilio
                             </Button>
+                        </div>
+                    )}
+
+                    {type === 'sarvam' && (
+                        <div className="bg-orange-50/50 rounded-xl p-6 border border-orange-100 flex flex-col gap-4">
+                            <div className="flex flex-col text-center bg-card p-8 rounded-lg border border-orange-100 shadow-sm">
+                                <span className="text-sm font-bold text-muted-foreground/80 uppercase tracking-[0.2em] mb-2">Total Sarvam Cost</span>
+                                <span className="text-5xl font-black text-orange-600">
+                                    ₹{(details?.totalCostInr ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}
+                                </span>
+                            </div>
+                            <div className="flex flex-col text-center bg-card p-3 rounded-lg border border-orange-100 shadow-sm">
+                                <span className="text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wider mb-1">Total Sarvam Calls</span>
+                                <span className="text-lg font-bold text-foreground/90">
+                                    {(details?.totalCalls ?? 0).toLocaleString('en-IN')}
+                                </span>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -358,6 +377,7 @@ function DashboardContent({
         calls,
         voiceBalance,
         twilioBalance,
+        sarvamCost,
         loadingBalances,
         loadingCalls
     } = useData();
@@ -371,7 +391,7 @@ function DashboardContent({
         return calls.reduce((acc: number, call: any) => acc + (call.breakdown?.agent || 0), 0);
     }, [calls, voiceBalance]);
 
-    const [walletModal, setWalletModal] = useState<{ isOpen: boolean, type: 'vapi' | 'twilio' }>({
+    const [walletModal, setWalletModal] = useState<{ isOpen: boolean, type: 'vapi' | 'twilio' | 'sarvam' }>({
         isOpen: false,
         type: 'vapi'
     });
@@ -611,6 +631,13 @@ function DashboardContent({
                                 >
                                     <Smartphone className="h-4 w-4" />
                                 </button>
+                                <button
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg border border-orange-200 bg-orange-50/30 text-orange-700"
+                                    onClick={() => setWalletModal({ isOpen: true, type: 'sarvam' })}
+                                    aria-label="Sarvam voice cost"
+                                >
+                                    <IndianRupee className="h-4 w-4" />
+                                </button>
                             </div>
                         )}
                     </div>
@@ -652,7 +679,20 @@ function DashboardContent({
                                         </div>
                                     </Button>
 
-
+                                    {/* Sarvam Voice Cost Button */}
+                                    <Button
+                                        variant="outline"
+                                        className="h-10 px-3 border-orange-200 bg-orange-50/30 hover:bg-orange-50 text-orange-700 gap-2 flex items-center shadow-sm"
+                                        onClick={() => setWalletModal({ isOpen: true, type: 'sarvam' })}
+                                    >
+                                        <IndianRupee className="h-3.5 w-3.5" />
+                                        <div className="flex flex-col items-start leading-[1.1]">
+                                            <span className="text-[9px] font-bold uppercase opacity-70">Sarvam Cost · {loadingBalances ? "..." : (sarvamCost?.totalCalls ?? 0).toLocaleString('en-IN')} calls</span>
+                                            <span className="text-xs font-bold">
+                                                {loadingBalances ? "..." : `₹${(sarvamCost?.totalCostInr ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`}
+                                            </span>
+                                        </div>
+                                    </Button>
 
                                 </div>
                             </div>
@@ -666,6 +706,7 @@ function DashboardContent({
                             switch (walletModal.type) {
                                 case 'vapi': return voiceBalance?.vapi;
                                 case 'twilio': return twilioBalance;
+                                case 'sarvam': return sarvamCost;
                                 default: return null;
                             }
                         })()}

@@ -311,6 +311,28 @@ function mapVapiRowToCall(r: any, lead: any | undefined, callNumber: 1 | 2 | 3):
     } satisfies CampaignVoiceCall;
 }
 
+/** Lightweight aggregate: total Sarvam voice cost (stored in cost_usd, but the actual
+ *  currency for sarvam rows is INR) and call count, across every vapi_call_logs row
+ *  where vapi_account = 'sarvam'. Used by the master dashboard's cost card — pulls only
+ *  the cost_usd column, never full rows or outreach_leads attribution. */
+export async function getSarvamCostSummary(): Promise<{ totalCostInr: number; totalCalls: number }> {
+    const { data, error, count } = await supabaseAdmin
+        .from('vapi_call_logs')
+        .select('cost_usd', { count: 'exact' })
+        .ilike('vapi_account', SARVAM_ACCOUNT)
+        .limit(10000);
+
+    if (error) {
+        console.error('[campaign-voice] getSarvamCostSummary error:', error);
+        throw new Error(error.message || 'Failed to fetch Sarvam cost summary');
+    }
+
+    const rows = data || [];
+    const totalCostInr = rows.reduce((sum, r) => sum + (r.cost_usd !== null && r.cost_usd !== undefined ? Number(r.cost_usd) : 0), 0);
+
+    return { totalCostInr, totalCalls: count ?? rows.length };
+}
+
 /** Targeted lookup for a single lead's most recent call by outreach_leads.id — used
  *  for the public shareable call-details link. Scoped to one lead's phone numbers
  *  only, never a bulk fetch. */

@@ -337,7 +337,7 @@ export default function CampaignVoiceAnalyticsPage() {
                         {Math.round((stats?.totalDurationSeconds || 0) / 60)} <span className="text-sm font-normal text-slate-500">mins</span>
                     </div>
                     <div className="text-[11px] text-slate-400 mt-0.5">
-                        Cost: {stats?.totalCostUsd !== null && stats?.totalCostUsd !== undefined ? `$${stats.totalCostUsd.toFixed(2)}` : 'N/A'}
+                        Cost: {stats?.totalCostUsd !== null && stats?.totalCostUsd !== undefined ? `₹${stats.totalCostUsd.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}` : 'N/A'}
                     </div>
                 </Card>
             </div>

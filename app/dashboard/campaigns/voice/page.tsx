@@ -135,7 +135,7 @@ export default function CampaignVoiceOverviewPage() {
             startedAt: call.callDate,
             durationSeconds: call.durationSeconds,
             status: call.status,
-            cost: call.costUsd !== null && call.costUsd !== undefined ? `$${call.costUsd.toFixed(2)}` : 'N/A',
+            cost: call.costUsd !== null && call.costUsd !== undefined ? `₹${call.costUsd.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}` : 'N/A',
             callSummary: call.summary,
             audio_url: call.recordingUrl,
             transcript: call.transcript,
