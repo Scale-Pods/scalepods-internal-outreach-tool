@@ -1,15 +1,12 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { CallDetailsModal } from "@/components/voice/call-details-modal";
 import { PhoneOff } from "lucide-react";
 
 export default function SharedCampaignCallPage({ params }: { params: Promise<{ leadId: string }> }) {
     const { leadId } = use(params);
     const decodedLeadId = decodeURIComponent(leadId);
-    const searchParams = useSearchParams();
-    const callId = searchParams.get("callId");
 
     const [call, setCall] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -20,8 +17,7 @@ export default function SharedCampaignCallPage({ params }: { params: Promise<{ l
             setLoading(true);
             setNotFound(false);
             try {
-                const qs = callId ? `?callId=${encodeURIComponent(callId)}` : "";
-                const res = await fetch(`/api/public/campaign-call/${encodeURIComponent(decodedLeadId)}${qs}`);
+                const res = await fetch(`/api/public/campaign-call/${encodeURIComponent(decodedLeadId)}`);
                 if (res.ok) {
                     const data = await res.json();
                     const c = data.call;
@@ -56,7 +52,7 @@ export default function SharedCampaignCallPage({ params }: { params: Promise<{ l
             }
         };
         fetchCall();
-    }, [decodedLeadId, callId]);
+    }, [decodedLeadId]);
 
     if (loading) {
         return (

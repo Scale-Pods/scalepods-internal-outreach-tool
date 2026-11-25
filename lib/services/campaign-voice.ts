@@ -311,11 +311,10 @@ function mapVapiRowToCall(r: any, lead: any | undefined, callNumber: 1 | 2 | 3):
     } satisfies CampaignVoiceCall;
 }
 
-/** Targeted lookup for a single lead's call(s) by outreach_leads.id — used for the
- *  public shareable call-details link. Scoped to one lead's phone numbers only,
- *  never a bulk fetch. If callId (a vapi_call_logs.id) is given, returns that exact
- *  call; otherwise returns the most recent call for the lead. */
-export async function getCampaignVoiceCallByLeadId(leadId: string, callId?: string): Promise<{
+/** Targeted lookup for a single lead's most recent call by outreach_leads.id — used
+ *  for the public shareable call-details link. Scoped to one lead's phone numbers
+ *  only, never a bulk fetch. */
+export async function getCampaignVoiceCallByLeadId(leadId: string): Promise<{
     lead: { id: string; name: string; phone: string; companyName: string | null } | null;
     call: CampaignVoiceCall | null;
     calls: CampaignVoiceCall[];
@@ -369,9 +368,7 @@ export async function getCampaignVoiceCallByLeadId(leadId: string, callId?: stri
         .map((r, idx) => mapVapiRowToCall(r, lead, (Math.min(idx + 1, 3) as 1 | 2 | 3)))
         .sort((a, b) => parseSafeTimestamp(b.callDate) - parseSafeTimestamp(a.callDate));
 
-    const selected = (callId ? calls.find(c => c.vapiCallId === callId) : null) || calls[0] || null;
-
-    return { lead: leadSummary, call: selected, calls };
+    return { lead: leadSummary, call: calls[0] || null, calls };
 }
 
 /** Filters a list of campaign voice calls using provided parameters (date range is

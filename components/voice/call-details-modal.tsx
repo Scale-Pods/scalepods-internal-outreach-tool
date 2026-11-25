@@ -222,15 +222,12 @@ export function CallDetailsModal({ open, onOpenChange, call, isPublic = false }:
         setTimeout(() => setTranscriptCopied(false), 2000);
     };
 
-    // Share link is keyed by outreach_leads.id (unique per lead) with the specific
-    // vapi_call_logs.id as a query param, so a lead with multiple touches still
-    // links to the exact call that was shared.
+    // Share link is keyed by outreach_leads.id (unique per lead).
     const handleCopyShareLink = () => {
         if (!displayCall.leadId) return;
         const baseUrl = window.location.origin;
         const leadId = encodeURIComponent(displayCall.leadId);
-        const callIdParam = displayCall.vapiCallId ? `?callId=${encodeURIComponent(displayCall.vapiCallId)}` : '';
-        const shareUrl = `${baseUrl}/dashboard/campaigns/voice/call/${leadId}${callIdParam}`;
+        const shareUrl = `${baseUrl}/dashboard/campaigns/voice/call/${leadId}`;
         navigator.clipboard.writeText(shareUrl);
         setLinkCopied(true);
         setTimeout(() => setLinkCopied(false), 2000);
