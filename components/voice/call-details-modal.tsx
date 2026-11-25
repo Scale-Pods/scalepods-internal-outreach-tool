@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Play, Pause, Volume2, VolumeX, Phone, Clock, Calendar, ArrowRight, User, Copy, Check, FileText } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Phone, Clock, Calendar, ArrowRight, User, Copy, Check, FileText, Link as LinkIcon } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -19,12 +19,15 @@ interface CallDetailsModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     call: any;
+    /** Public/read-only mode: hides the share-link button (shown when rendering the shared page itself) */
+    isPublic?: boolean;
 }
 
-export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalProps) {
+export function CallDetailsModal({ open, onOpenChange, call, isPublic = false }: CallDetailsModalProps) {
     const [fullCall, setFullCall] = useState<any>(null);
     const [localLoading, setLocalLoading] = useState(false);
     const [transcriptCopied, setTranscriptCopied] = useState(false);
+    const [linkCopied, setLinkCopied] = useState(false);
 
     const displayCall = fullCall || call || {};
 
@@ -219,6 +222,20 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
         setTimeout(() => setTranscriptCopied(false), 2000);
     };
 
+    // Share link is keyed by outreach_leads.id (unique per lead) with the specific
+    // vapi_call_logs.id as a query param, so a lead with multiple touches still
+    // links to the exact call that was shared.
+    const handleCopyShareLink = () => {
+        if (!displayCall.leadId) return;
+        const baseUrl = window.location.origin;
+        const leadId = encodeURIComponent(displayCall.leadId);
+        const callIdParam = displayCall.vapiCallId ? `?callId=${encodeURIComponent(displayCall.vapiCallId)}` : '';
+        const shareUrl = `${baseUrl}/dashboard/campaigns/voice/call/${leadId}${callIdParam}`;
+        navigator.clipboard.writeText(shareUrl);
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+    };
+
     if (!call) return null;
 
     return (
@@ -226,6 +243,21 @@ export function CallDetailsModal({ open, onOpenChange, call }: CallDetailsModalP
             <DialogContent className="max-w-3xl p-0 gap-0 bg-white overflow-hidden max-h-[90vh] flex flex-col">
                 <DialogHeader className="p-6 border-b border-border flex flex-row items-center justify-between space-y-0">
                     <DialogTitle className="text-xl font-semibold">Call Details</DialogTitle>
+                    {!isPublic && displayCall.leadId && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`gap-1.5 text-[10px] font-black uppercase transition-all border shadow-sm mr-8 ${
+                                linkCopied
+                                    ? 'text-emerald-600 border-emerald-200 bg-emerald-50'
+                                    : 'text-cyan-700 border-cyan-200 bg-cyan-50 hover:bg-cyan-100 hover:border-cyan-300'
+                            }`}
+                            onClick={handleCopyShareLink}
+                        >
+                            {linkCopied ? <Check className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
+                            {linkCopied ? 'Link Copied!' : 'Share Link'}
+                        </Button>
+                    )}
                 </DialogHeader>
 
                 <div className="flex-1 overflow-auto relative">

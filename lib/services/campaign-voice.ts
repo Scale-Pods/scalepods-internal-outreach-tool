@@ -264,44 +264,114 @@ async function fetchSarvamCallsWithAttribution(filters: Pick<CampaignVoiceFilter
         touchCounters.set(digits, touchIndex);
         const callNumber = (Math.min(touchIndex, 3) as 1 | 2 | 3);
 
-        const rawCampaignId = lead?.campaign_id !== undefined && lead?.campaign_id !== null ? Number(lead.campaign_id) : null;
-        const { campaignId, campaignKey, campaignName, color } = resolveCampaignInfo(rawCampaignId, lead?.campaign_key || null);
-
-        const durationSeconds = r.duration_seconds ? Math.round(Number(r.duration_seconds)) : 0;
-        const { category, score, raw } = normalizeVoiceSentiment(null, r.summary);
-        const isPicked = isCallPickedUp(r.status, durationSeconds);
-
-        return {
-            id: r.id,
-            callNumber,
-            leadId: lead?.id ?? null,
-            leadName: lead
-                ? (lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || 'Unknown Lead')
-                : (r.customer_name || 'Unknown Lead'),
-            phone: r.customer_phone || '—',
-            companyName: lead?.company_name || null,
-            campaignId,
-            campaignKey,
-            campaignName,
-            campaignColor: color,
-            callDate: r.started_at || r.created_at,
-            durationSeconds,
-            status: r.status || 'Completed',
-            sentiment: category,
-            rawSentiment: raw,
-            sentimentScore: score,
-            summary: r.summary || null,
-            note: null,
-            recordingUrl: r.recording_url || null,
-            transcript: r.transcript || null,
-            isPickedUp: isPicked,
-            costUsd: r.cost_usd !== null && r.cost_usd !== undefined ? Number(r.cost_usd) : null,
-            source: 'sarvam',
-            vapiCallId: r.id,
-            callType: r.type || null,
-            isInbound: String(r.type || '').toLowerCase() === 'inboundphonecall',
-        } satisfies CampaignVoiceCall;
+        return mapVapiRowToCall(r, lead, callNumber);
     }).sort((a, b) => parseSafeTimestamp(b.callDate) - parseSafeTimestamp(a.callDate));
+}
+
+/** Maps a single vapi_call_logs row (+ its resolved outreach_leads attribution, if any)
+ *  into the shared CampaignVoiceCall shape. Used by both the bulk fetch above and the
+ *  targeted single-lead lookup (getCampaignVoiceCallByLeadId) below. */
+function mapVapiRowToCall(r: any, lead: any | undefined, callNumber: 1 | 2 | 3): CampaignVoiceCall {
+    const rawCampaignId = lead?.campaign_id !== undefined && lead?.campaign_id !== null ? Number(lead.campaign_id) : null;
+    const { campaignId, campaignKey, campaignName, color } = resolveCampaignInfo(rawCampaignId, lead?.campaign_key || null);
+
+    const durationSeconds = r.duration_seconds ? Math.round(Number(r.duration_seconds)) : 0;
+    const { category, score, raw } = normalizeVoiceSentiment(null, r.summary);
+    const isPicked = isCallPickedUp(r.status, durationSeconds);
+
+    return {
+        id: r.id,
+        callNumber,
+        leadId: lead?.id ?? null,
+        leadName: lead
+            ? (lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || 'Unknown Lead')
+            : (r.customer_name || 'Unknown Lead'),
+        phone: r.customer_phone || '—',
+        companyName: lead?.company_name || null,
+        campaignId,
+        campaignKey,
+        campaignName,
+        campaignColor: color,
+        callDate: r.started_at || r.created_at,
+        durationSeconds,
+        status: r.status || 'Completed',
+        sentiment: category,
+        rawSentiment: raw,
+        sentimentScore: score,
+        summary: r.summary || null,
+        note: null,
+        recordingUrl: r.recording_url || null,
+        transcript: r.transcript || null,
+        isPickedUp: isPicked,
+        costUsd: r.cost_usd !== null && r.cost_usd !== undefined ? Number(r.cost_usd) : null,
+        source: 'sarvam',
+        vapiCallId: r.id,
+        callType: r.type || null,
+        isInbound: String(r.type || '').toLowerCase() === 'inboundphonecall',
+    } satisfies CampaignVoiceCall;
+}
+
+/** Targeted lookup for a single lead's call(s) by outreach_leads.id — used for the
+ *  public shareable call-details link. Scoped to one lead's phone numbers only,
+ *  never a bulk fetch. If callId (a vapi_call_logs.id) is given, returns that exact
+ *  call; otherwise returns the most recent call for the lead. */
+export async function getCampaignVoiceCallByLeadId(leadId: string, callId?: string): Promise<{
+    lead: { id: string; name: string; phone: string; companyName: string | null } | null;
+    call: CampaignVoiceCall | null;
+    calls: CampaignVoiceCall[];
+}> {
+    const { data: lead, error: leadErr } = await supabaseAdmin
+        .from('outreach_leads')
+        .select('id, full_name, first_name, last_name, mobile_number, mobile_number_2, company_phone, company_name, campaign_id, campaign_key')
+        .eq('id', leadId)
+        .maybeSingle();
+
+    if (leadErr) {
+        console.error('[campaign-voice] getCampaignVoiceCallByLeadId lead lookup error:', leadErr);
+    }
+    if (!lead) {
+        return { lead: null, call: null, calls: [] };
+    }
+
+    const leadSummary = {
+        id: lead.id,
+        name: lead.full_name || [lead.first_name, lead.last_name].filter(Boolean).join(' ') || 'Unknown Lead',
+        phone: lead.mobile_number || lead.mobile_number_2 || lead.company_phone || '—',
+        companyName: lead.company_name || null,
+    };
+
+    const phoneDigitsSet = new Set<string>();
+    [lead.mobile_number, lead.mobile_number_2, lead.company_phone].forEach(p => {
+        const d = last10Digits(p);
+        if (d.length >= 7) phoneDigitsSet.add(d);
+    });
+
+    if (phoneDigitsSet.size === 0) {
+        return { lead: leadSummary, call: null, calls: [] };
+    }
+
+    const orClauses = Array.from(phoneDigitsSet).map(d => `customer_phone.ilike.%${d}`).join(',');
+
+    const { data: rows, error } = await supabaseAdmin
+        .from('vapi_call_logs')
+        .select('id, started_at, customer_phone, customer_name, duration_seconds, status, cost_usd, summary, recording_url, transcript, created_at, vapi_account, type')
+        .ilike('vapi_account', SARVAM_ACCOUNT)
+        .or(orClauses)
+        .order('started_at', { ascending: true })
+        .limit(50);
+
+    if (error) {
+        console.error('[campaign-voice] getCampaignVoiceCallByLeadId calls lookup error:', error);
+        throw new Error(error.message || 'Failed to fetch call for lead');
+    }
+
+    const calls = (rows || [])
+        .map((r, idx) => mapVapiRowToCall(r, lead, (Math.min(idx + 1, 3) as 1 | 2 | 3)))
+        .sort((a, b) => parseSafeTimestamp(b.callDate) - parseSafeTimestamp(a.callDate));
+
+    const selected = (callId ? calls.find(c => c.vapiCallId === callId) : null) || calls[0] || null;
+
+    return { lead: leadSummary, call: selected, calls };
 }
 
 /** Filters a list of campaign voice calls using provided parameters (date range is

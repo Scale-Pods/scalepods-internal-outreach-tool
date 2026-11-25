@@ -127,6 +127,9 @@ export default function CampaignVoiceOverviewPage() {
     const openCallDetails = (call: CampaignVoiceCall) => {
         setSelectedCall({
             id: call.vapiCallId || call.id,
+            leadId: call.leadId,
+            vapiCallId: call.vapiCallId,
+            type: call.isInbound ? 'inbound' : 'outbound',
             name: call.leadName,
             phone: call.phone,
             startedAt: call.callDate,

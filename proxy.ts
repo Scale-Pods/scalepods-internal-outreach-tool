@@ -26,7 +26,11 @@ export async function proxy(request: NextRequest) {
         // Ensure it has a parameter after /chat/
         const isPublicChat = pathname.startsWith('/dashboard/whatsapp/chat/') && pathname.split('/').length > 4;
 
-        if (isPublicChat) {
+        // ALLOW PUBLIC ACCESS to specific campaign voice call share links
+        // Ensure it has a parameter after /call/
+        const isPublicCampaignCall = pathname.startsWith('/dashboard/campaigns/voice/call/') && pathname.split('/').length > 5;
+
+        if (isPublicChat || isPublicCampaignCall) {
             // Allow them through without needing a valid auth token
             return NextResponse.next();
         }
