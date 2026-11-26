@@ -19,7 +19,7 @@ import { CampaignBadge, campaignColorClasses } from "@/components/dashboard/camp
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useCampaignDateRange } from "@/context/CampaignDateContext";
 import {
-    countEmailStepsSent, latestEmailStatus, campaignColor,
+    campaignColor,
     type OutreachLead, type OutreachLeadListItem, type ChannelStats,
 } from "@/lib/services/campaigns";
 
@@ -260,6 +260,16 @@ export default function CampaignEmailPage() {
     );
 }
 
+function sanitizeEmailHtml(html: string): string {
+    if (!html) return "";
+    return html
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+        .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, "")
+        .replace(/\son\w+=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+        .replace(/href\s*=\s*["']\s*javascript:[^"']*["']/gi, 'href="#"')
+        .replace(/<a\b([^>]*?)>/gi, '<a $1 target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">');
+}
+
 function EmailDetail({ leadId }: { leadId: string }) {
     const [lead, setLead] = useState<OutreachLead | null>(null);
     const [loading, setLoading] = useState(true);
@@ -279,6 +289,12 @@ function EmailDetail({ leadId }: { leadId: string }) {
         return <div className="py-16 text-center text-sm text-slate-400">Loading lead…</div>;
     }
 
+    const visibleSteps = Array.from({ length: Math.max(lead.emailStepStatuses.length, lead.emailSteps.length) }, (_, idx) => ({
+        idx,
+        step: lead.emailStepStatuses[idx] || null,
+        body: lead.emailSteps[idx] || null,
+    })).filter(s => Boolean(s.step || (s.body && s.body.trim())));
+
     return (
         <div className="space-y-6">
             <div className="flex items-start justify-between pr-8">
@@ -294,13 +310,13 @@ function EmailDetail({ leadId }: { leadId: string }) {
                     <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Replies ({lead.emailReplies.length})</h3>
                     <div className="space-y-2">
                         {lead.emailReplies.map((r, idx) => (
-                            <div key={idx} className="rounded-lg border border-border bg-slate-50/60 p-3">
+                            <div key={idx} className="rounded-lg border border-cyan-200/80 bg-cyan-50/40 p-3">
                                 <div className="flex items-center justify-between mb-1">
                                     <span className="text-xs font-bold text-slate-900">{r.from_name || r.from_email}</span>
                                     <span className="text-[10px] text-slate-400">{r.received_at ? new Date(r.received_at).toLocaleString() : ""}</span>
                                 </div>
-                                {r.classification && <Badge variant="outline" className="text-[9px] uppercase font-bold mb-1.5">{r.classification.replace(/_/g, ' ')}</Badge>}
-                                <p className="text-xs text-slate-600 whitespace-pre-wrap">{r.body}</p>
+                                {r.classification && <Badge variant="outline" className="text-[9px] uppercase font-bold mb-1.5 bg-white">{r.classification.replace(/_/g, ' ')}</Badge>}
+                                <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">{r.body}</p>
                             </div>
                         ))}
                     </div>
@@ -308,21 +324,53 @@ function EmailDetail({ leadId }: { leadId: string }) {
             )}
 
             <div>
-                <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Sequence Steps</h3>
-                <div className="space-y-1.5">
-                    {lead.emailStepStatuses.map((step, idx) => {
-                        if (!step) return null;
-                        return (
-                            <div key={idx} className="flex items-center justify-between text-xs px-3 py-2 rounded-lg bg-slate-50 border border-border">
-                                <span className="font-bold text-slate-700">Step {idx + 1}: {step.subject || "—"}</span>
-                                <div className="flex items-center gap-2">
-                                    <Badge variant="outline" className={`text-[9px] uppercase font-bold ${statusBadgeClass(step.status)}`}>{step.status}</Badge>
-                                    <span className="text-slate-400">{step.sent_at ? new Date(step.sent_at).toLocaleDateString() : ""}</span>
+                <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">
+                    Sequence Steps {visibleSteps.length > 0 ? `(${visibleSteps.length})` : ""}
+                </h3>
+                <div className="space-y-3">
+                    {visibleSteps.map(({ idx, step, body }) => (
+                        <div key={idx} className="rounded-lg bg-slate-50/80 border border-border overflow-hidden">
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs px-3 py-2.5 bg-white border-b border-border">
+                                <div className="min-w-0">
+                                    <span className="font-bold text-slate-800 block truncate">
+                                        Step {idx + 1}: {step?.subject || "Outreach Email"}
+                                    </span>
+                                    {step?.sender && (
+                                        <span className="text-[10px] text-slate-400">From: {step.sender}</span>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    {step?.status && (
+                                        <Badge variant="outline" className={`text-[9px] uppercase font-bold ${statusBadgeClass(step.status)}`}>
+                                            {step.status}
+                                        </Badge>
+                                    )}
+                                    <span className="text-[11px] text-slate-400">
+                                        {step?.sent_at ? new Date(step.sent_at).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ""}
+                                    </span>
                                 </div>
                             </div>
-                        );
-                    })}
-                    {countEmailStepsSent(lead) === 0 && <p className="text-xs text-slate-400">No email steps sent yet.</p>}
+                            {body && body.trim() && (
+                                <div className="p-3 text-xs text-slate-700 leading-relaxed bg-slate-50/50">
+                                    {body.includes("<") ? (
+                                        <div
+                                            dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(body) }}
+                                            className="space-y-1.5 [&_div]:min-h-[0.75rem]"
+                                        />
+                                    ) : (
+                                        <p className="whitespace-pre-wrap">{body}</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                    {visibleSteps.length === 0 && (
+                        <p className="text-xs text-slate-400">
+                            {lead.emailReplies.length > 0
+                                ? "Reply recorded above; outbound sequence step details were not synced for this historical lead."
+                                : "No email steps sent yet."}
+                        </p>
+                    )}
                 </div>
             </div>
         </div>

@@ -233,6 +233,17 @@ function normalizeLeadListItem(row: any): OutreachLeadListItem {
         ? row.email_reply_count
         : (Array.isArray(emailReplies) ? emailReplies.length : 0);
 
+    let computedLastSubject: string | null = row.last_email_subject || null;
+    if (!computedLastSubject) {
+        for (let i = EMAIL_STEP_COUNT; i >= 1; i--) {
+            const st = parseJsonField<EmailStatusEntry>(row[`email_status_${i}`]);
+            if (st?.subject) {
+                computedLastSubject = st.subject;
+                break;
+            }
+        }
+    }
+
     const campaignName = row.campaign_name
         || (row.campaign_key ? row.campaign_key.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : null)
         || (row.campaign_id ? `Campaign ${row.campaign_id}` : 'General Campaign');
@@ -260,7 +271,7 @@ function normalizeLeadListItem(row: any): OutreachLeadListItem {
         emailSentCount,
         emailReplied: emailReplyCount > 0 || !!row.email_replied,
         emailReplyCount,
-        lastEmailSubject: row.last_email_subject || null,
+        lastEmailSubject: computedLastSubject,
         lastContactedAt: row.last_contacted_at,
         createdAt: row.created_at,
     };
@@ -268,14 +279,186 @@ function normalizeLeadListItem(row: any): OutreachLeadListItem {
 
 // ── fetchers ─────────────────────────────────────────────────────────────────
 
+const EMAIL_LIST_COLUMNS = `
+    id, full_name, email, mobile_number, linkedin_url, company_name, city, country,
+    campaign_id, campaign_key, outreach_channels, lead_status, whatsapp_status,
+    voice_status, unsubscribed, bounced, last_contacted_at, created_at,
+    assigned_lead, is_enriched,
+    email_status_1, email_status_2, email_status_3, email_status_4, email_status_5,
+    email_status_6, email_status_7, email_status_8, email_status_9, email_status_10,
+    email_reply
+`;
+
+const EMAIL_STATS_COLUMNS = `
+    id, unsubscribed, bounced, last_contacted_at,
+    email_status_1, email_status_2, email_status_3, email_status_4, email_status_5,
+    email_status_6, email_status_7, email_status_8, email_status_9, email_status_10,
+    email_reply
+`;
+
+function parseEmailIsoMs(raw: string | null | undefined): number {
+    if (!raw) return 0;
+    const t = new Date(raw).getTime();
+    return isNaN(t) ? 0 : t;
+}
+
+function extractEmailActivityTimestamps(row: any) {
+    const stepSentDates: number[] = [];
+    for (let i = 1; i <= EMAIL_STEP_COUNT; i++) {
+        const st = parseJsonField<EmailStatusEntry>(row[`email_status_${i}`]);
+        if (st?.sent_at) {
+            const t = parseEmailIsoMs(st.sent_at);
+            if (t > 0) stepSentDates.push(t);
+        }
+    }
+    const replies = parseJsonField<EmailReplyEntry[]>(row.email_reply) || [];
+    const replyDates: number[] = [];
+    for (const r of replies) {
+        if (r?.received_at) {
+            const t = parseEmailIsoMs(r.received_at);
+            if (t > 0) replyDates.push(t);
+        }
+    }
+    const fallbackFlagMs = (row.unsubscribed || row.bounced) && stepSentDates.length === 0 && replyDates.length === 0
+        ? parseEmailIsoMs(row.last_contacted_at)
+        : 0;
+    const latestEmailActivityMs = Math.max(0, ...stepSentDates, ...replyDates, fallbackFlagMs);
+    return { stepSentDates, replyDates, latestEmailActivityMs };
+}
+
+async function fetchEmailActiveRows(filters: {
+    campaignIds?: string[];
+    search?: string;
+    selectColumns: string;
+}): Promise<any[]> {
+    const BATCH = 1000;
+    const allRows: any[] = [];
+    const emailChannelFilter = JSON.stringify(['email']);
+
+    for (let offset = 0; offset < 20000; offset += BATCH) {
+        let q = supabaseAdmin
+            .from('outreach_leads')
+            .select(filters.selectColumns)
+            .contains('outreach_channels', emailChannelFilter)
+            .or('email_status_1.not.is.null,email_status_2.not.is.null,email_reply.not.is.null,unsubscribed.eq.true,bounced.eq.true');
+
+        if (filters.campaignIds?.length) {
+            q = q.in('campaign_id', filters.campaignIds);
+        }
+        if (filters.search?.trim()) {
+            const s = filters.search.trim();
+            q = q.or(`full_name.ilike.%${s}%,email.ilike.%${s}%,mobile_number.ilike.%${s}%,company_name.ilike.%${s}%,assigned_lead.ilike.%${s}%`);
+        }
+
+        q = q.order('id', { ascending: true }).range(offset, offset + BATCH - 1);
+        const { data, error } = await q;
+        if (error) throw new Error(error.message);
+        const batch = data || [];
+        allRows.push(...batch);
+        if (batch.length < BATCH) break;
+    }
+
+    return allRows;
+}
+
 /**
  * Paginated, filtered, search-aware leads list.
- * Uses the get_campaigns_leads_page Postgres RPC when no date filter is active,
- * or direct indexed Postgres query when date filtering is active.
+ * For `channel === 'email'`, filters and sorts by actual email step/reply activity
+ * (instead of shared cross-channel `last_contacted_at`) so WhatsApp-only leads
+ * do not appear with 0/10 emails at the top.
  */
 export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {}): Promise<OutreachLeadsPage> {
     const page = filters.page ?? 1;
     const pageSize = filters.pageSize ?? 15;
+
+    if (filters.channel === 'email') {
+        const wantsNotSentOnly =
+            filters.statusFilter?.length === 1 && filters.statusFilter[0] === 'Not Sent';
+
+        if (wantsNotSentOnly) {
+            let q = supabaseAdmin
+                .from('outreach_leads')
+                .select(EMAIL_LIST_COLUMNS, { count: 'exact' })
+                .contains('outreach_channels', JSON.stringify(['email']))
+                .is('email_status_1', null)
+                .is('email_reply', null);
+
+            if (filters.campaignIds?.length) q = q.in('campaign_id', filters.campaignIds);
+            if (filters.search?.trim()) {
+                const s = filters.search.trim();
+                q = q.or(`full_name.ilike.%${s}%,email.ilike.%${s}%,mobile_number.ilike.%${s}%,company_name.ilike.%${s}%,assigned_lead.ilike.%${s}%`);
+            }
+
+            const startIndex = (page - 1) * pageSize;
+            q = q.order('created_at', { ascending: false, nullsFirst: false })
+                 .range(startIndex, startIndex + pageSize - 1);
+
+            const { data, count, error } = await q;
+            if (error) throw new Error(error.message);
+
+            return {
+                data: (data || []).map(normalizeLeadListItem),
+                totalCount: count ?? 0,
+                page,
+                pageSize,
+            };
+        }
+
+        const rawRows = await fetchEmailActiveRows({
+            campaignIds: filters.campaignIds,
+            search: filters.search,
+            selectColumns: EMAIL_LIST_COLUMNS,
+        });
+
+        const hasDateRange = !!(filters.from || filters.to);
+        const fromMs = filters.from ? parseEmailIsoMs(filters.from) : -Infinity;
+        const toMs = filters.to ? parseEmailIsoMs(filters.to) : Infinity;
+
+        let enriched = rawRows.map(row => {
+            const item = normalizeLeadListItem(row);
+            const ts = extractEmailActivityTimestamps(row);
+            return { item, ...ts };
+        });
+
+        if (hasDateRange) {
+            enriched = enriched.filter(({ item, stepSentDates, replyDates, latestEmailActivityMs }) => {
+                const sentInRange = stepSentDates.some(t => t >= fromMs && t <= toMs);
+                const replyInRange = replyDates.some(t => t >= fromMs && t <= toMs);
+                const flagInRange = (item.unsubscribed || item.bounced) && latestEmailActivityMs >= fromMs && latestEmailActivityMs <= toMs;
+                return sentInRange || replyInRange || flagInRange;
+            });
+        }
+
+        if (filters.statusFilter?.length) {
+            const allowed = new Set(filters.statusFilter);
+            enriched = enriched.filter(({ item }) => {
+                if (allowed.has('Sent') && item.emailSentCount > 0) return true;
+                if (allowed.has('Not Sent') && item.emailSentCount === 0) return true;
+                if (allowed.has('Replied') && item.emailReplied) return true;
+                if (allowed.has('Unsubscribed') && item.unsubscribed) return true;
+                if (allowed.has('Bounced') && item.bounced) return true;
+                return false;
+            });
+        }
+
+        enriched.sort((a, b) => b.latestEmailActivityMs - a.latestEmailActivityMs);
+
+        const totalCount = enriched.length;
+        const startIndex = (page - 1) * pageSize;
+        const pageItems = enriched.slice(startIndex, startIndex + pageSize).map(e => ({
+            ...e.item,
+            lastContactedAt: e.latestEmailActivityMs > 0
+                ? new Date(e.latestEmailActivityMs).toISOString()
+                : e.item.lastContactedAt,
+        }));
+
+        return {
+            data: pageItems,
+            totalCount,
+            page,
+            pageSize,
+        };
+    }
 
     // Use direct Postgres query when date filtering is active, or enrichedOnly is requested,
     // or for standard campaign lead listing (ensuring assigned_lead and is_enriched are always selected).
@@ -633,8 +816,43 @@ export async function getChannelStats(channel: OutreachChannel, filters: { from?
     if (filters.from || filters.to) {
         const fromIso = filters.from || '1970-01-01T00:00:00.000Z';
         const toIso = filters.to || '2099-12-31T23:59:59.999Z';
-
         const channelFilter = JSON.stringify([channel]);
+
+        if (channel === 'email') {
+            const fromMs = parseEmailIsoMs(fromIso);
+            const toMs = parseEmailIsoMs(toIso);
+
+            const [enrolledRes, emailRows] = await Promise.all([
+                supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', channelFilter),
+                fetchEmailActiveRows({ selectColumns: EMAIL_STATS_COLUMNS }),
+            ]);
+
+            if (enrolledRes.error) throw new Error(enrolledRes.error.message);
+
+            let emailSent = 0;
+            let emailReplied = 0;
+            let unsubs = 0;
+            let bounced = 0;
+
+            for (const row of emailRows) {
+                const { stepSentDates, replyDates, latestEmailActivityMs } = extractEmailActivityTimestamps(row);
+                if (stepSentDates.some(t => t >= fromMs && t <= toMs)) emailSent++;
+                if (replyDates.some(t => t >= fromMs && t <= toMs)) emailReplied++;
+                if (row.unsubscribed && latestEmailActivityMs >= fromMs && latestEmailActivityMs <= toMs) unsubs++;
+                if (row.bounced && latestEmailActivityMs >= fromMs && latestEmailActivityMs <= toMs) bounced++;
+            }
+
+            const enrolled = enrolledRes.count ?? 0;
+            return {
+                enrolled,
+                active: emailSent,
+                notStarted: Math.max(0, enrolled - emailSent),
+                emailSent,
+                emailReplied,
+                unsubscribed: unsubs,
+                bounced,
+            };
+        }
 
         const [enrolledRes, emailSentRes, emailRepliedRes, unsubsRes, bouncedRes] = await Promise.all([
             supabaseAdmin.from('outreach_leads').select('id', { count: 'exact', head: true }).contains('outreach_channels', channelFilter),
