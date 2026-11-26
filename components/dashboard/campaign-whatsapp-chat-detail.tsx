@@ -33,7 +33,40 @@ export function CampaignWhatsAppChatDetail({
 }: CampaignWhatsAppChatDetailProps) {
     const [copied, setCopied] = useState(false);
 
-    const messages = useMemo(() => (lead ? lead.timeline : []), [lead]);
+    const messages = useMemo(() => {
+        if (!lead) return [];
+        if (Array.isArray(lead.timeline) && lead.timeline.length > 0) {
+            return lead.timeline.filter(m => m && Boolean(m.content && m.content.trim()));
+        }
+        // Defensive fallback if only raw conversation is present
+        if (Array.isArray(lead.conversation)) {
+            return lead.conversation
+                .filter((m: any) => m && typeof m === 'object' && (m.direction || m.message_text || m.text || m.sender))
+                .map((m: any, idx: number) => {
+                    const dir = String(m.direction || '').toLowerCase().trim();
+                    const sender = String(m.sender || '').toLowerCase().trim();
+                    const isBot =
+                        dir === 'outbound' ||
+                        dir === 'outgoing' ||
+                        sender === '917738558481' ||
+                        sender.includes('scalepods');
+                    return {
+                        id: m.id || `conv-${idx}`,
+                        type: (isBot ? 'bot' : 'user') as 'bot' | 'user',
+                        label: isBot ? 'AI Bot Reply' : 'Customer Reply',
+                        content: String(m.message_text || m.text || m.rendered_text || '').trim(),
+                        date: m.timestamp || m.attempted_at || null,
+                        status: m.status || (isBot ? 'SENT' : null),
+                    };
+                })
+                .filter(m => Boolean(m.content));
+        }
+        return [];
+    }, [lead]);
+
+    const incomingCount = useMemo(() => messages.filter(m => m.type === 'user').length, [messages]);
+    const outgoingCount = useMemo(() => messages.filter(m => m.type === 'bot').length, [messages]);
+    const totalCount = incomingCount + outgoingCount;
 
     const handleCopyPhone = () => {
         if (!lead?.mobileNumber) return;
@@ -120,7 +153,7 @@ export function CampaignWhatsAppChatDetail({
                             </h3>
                         </div>
                         <div className="text-[10px] text-slate-500 font-bold bg-white px-2 py-0.5 rounded border border-border">
-                            {messages.length} Messages
+                            {totalCount} Messages
                         </div>
                     </div>
 
@@ -134,23 +167,24 @@ export function CampaignWhatsAppChatDetail({
                             messages.map((msg, idx) => {
                                 const isUser = msg.type === 'user';
                                 const tsPill = !isUser && msg.status ? renderStatusPill(String(msg.status)) : null;
+                                const formattedDate = formatMessageDate(msg.date);
 
                                 return (
                                     <div
-                                        key={idx}
+                                        key={msg.id || idx}
                                         className={`flex flex-col ${isUser ? 'items-start' : 'items-end'}`}
                                     >
                                         <div
                                             className={`max-w-[85%] rounded-2xl p-4 shadow-sm transition-all ${
                                                 isUser
-                                                    ? 'bg-white text-slate-900 border border-slate-200/80 rounded-tl-none'
+                                                    ? 'bg-slate-100 text-slate-900 border border-slate-200 rounded-tl-none'
                                                     : 'bg-emerald-600 text-white rounded-tr-none'
                                             }`}
                                         >
                                             <div className="flex items-center justify-between mb-2 gap-3">
                                                 <span
                                                     className={`text-[10px] font-bold uppercase tracking-wide flex items-center gap-1 ${
-                                                        isUser ? 'text-slate-500' : 'text-emerald-100'
+                                                        isUser ? 'text-slate-600' : 'text-emerald-100'
                                                     }`}
                                                 >
                                                     {isUser ? (
@@ -166,14 +200,9 @@ export function CampaignWhatsAppChatDetail({
                                                 {msg.content}
                                             </p>
                                         </div>
-                                        {msg.date && (
+                                        {formattedDate && (
                                             <span className="text-[10px] text-slate-400 mt-1 px-1">
-                                                {new Date(msg.date).toLocaleString([], {
-                                                    month: 'short',
-                                                    day: 'numeric',
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                })}
+                                                {formattedDate}
                                             </span>
                                         )}
                                     </div>
@@ -243,15 +272,15 @@ export function CampaignWhatsAppChatDetail({
                                 <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Activity Stats
                             </h3>
                             <div className="grid grid-cols-1 gap-2">
-                                <StatBox label="Total Messages" value={messages.length} icon={MessageSquare} />
+                                <StatBox label="Total Messages" value={totalCount} icon={MessageSquare} />
                                 <StatBox
                                     label="Incoming Replies"
-                                    value={messages.filter(m => m.type === 'user').length}
+                                    value={incomingCount}
                                     icon={User}
                                 />
                                 <StatBox
                                     label="Outgoing Bot Messages"
-                                    value={messages.filter(m => m.type === 'bot').length}
+                                    value={outgoingCount}
                                     icon={Bot}
                                 />
                                 <StatBox label="Reply Status" value={lead.hasReplied ? 'Replied' : 'No Reply'} icon={CheckCircle2} />
@@ -262,6 +291,22 @@ export function CampaignWhatsAppChatDetail({
             </div>
         </div>
     );
+}
+
+function formatMessageDate(rawDate: string | null | undefined): string {
+    if (!rawDate) return '';
+    let str = String(rawDate).trim();
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(str)) {
+        str = str.replace(' ', 'T') + 'Z';
+    }
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
 }
 
 function renderStatusPill(status: string) {
@@ -282,7 +327,7 @@ function renderStatusPill(status: string) {
 
     return (
         <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${cls}`}>
-            {label}
+            ✓✓ {label}
         </span>
     );
 }

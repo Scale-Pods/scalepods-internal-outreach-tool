@@ -103,22 +103,51 @@ export function parseJsonbArray<T>(val: any): T[] {
     return Array.isArray(val) ? val : [];
 }
 
+/** Checks whether a message object is an empty placeholder like {} */
+function isValidWaMessageObject(msg: any): msg is CampaignWaMessage {
+    if (!msg || typeof msg !== 'object') return false;
+    return Boolean(
+        msg.direction ||
+        msg.message_text ||
+        msg.text ||
+        msg.rendered_text ||
+        msg.message ||
+        msg.sender ||
+        msg.role
+    );
+}
+
+/** Checks whether a message from whatsapp_conversation is an outgoing AI bot / ScalePods message */
+export function isBotReply(msg: CampaignWaMessage): boolean {
+    if (!isValidWaMessageObject(msg)) return false;
+    const dir = String(msg.direction || '').toLowerCase().trim();
+    if (dir === 'outbound' || dir === 'outgoing') return true;
+    const role = String(msg.role || '').toLowerCase().trim();
+    if (role === 'bot' || role === 'assistant') return true;
+
+    const sender = String(msg.sender || '').toLowerCase().trim();
+    if (sender === '917738558481' || sender.includes('scalepods') || sender === 'bot') {
+        return true;
+    }
+    return false;
+}
+
 /** Checks whether a message from whatsapp_conversation is an incoming customer reply */
 export function isCustomerReply(msg: CampaignWaMessage): boolean {
-    if (!msg) return false;
+    if (!isValidWaMessageObject(msg)) return false;
     const dir = String(msg.direction || '').toLowerCase().trim();
-    if (dir === 'inbound') return true;
+    if (dir === 'inbound' || dir === 'incoming') return true;
     const role = String(msg.role || '').toLowerCase().trim();
     if (role === 'user') return true;
 
     // Explicit outbound or bot role is never a customer reply
-    if (dir === 'outbound' || role === 'bot' || role === 'assistant') {
+    if (isBotReply(msg)) {
         return false;
     }
 
     // Sender check: if sender is not ScalePods and not bot system
     const sender = String(msg.sender || '').toLowerCase().trim();
-    if (sender && !sender.includes('scalepods')) {
+    if (sender) {
         return true;
     }
     return false;
@@ -292,7 +321,7 @@ export function getLeadClassification(lead: {
     return 'NOT_CONTACTED';
 }
 
-/** Combines whatsapp_outreach_message (bot) and whatsapp_conversation (customer replies only) into chronological timeline */
+/** Combines whatsapp_outreach_message (bot) and whatsapp_conversation (both inbound customer replies and outbound AI bot replies) into chronological timeline */
 export function buildCampaignWaTimeline(
     outreachMessagesRaw: any,
     conversationRaw: any
@@ -301,14 +330,22 @@ export function buildCampaignWaTimeline(
     const outreach = parseJsonbArray<CampaignWaMessage>(outreachMessagesRaw);
     const conversation = parseJsonbArray<CampaignWaMessage>(conversationRaw);
 
+    const seenIds = new Set<string>();
+    const seenContentTimeKeys = new Set<string>();
+
     // 1. Outgoing bot messages from whatsapp_outreach_message
     outreach.forEach((m, idx) => {
-        const text = m.rendered_text || m.text || m.message || '';
+        if (!isValidWaMessageObject(m)) return;
+        const text = m.rendered_text || m.text || m.message_text || m.message || '';
         if (!text.trim()) return;
         const date = m.attempted_at || m.timestamp || null;
         const stepNum = typeof m.step === 'number' ? m.step : idx + 1;
+        const msgId = m.id || m.message_id || m.provider_message_id;
+        if (msgId) seenIds.add(String(msgId).trim());
+        seenContentTimeKeys.add(`${text.trim()}|${date || ''}`);
+
         timeline.push({
-            id: m.message_id || `outreach-step-${stepNum}-${idx}`,
+            id: msgId || `outreach-step-${stepNum}-${idx}`,
             type: 'bot',
             label: `Bot Outreach Step ${stepNum}`,
             content: text.trim(),
@@ -320,28 +357,38 @@ export function buildCampaignWaTimeline(
         });
     });
 
-    // 2. Incoming customer replies ONLY from whatsapp_conversation
+    // 2. Both incoming customer replies and outgoing AI bot replies from whatsapp_conversation
     conversation.forEach((m, idx) => {
-        if (!isCustomerReply(m)) return;
-        const text = m.message_text || m.text || m.message || '';
+        if (!isValidWaMessageObject(m)) return;
+        const text = m.message_text || m.text || m.rendered_text || m.message || '';
         if (!text.trim()) return;
         const date = m.timestamp || m.attempted_at || null;
+        const msgId = m.id || m.message_id || m.provider_message_id;
+
+        if (msgId && seenIds.has(String(msgId).trim())) return;
+        if (seenContentTimeKeys.has(`${text.trim()}|${date || ''}`)) return;
+        if (msgId) seenIds.add(String(msgId).trim());
+
+        const bot = isBotReply(m);
+        const customer = !bot && isCustomerReply(m);
+        if (!bot && !customer) return;
+
         timeline.push({
-            id: m.id || m.message_id || `reply-${idx}`,
-            type: 'user',
-            label: 'Customer Reply',
+            id: msgId || `${bot ? 'bot' : 'reply'}-${idx}`,
+            type: bot ? 'bot' : 'user',
+            label: bot ? 'AI Bot Reply' : 'Customer Reply',
             content: text.trim(),
             date,
-            status: m.status || null,
+            status: m.status || (bot ? 'SENT' : null),
             metadata: m.metadata,
             isInitial: false,
         });
     });
 
-    // 3. Sort chronologically: earliest first
+    // 3. Sort chronologically: earliest first (using parseSafeTimestamp so timestamps without 'Z' still parse as UTC)
     timeline.sort((a, b) => {
-        const timeA = a.date ? new Date(a.date).getTime() : 0;
-        const timeB = b.date ? new Date(b.date).getTime() : 0;
+        const timeA = a.date ? parseSafeTimestamp(a.date) : 0;
+        const timeB = b.date ? parseSafeTimestamp(b.date) : 0;
         if (timeA !== timeB) return timeA - timeB;
         // If timestamps match or are missing, ensure initial bot outreach is at the top
         if (a.isInitial && !b.isInitial) return -1;
@@ -381,10 +428,11 @@ export function normalizeCampaignWaLead(row: any, dateRange?: { fromIso?: string
     const dispatchedOutreachInRange = filterMessagesByDateRange(dispatchedOutreachAll, dateRange?.fromIso, dateRange?.toIso);
     const messagesSentCount = dispatchedOutreachInRange.length;
 
-    // 2. Deduplicate inbound conversation replies using message IDs (id, message_id or provider_message_id)
+    // 2. Deduplicate conversation entries using message IDs (id, message_id or provider_message_id), skipping empty {} objects
     const seenMsgIds = new Set<string>();
     const dedupedConversation: CampaignWaMessage[] = [];
     rawConversation.forEach(m => {
+        if (!isValidWaMessageObject(m)) return;
         const msgId = m.id || m.message_id || m.provider_message_id;
         if (msgId) {
             const normId = String(msgId).trim();

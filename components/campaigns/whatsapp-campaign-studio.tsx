@@ -92,6 +92,134 @@ interface SequenceStep {
   };
 }
 
+const DEFAULT_STEP_META = [
+  { step: 1, cadence: "Day 3", objective: "Initial Hook & Value Proposition" },
+  { step: 2, cadence: "Day 11", objective: "Proof & Workflow Architecture Follow-Up" },
+  { step: 3, cadence: "Day 21", objective: "Low-Friction Breakup & Close Loop" },
+];
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Collapses duplicated leading greetings such as "Hi Marcus. Hi Marcus. ..." */
+export function stripDuplicateGreeting(text: string, firstName: string): string {
+  if (!text) return "";
+  if (!firstName.trim()) return text;
+  const escaped = escapeRegex(firstName.trim());
+  const pattern = new RegExp(
+    `^(Hi|Hey|Hello)\\s+${escaped}[.!,]?\\s*(Hi|Hey|Hello)\\s+${escaped}[.!,]?`,
+    "i"
+  );
+  return text.replace(pattern, `Hi ${firstName.trim()}.`);
+}
+
+/** Strips redundant leading greeting when the chat bubble header already renders "Hi {firstName}." */
+function sanitizeBubbleBody(text: string, firstName: string): string {
+  const collapsed = stripDuplicateGreeting(text.trim(), firstName);
+  const namePattern = firstName.trim()
+    ? `(?:${escapeRegex(firstName.trim())}|there|\\{\\{firstname\\}\\})`
+    : `(?:there|\\{\\{firstname\\}\\})`;
+  const leadingGreeting = new RegExp(`^(?:Hi|Hey|Hello)\\s+${namePattern}[.!,:]*\\s*`, "i");
+  const withoutGreeting = collapsed.replace(leadingGreeting, "").trim();
+  if (!withoutGreeting) return collapsed;
+  // Capitalize first letter if stripping "Hi Marcus, noticed..." left lowercase "noticed..."
+  return withoutGreeting.charAt(0).toUpperCase() + withoutGreeting.slice(1);
+}
+
+/** Interpolates simulator variables and builds deterministic 3-step simulated preview from KB text */
+function buildSimulatedDraftSequence(kb: string, sim: LeadSample): SequenceStep[] {
+  const firstName = sim.first_name?.trim() || "Marcus";
+  const company = sim.company_name?.trim() || "Apex Air Systems";
+  const designation = sim.designation?.trim() || "VP of Operations";
+  const industry = sim.industry?.trim() || "Commercial Facilities";
+
+  const interpolate = (raw: string) =>
+    raw
+      .replace(/\{\{\s*first_?name\s*\}\}/gi, firstName)
+      .replace(/\{\{\s*company(?:\s|_)?name\s*\}\}/gi, company)
+      .replace(/\{\{\s*designation\s*\}\}/gi, designation)
+      .replace(/\{\{\s*industry\s*\}\}/gi, industry)
+      .trim();
+
+  // Extract explicit "Step 1:" / "Step 2:" / "Step 3:" blocks if present in KB
+  const stepBlocks: Record<number, { objective?: string; body: string }> = {};
+  const stepRegex = /Step\s*([1-3])\s*:?([^\n]*)\n([\s\S]*?)(?=\n\s*Step\s*[1-3]\s*:|$)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = stepRegex.exec(kb)) !== null) {
+    const stepNum = Number(match[1]);
+    const heading = match[2]?.trim().replace(/^\(|\)$/g, "");
+    const body = match[3]?.trim();
+    if (body) {
+      stepBlocks[stepNum] = { objective: heading || undefined, body };
+    }
+  }
+
+  const trimmedKb = kb.trim();
+
+  return DEFAULT_STEP_META.map((meta) => {
+    const block = stepBlocks[meta.step];
+    let rawBody = block?.body;
+
+    if (!rawBody) {
+      const compactContext = trimmedKb.replace(/\s+/g, " ").slice(0, 260);
+      if (meta.step === 1) {
+        rawBody = `Noticed {{company name}} is focused on ${industry} operations. Based on your campaign context: ${compactContext}${trimmedKb.length > 260 ? "..." : ""} Open to a quick 2-min walkthrough?`;
+      } else if (meta.step === 2) {
+        rawBody = `Following up on our note for {{company name}} — teams led by {{designation}}s in ${industry} use this workflow to eliminate manual bottlenecks. Want me to share the 1-page architecture?`;
+      } else {
+        rawBody = `Haven't heard back, so I'll assume this isn't a top priority for {{company name}} right now. I'll close the loop here—feel free to reply anytime if it hits your roadmap.`;
+      }
+    }
+
+    const interpolated = sanitizeBubbleBody(interpolate(rawBody), firstName);
+    const charCount = interpolated.length;
+
+    return {
+      step: meta.step,
+      cadence: meta.cadence,
+      objective: block?.objective || meta.objective,
+      rendered_whatsapp_message: interpolated,
+      character_count: charCount,
+      compliance_check: {
+        passed: charCount <= 1024,
+        single_line: !interpolated.includes("\n\n"),
+        length_valid: charCount <= 1024,
+        validation_error: charCount > 1024 ? "Exceeds Meta 1024 char limit" : null,
+      },
+    };
+  });
+}
+
+function getMetaLimitBadge(charCount: number) {
+  if (charCount > 1024) {
+    return {
+      badgeClass: "bg-rose-950/80 border-rose-600/70 text-rose-400",
+      textClass: "text-rose-400 font-bold",
+      label: "Exceeds 1024 Limit",
+    };
+  }
+  if (charCount >= 400 && charCount <= 600) {
+    return {
+      badgeClass: "bg-amber-950/70 border-amber-700/60 text-amber-400",
+      textClass: "text-amber-400 font-bold",
+      label: "Warning (400–600)",
+    };
+  }
+  if (charCount > 600) {
+    return {
+      badgeClass: "bg-amber-950/80 border-amber-600/70 text-amber-300",
+      textClass: "text-amber-300 font-bold",
+      label: "Near Meta Limit",
+    };
+  }
+  return {
+    badgeClass: "bg-emerald-950/70 border-emerald-700/60 text-emerald-400",
+    textClass: "text-emerald-400 font-semibold",
+    label: "Meta Optimal",
+  };
+}
+
 export interface WhatsAppCampaignStudioProps {
   initialCampaignId?: number;
 }
@@ -116,11 +244,29 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
   });
 
   const [sequence, setSequence] = useState<SequenceStep[]>([]);
+  const [previewSource, setPreviewSource] = useState<"ai" | "draft" | "placeholder">("placeholder");
   const [loadingPreview, setLoadingPreview] = useState<boolean>(false);
   const [savingStatus, setSavingStatus] = useState<"ACTIVATING" | "SAVING_DRAFT" | null>(null);
   const [bannerMessage, setBannerMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const cursorPosRef = useRef<{ start: number; end: number } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerToast = (text: string, type: "success" | "error" = "success") => {
+    setToastMessage({ text, type });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage(null);
+    }, 4500);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   // Update campaignId if initialCampaignId changes externally
   useEffect(() => {
@@ -132,6 +278,8 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
   // Load Campaign Config on campaignId change
   const fetchCampaignConfig = async (id: number) => {
     setIsLoadingConfig(true);
+    setSequence([]);
+    setPreviewSource("placeholder");
     try {
       const resp = await fetch(API_WEBHOOK_URL, {
         method: "POST",
@@ -143,12 +291,24 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
       });
       const data = await resp.json();
       if (data.success && data.campaign) {
+        const loadedKb = data.campaign.knowledge_base || "";
         setCampaignName(data.campaign.campaign_name || `Campaign ${id}`);
         setIsEnabled(Boolean(data.campaign.enabled));
-        setKbText(data.campaign.knowledge_base || "");
+        setKbText(loadedKb);
         setSystemPrompt(data.campaign.system_prompt || "");
         setTotalLeads(data.campaign.total_leads || 0);
         setEnrichedLeads(data.campaign.enriched_leads || 0);
+
+        if (Array.isArray(data.campaign.sequence) && data.campaign.sequence.length > 0) {
+          setSequence(data.campaign.sequence);
+          setPreviewSource("ai");
+        } else if (loadedKb.trim().length >= 20) {
+          setSequence(buildSimulatedDraftSequence(loadedKb, simulator));
+          setPreviewSource("draft");
+        } else {
+          setSequence([]);
+          setPreviewSource("placeholder");
+        }
       }
     } catch (err) {
       console.error("Failed to load campaign config", err);
@@ -161,6 +321,18 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
   useEffect(() => {
     fetchCampaignConfig(campaignId);
   }, [campaignId]);
+
+  // Keep simulated draft previews live-updated when KB or simulator variables change (unless an AI preview is active)
+  useEffect(() => {
+    if (isLoadingConfig || loadingPreview || previewSource === "ai") return;
+    if (kbText.trim().length >= 20) {
+      setSequence(buildSimulatedDraftSequence(kbText, simulator));
+      setPreviewSource("draft");
+    } else {
+      setSequence([]);
+      setPreviewSource("placeholder");
+    }
+  }, [kbText, simulator, isLoadingConfig, loadingPreview, previewSource]);
 
   // Generate Sequence Preview
   const handleGeneratePreview = async () => {
@@ -189,6 +361,7 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
       const data = await resp.json();
       if (data.success && Array.isArray(data.sequence)) {
         setSequence(data.sequence);
+        setPreviewSource("ai");
       } else {
         setBannerMessage({ text: data.error || "Failed to generate sequence preview.", type: "error" });
       }
@@ -210,6 +383,11 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
       return;
     }
 
+    const previousEnabled = isEnabled;
+    if (activate) {
+      setIsEnabled(true); // Optimistic activation
+    }
+
     setSavingStatus(activate ? "ACTIVATING" : "SAVING_DRAFT");
     setBannerMessage(null);
     try {
@@ -226,42 +404,66 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
       });
       const data = await resp.json();
       if (data.success) {
-        setIsEnabled(data.enabled);
+        setIsEnabled(Boolean(data.enabled));
+        const successText = activate
+          ? `Campaign ${campaignId} configuration saved & activated for hourly outreach`
+          : `Campaign ${campaignId} draft saved successfully (remains inactive).`;
         setBannerMessage({
-          text: activate
-            ? `Campaign ${campaignId} APPROVED and ACTIVATED for live WhatsApp outreach!`
-            : `Campaign ${campaignId} draft saved successfully (remains inactive).`,
+          text: successText,
           type: "success",
         });
+        triggerToast(successText, "success");
       } else {
-        setBannerMessage({ text: data.error || "Failed to update campaign in database.", type: "error" });
+        setIsEnabled(previousEnabled);
+        const errText = data.error || "Failed to update campaign in database.";
+        setBannerMessage({ text: errText, type: "error" });
+        triggerToast(errText, "error");
       }
     } catch (err) {
       console.error("Failed to save campaign", err);
-      setBannerMessage({ text: "Error saving campaign to database.", type: "error" });
+      setIsEnabled(previousEnabled);
+      const errText = "Error saving campaign to database.";
+      setBannerMessage({ text: errText, type: "error" });
+      triggerToast(errText, "error");
     } finally {
       setSavingStatus(null);
     }
   };
 
+  const syncCursorPos = () => {
+    if (!textareaRef.current) return;
+    cursorPosRef.current = {
+      start: textareaRef.current.selectionStart ?? kbText.length,
+      end: textareaRef.current.selectionEnd ?? kbText.length,
+    };
+  };
+
   const insertVariable = (token: string) => {
-    const textToInsert = `{{${token}}}`;
-    if (!textareaRef.current) {
-      setKbText((prev) => (prev ? `${prev} ${textToInsert}` : textToInsert));
+    const variableText = `{{${token}}}`;
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      setKbText((prev) => (prev ? `${prev} ${variableText}` : variableText));
       return;
     }
 
-    const textarea = textareaRef.current;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = textarea.value;
+    const start =
+      document.activeElement === textarea
+        ? textarea.selectionStart
+        : (cursorPosRef.current?.start ?? textarea.selectionStart ?? textarea.value.length);
+    const end =
+      document.activeElement === textarea
+        ? textarea.selectionEnd
+        : (cursorPosRef.current?.end ?? textarea.selectionEnd ?? textarea.value.length);
+    const current = textarea.value;
 
-    const newText = text.substring(0, start) + textToInsert + text.substring(end);
-    setKbText(newText);
+    const updated = current.substring(0, start) + variableText + current.substring(end);
+    setKbText(updated);
+    const nextPos = start + variableText.length;
+    cursorPosRef.current = { start: nextPos, end: nextPos };
 
     setTimeout(() => {
       textarea.focus();
-      textarea.setSelectionRange(start + textToInsert.length, start + textToInsert.length);
+      textarea.setSelectionRange(nextPos, nextPos);
     }, 0);
   };
 
@@ -269,6 +471,7 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
     const preset = PRESETS[presetKey];
     if (preset) {
       setKbText(preset.text);
+      setPreviewSource("draft");
       setBannerMessage({
         text: `Loaded copy preset for ${preset.label}`,
         type: "success",
@@ -364,16 +567,18 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
           {/* Metric Badges */}
           <div className="grid grid-cols-3 gap-2.5 text-center">
             <div
-              className={`p-3 rounded-lg border transition ${
+              className={`p-3 rounded-lg border transition-all duration-300 ${
                 isEnabled
-                  ? "bg-emerald-950/40 border-emerald-700/60 text-emerald-300"
+                  ? "bg-emerald-950/50 border-emerald-500/70 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.25)]"
                   : "bg-slate-950 border-slate-800 text-slate-400"
               }`}
             >
-              <div className="text-sm font-bold flex items-center justify-center gap-1">
+              <div className="text-sm font-bold flex items-center justify-center gap-1.5">
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    isEnabled ? "bg-emerald-400 animate-pulse" : "bg-slate-600"
+                    isEnabled
+                      ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]"
+                      : "bg-slate-600"
                   }`}
                 ></span>
                 {isEnabled ? "ACTIVE" : "INACTIVE"}
@@ -426,7 +631,15 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
               <label className="block text-xs font-medium text-slate-400">
                 Campaign Product Context &amp; Reference Templates:
               </label>
-              <span className={`text-[10px] ${kbText.length >= 20 ? "text-emerald-400" : "text-amber-400"}`}>
+              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                kbText.length < 20
+                  ? "text-amber-400 bg-amber-950/50 border-amber-800/50"
+                  : kbText.length > 1024
+                  ? "text-rose-400 bg-rose-950/50 border-rose-800/50"
+                  : kbText.length >= 400
+                  ? "text-amber-300 bg-amber-950/40 border-amber-700/50"
+                  : "text-emerald-400 bg-emerald-950/40 border-emerald-800/50"
+              }`}>
                 {kbText.length} chars (min 20)
               </span>
             </div>
@@ -434,10 +647,20 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
               ref={textareaRef}
               rows={8}
               value={kbText}
-              onChange={(e) => setKbText(e.target.value)}
+              onChange={(e) => {
+                setKbText(e.target.value);
+                if (previewSource === "ai") setPreviewSource("draft");
+                syncCursorPos();
+              }}
+              onClick={syncCursorPos}
+              onKeyUp={syncCursorPos}
+              onSelect={syncCursorPos}
               placeholder="Paste product details or sequence reference templates with {{firstname}}, {{company name}}..."
               className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-200 font-mono focus:outline-none focus:border-emerald-500 transition leading-relaxed resize-y"
             />
+            <p className="text-[11px] text-slate-400 italic mt-1.5">
+              Do not include redundant &lsquo;Hi &#123;&#123;firstname&#125;&#125;&rsquo; if already starting the prompt with one.
+            </p>
           </div>
 
           {/* Variable Insertion Chips */}
@@ -448,6 +671,7 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
                 <button
                   key={v}
                   type="button"
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => insertVariable(v)}
                   className="text-xs bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 px-2 py-1 rounded transition active:scale-95"
                 >
@@ -571,78 +795,152 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
         <section className="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-xl p-5 flex flex-col justify-between shadow-xl">
           <div>
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-4 pb-3 border-b border-slate-800">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-emerald-400" />
-                Live 3-Touch WhatsApp Sequence Preview
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-emerald-400" />
+                  Live 3-Touch WhatsApp Sequence Preview
+                </h3>
+                {previewSource === "ai" && !loadingPreview && !isLoadingConfig && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-950/70 border border-emerald-700/60 text-emerald-300">
+                    AI Preview
+                  </span>
+                )}
+                {previewSource === "draft" && !loadingPreview && !isLoadingConfig && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-950/70 border border-sky-700/60 text-sky-300">
+                    Draft Preview
+                  </span>
+                )}
+              </div>
               <span className="text-xs text-slate-400">
                 Prospect: <strong className="text-emerald-400">{simulator.first_name || "Lead"}</strong> (
                 {simulator.company_name || "Company"})
               </span>
             </div>
 
-            {sequence.length === 0 ? (
-              <div className="text-center py-24 px-4 text-slate-500 border-2 border-dashed border-slate-800 rounded-xl">
-                <MessageSquare className="h-10 w-10 mx-auto text-slate-600 mb-3" />
-                <p className="text-sm font-semibold text-slate-400">No sequence generated yet.</p>
-                <p className="text-xs mt-1 text-slate-500 max-w-sm mx-auto">
-                  Click &ldquo;⚡ Generate Sequence Preview&rdquo; to simulate how OpenAI and Meta templates will render for this prospect.
-                </p>
-              </div>
-            ) : (
+            {isLoadingConfig || loadingPreview ? (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-                {sequence.map((step) => (
+                {DEFAULT_STEP_META.map((meta) => (
                   <div
-                    key={step.step}
-                    className="flex flex-col bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-lg"
+                    key={meta.step}
+                    className="flex flex-col bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-lg min-h-[340px]"
                   >
-                    {/* Step Header */}
                     <div className="p-2.5 bg-slate-900/90 border-b border-slate-800 flex justify-between items-center">
                       <span className="text-[11px] font-bold text-sky-400 bg-sky-950/70 border border-sky-800/60 px-2 py-0.5 rounded">
-                        STEP {step.step}
+                        STEP {meta.step}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-mono">{step.cadence}</span>
+                      <span className="text-[10px] text-slate-400 font-mono">{meta.cadence}</span>
                     </div>
-
-                    {/* Step Objective */}
-                    <div className="p-2.5 bg-slate-950 text-[10px] text-slate-400 border-b border-slate-800/60 leading-relaxed min-h-[46px] line-clamp-2">
-                      {step.objective}
+                    <div className="p-2.5 bg-slate-950 text-[10px] text-slate-500 border-b border-slate-800/60 min-h-[46px]">
+                      {meta.objective}
                     </div>
-
-                    {/* WhatsApp Chat Bubble */}
-                    <div className="p-3 flex-1 flex flex-col justify-between bg-[#0a1914]/50">
-                      <div className="bg-[#0b4334] text-emerald-50 rounded-xl p-3 text-xs leading-relaxed shadow relative border border-emerald-800/40">
-                        <div className="text-[11px] text-emerald-200/90 font-medium mb-1">
+                    <div className="p-3 flex-1 flex flex-col justify-between bg-[#0a1914]/50 animate-pulse">
+                      <div className="bg-slate-900/70 rounded-xl p-3 space-y-2 border border-slate-800">
+                        <div className="h-3 w-20 bg-slate-800 rounded"></div>
+                        <div className="h-3 w-full bg-slate-800 rounded"></div>
+                        <div className="h-3 w-11/12 bg-slate-800 rounded"></div>
+                        <div className="h-3 w-4/5 bg-slate-800 rounded"></div>
+                        <div className="h-3 w-2/3 bg-slate-800 rounded"></div>
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-slate-800/80 flex justify-between">
+                        <div className="h-3 w-16 bg-slate-800 rounded"></div>
+                        <div className="h-3 w-20 bg-slate-800 rounded"></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : sequence.length === 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                {DEFAULT_STEP_META.map((meta) => (
+                  <div
+                    key={meta.step}
+                    className="flex flex-col bg-slate-950 border border-slate-800/90 rounded-xl overflow-hidden shadow-lg min-h-[340px]"
+                  >
+                    <div className="p-2.5 bg-slate-900/90 border-b border-slate-800 flex justify-between items-center">
+                      <span className="text-[11px] font-bold text-sky-400 bg-sky-950/70 border border-sky-800/60 px-2 py-0.5 rounded">
+                        STEP {meta.step}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">{meta.cadence}</span>
+                    </div>
+                    <div className="p-2.5 bg-slate-950 text-[10px] text-slate-400 border-b border-slate-800/60 leading-relaxed min-h-[46px]">
+                      {meta.objective}
+                    </div>
+                    <div className="p-3 flex-1 flex flex-col justify-between bg-[#0a1914]/30">
+                      <div className="bg-slate-900/50 text-slate-400 rounded-xl p-3 text-xs leading-relaxed border border-dashed border-slate-800">
+                        <div className="text-[11px] text-emerald-400/80 font-medium mb-1">
                           Hi {simulator.first_name || "there"}.
                         </div>
-                        <p className="whitespace-pre-wrap">{step.rendered_whatsapp_message}</p>
-                        <div className="text-[9px] text-emerald-300/80 text-right mt-2 flex items-center justify-end gap-1 font-mono">
-                          <span>10:45 AM</span>
-                          <span className="text-sky-400 font-bold">✓✓</span>
-                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          Enter product context on the left (min 20 chars) or select a preset to preview Step {meta.step} for{" "}
+                          <span className="text-slate-300">{simulator.company_name || "this prospect"}</span>.
+                        </p>
                       </div>
-
-                      {/* Meta Compliance Badge */}
                       <div className="mt-3 flex justify-between items-center text-[10px] pt-2 border-t border-slate-800/80">
-                        <span
-                          className={`font-mono ${
-                            step.character_count > 400 ? "text-amber-400 font-bold" : "text-slate-400"
-                          }`}
-                        >
-                          {step.character_count} / 400 chars
-                        </span>
-                        <span
-                          className={`flex items-center gap-1 font-medium ${
-                            step.compliance_check.length_valid ? "text-emerald-400" : "text-amber-400"
-                          }`}
-                        >
+                        <span className="font-mono text-slate-500">0 / 400 chars</span>
+                        <span className="flex items-center gap-1 text-slate-500">
                           <ShieldCheck className="h-3 w-3" />
-                          {step.compliance_check.length_valid ? "Meta Compliant" : "Exceeds Limit"}
+                          Awaiting Copy
                         </span>
                       </div>
                     </div>
                   </div>
                 ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                {sequence.map((step) => {
+                  const firstName = simulator.first_name || "there";
+                  const sanitizedBody = sanitizeBubbleBody(step.rendered_whatsapp_message || "", firstName);
+                  const charCount = sanitizedBody.length;
+                  const metaLimit = getMetaLimitBadge(charCount);
+
+                  return (
+                    <div
+                      key={step.step}
+                      className="flex flex-col bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-lg min-h-[340px]"
+                    >
+                      {/* Step Header */}
+                      <div className="p-2.5 bg-slate-900/90 border-b border-slate-800 flex justify-between items-center">
+                        <span className="text-[11px] font-bold text-sky-400 bg-sky-950/70 border border-sky-800/60 px-2 py-0.5 rounded">
+                          STEP {step.step}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">{step.cadence}</span>
+                      </div>
+
+                      {/* Step Objective */}
+                      <div className="p-2.5 bg-slate-950 text-[10px] text-slate-400 border-b border-slate-800/60 leading-relaxed min-h-[46px] line-clamp-2">
+                        {step.objective}
+                      </div>
+
+                      {/* WhatsApp Chat Bubble */}
+                      <div className="p-3 flex-1 flex flex-col justify-between bg-[#0a1914]/50">
+                        <div className="bg-[#0b4334] text-emerald-50 rounded-xl p-3 text-xs leading-relaxed shadow relative border border-emerald-800/40">
+                          <div className="text-[11px] text-emerald-200/90 font-medium mb-1">
+                            Hi {firstName}.
+                          </div>
+                          <p className="whitespace-pre-wrap">{sanitizedBody}</p>
+                          <div className="text-[9px] text-emerald-300/80 text-right mt-2 flex items-center justify-end gap-1 font-mono">
+                            <span>10:45 AM</span>
+                            <span className="text-sky-400 font-bold">✓✓</span>
+                          </div>
+                        </div>
+
+                        {/* Meta Compliance Badge */}
+                        <div className="mt-3 flex justify-between items-center text-[10px] pt-2 border-t border-slate-800/80 gap-1">
+                          <span className={`font-mono ${metaLimit.textClass}`}>
+                            {charCount} chars
+                          </span>
+                          <span
+                            className={`flex items-center gap-1 font-medium px-1.5 py-0.5 rounded border ${metaLimit.badgeClass}`}
+                          >
+                            <ShieldCheck className="h-3 w-3 shrink-0" />
+                            {metaLimit.label}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -653,6 +951,34 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
           </div>
         </section>
       </div>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed bottom-5 right-5 z-50 max-w-md px-4 py-3 rounded-xl border shadow-2xl flex items-center gap-3 text-xs font-medium transition-all animate-in fade-in slide-in-from-bottom-4 ${
+            toastMessage.type === "success"
+              ? "bg-emerald-950/95 border-emerald-500/70 text-emerald-100 shadow-emerald-950/60"
+              : "bg-rose-950/95 border-rose-500/70 text-rose-100 shadow-rose-950/60"
+          }`}
+        >
+          {toastMessage.type === "success" ? (
+            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+          ) : (
+            <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+          )}
+          <span className="flex-1">{toastMessage.text}</span>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="text-slate-400 hover:text-white font-bold px-1"
+            aria-label="Dismiss notification"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }
