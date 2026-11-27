@@ -419,7 +419,7 @@ function DashboardContent({
     const content = (() => {
 
         return (
-            <div className="flex h-screen overflow-hidden bg-background text-foreground">
+            <div className="flex h-screen h-[100dvh] overflow-hidden bg-background text-foreground">
                 {/* Mobile sidebar backdrop */}
                 {isMobileSidebarOpen && (
                     <div
@@ -714,7 +714,7 @@ function DashboardContent({
                         onClose={() => setWalletModal({ ...walletModal, isOpen: false })}
                     />
 
-                    <main className="flex-1 overflow-auto bg-background px-6 pb-6 pt-0 relative">
+                    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-background px-3 sm:px-6 pb-4 sm:pb-6 pt-0 relative">
                         {children}
                     </main>
                 </div>

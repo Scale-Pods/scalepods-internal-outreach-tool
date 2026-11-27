@@ -89,22 +89,24 @@ export default function CampaignsDashboardPage() {
     }, [loading]);
 
     return (
-        <div className={`space-y-8 pb-10 pt-6 relative px-6 ${loading ? 'h-[calc(100vh-6rem)] overflow-hidden' : 'min-h-[500px]'}`}>
+        <div className={`space-y-6 sm:space-y-8 pb-8 sm:pb-10 pt-4 sm:pt-6 relative px-1 sm:px-2 md:px-4 ${loading ? 'h-[calc(100dvh-5rem)] overflow-hidden' : 'min-h-[500px]'}`}>
             {loading && <SPLoader />}
 
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-6 mb-2">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5 sm:pb-6 mb-2">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Campaigns</h1>
-                    <p className="text-sm text-slate-500 mt-1">
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Campaigns</h1>
+                    <p className="text-xs sm:text-sm text-slate-500 mt-1">
                         Multi-channel outreach performance across all campaigns
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <DateRangePicker
-                        value={dateRange}
-                        onUpdate={({ range, label }) => setDateRange(range, label)}
-                    />
-                    <Button variant="outline" size="sm" onClick={fetchData} className="gap-2 h-10 px-4">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
+                    <div className="flex-1 sm:flex-initial min-w-[200px]">
+                        <DateRangePicker
+                            value={dateRange}
+                            onUpdate={({ range, label }) => setDateRange(range, label)}
+                        />
+                    </div>
+                    <Button variant="outline" size="sm" onClick={fetchData} className="gap-2 h-10 px-4 shrink-0">
                         <RefreshCw className="h-4 w-4" /> Refresh
                     </Button>
                 </div>
@@ -171,7 +173,7 @@ export default function CampaignsDashboardPage() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {(stats?.campaigns || []).map((c) => (
                         <CampaignCard
                             key={c.campaignId}

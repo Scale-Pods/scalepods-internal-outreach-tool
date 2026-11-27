@@ -160,7 +160,7 @@ export default function AssignPersonPage() {
     }, [loading]);
 
     return (
-        <div className={`space-y-6 pb-10 pt-6 px-6 relative ${loading ? 'h-[calc(100vh-6rem)] overflow-hidden' : 'min-h-[500px]'}`}>
+        <div className={`space-y-5 sm:space-y-6 pb-8 sm:pb-10 pt-4 sm:pt-6 px-1 sm:px-4 md:px-6 relative ${loading ? 'h-[calc(100dvh-5rem)] overflow-hidden' : 'min-h-[500px]'}`}>
             {loading && <SPLoader />}
             <div className="flex items-center gap-3">
                 <Button variant="ghost" size="sm" className="gap-1.5 text-slate-500 -ml-2" onClick={() => router.push("/dashboard/campaigns")}>
@@ -220,7 +220,7 @@ export default function AssignPersonPage() {
                                                     <td className="px-4 py-3 text-center font-bold text-slate-700">{campaign.totalLeads.toLocaleString()}</td>
                                                     <td className="px-4 py-3">
                                                         <Input
-                                                            className="h-9 max-w-xs bg-white"
+                                                            className="h-9 min-w-[160px] w-full max-w-xs bg-white"
                                                             placeholder="Enter alias / person name..."
                                                             value={names[key] ?? ""}
                                                             onChange={(e) => setNames(prev => ({ ...prev, [key]: e.target.value }))}
@@ -256,7 +256,7 @@ export default function AssignPersonPage() {
             {toast && (
                 <div
                     role="status"
-                    className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl border shadow-lg flex items-center gap-2.5 text-xs font-semibold ${
+                    className={`fixed bottom-4 left-4 right-4 sm:left-auto sm:bottom-5 sm:right-5 z-50 px-4 py-3 rounded-xl border shadow-lg flex items-center gap-2.5 text-xs font-semibold ${
                         toast.type === "success"
                             ? "bg-emerald-950 text-emerald-100 border-emerald-700"
                             : "bg-rose-950 text-rose-100 border-rose-700"

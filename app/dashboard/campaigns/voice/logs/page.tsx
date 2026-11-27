@@ -179,22 +179,22 @@ export default function CampaignVoiceCallLogsPage() {
     }, [loading]);
 
     return (
-        <div className={`space-y-6 pb-12 pt-4 px-6 relative ${loading ? 'h-[calc(100vh-6rem)] overflow-hidden' : 'min-h-[500px]'}`}>
+        <div className={`space-y-6 pb-8 sm:pb-12 pt-4 px-1 sm:px-4 md:px-6 relative ${loading ? 'h-[calc(100dvh-5rem)] overflow-hidden' : 'min-h-[500px]'}`}>
             {loading && <SPLoader />}
 
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                        <PhoneCall className="h-6 w-6 text-cyan-600" />
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <PhoneCall className="h-5 w-5 sm:h-6 sm:w-6 text-cyan-600 shrink-0" />
                         Campaign Voice Call Logs
                     </h1>
-                    <p className="text-sm text-slate-500 mt-1">
+                    <p className="text-xs sm:text-sm text-slate-500 mt-1">
                         Detailed voice history with transcripts, sentiment analysis, notes, and call recordings
                     </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full md:w-auto">
                     {/* Campaign filter */}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -310,7 +310,7 @@ export default function CampaignVoiceCallLogsPage() {
 
                 <div className="flex flex-wrap items-center gap-2">
                     {/* Call Slot filter */}
-                    <div className="flex items-center rounded-lg border border-slate-200 p-0.5 bg-white">
+                    <div className="flex flex-wrap items-center rounded-lg border border-slate-200 p-0.5 bg-white max-w-full">
                         <button
                             onClick={() => { setCallSlotFilter("all"); setCurrentPage(1); }}
                             className={`px-2.5 py-1 text-xs font-semibold rounded ${callSlotFilter === "all" ? "bg-slate-100 text-slate-800" : "text-slate-500 hover:text-slate-800"}`}
@@ -558,7 +558,7 @@ export default function CampaignVoiceCallLogsPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                    <div className="p-3 border-t border-border flex items-center justify-between text-xs text-slate-500">
+                    <div className="p-3 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
                         <div>
                             Showing {(currentPage - 1) * CALLS_PER_PAGE + 1} to{" "}
                             {Math.min(currentPage * CALLS_PER_PAGE, totalCount)} of {totalCount} calls

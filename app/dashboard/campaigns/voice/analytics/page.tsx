@@ -161,22 +161,22 @@ export default function CampaignVoiceAnalyticsPage() {
     }, [loading]);
 
     return (
-        <div className={`space-y-6 pb-12 pt-4 px-6 relative ${loading ? 'h-[calc(100vh-6rem)] overflow-hidden' : 'min-h-[500px]'}`}>
+        <div className={`space-y-6 pb-8 sm:pb-12 pt-4 px-1 sm:px-4 md:px-6 relative ${loading ? 'h-[calc(100dvh-5rem)] overflow-hidden' : 'min-h-[500px]'}`}>
             {loading && <SPLoader />}
 
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                        <TrendingUp className="h-6 w-6 text-cyan-600" />
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-cyan-600 shrink-0" />
                         Campaign Voice Analytics
                     </h1>
-                    <p className="text-sm text-slate-500 mt-1">
+                    <p className="text-xs sm:text-sm text-slate-500 mt-1">
                         In-depth trends, pickup rates, sentiment breakdown, and touchpoint funnel performance
                     </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full md:w-auto">
                     {/* Campaign filter */}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -261,7 +261,7 @@ export default function CampaignVoiceAnalyticsPage() {
             </div>
 
             {/* Top KPI Cards Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-3">
                 <Card className="border-border shadow-xs bg-white p-4">
                     <div className="flex items-center justify-between text-xs text-slate-500 font-semibold uppercase">
                         <span>Total Calls</span>
@@ -349,7 +349,7 @@ export default function CampaignVoiceAnalyticsPage() {
             {/* Charts Row 1: Daily Volume Trend & Hourly Distribution */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Daily Call Volume & Pickup Trend */}
-                <Card className="lg:col-span-2 border-border shadow-xs bg-white">
+                <Card className="lg:col-span-2 border-border shadow-xs bg-white min-w-0">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-base font-bold text-slate-900 flex items-center justify-between">
                             <span className="flex items-center gap-2">
@@ -578,7 +578,7 @@ export default function CampaignVoiceAnalyticsPage() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-4">
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 text-center">
                                 <Smile className="h-6 w-6 text-emerald-600 mx-auto mb-1.5" />
                                 <p className="text-xs font-semibold text-emerald-800">Positive</p>
@@ -644,7 +644,7 @@ export default function CampaignVoiceAnalyticsPage() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-4">
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="p-4 rounded-xl border border-cyan-200 bg-cyan-50/40">
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs font-semibold text-cyan-800">Picked Up / Completed</span>

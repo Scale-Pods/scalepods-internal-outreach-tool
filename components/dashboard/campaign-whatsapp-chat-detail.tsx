@@ -95,12 +95,12 @@ export function CampaignWhatsAppChatDetail({
     }
 
     return (
-        <div className="space-y-6 flex flex-col h-full overflow-hidden max-h-[85vh]">
+        <div className="space-y-4 sm:space-y-6 flex flex-col h-full overflow-y-auto lg:overflow-hidden max-h-[88dvh]">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 pr-10">
-                <div>
-                    <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-bold text-slate-900 tracking-tight">{lead.fullName}</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 pr-8">
+                <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight break-words">{lead.fullName}</h2>
                         {lead.isPositive && (
                             <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[10px] font-bold uppercase gap-1">
                                 <Sparkles className="h-3 w-3" /> Positive Lead
@@ -123,7 +123,7 @@ export function CampaignWhatsAppChatDetail({
                     </div>
                 </div>
 
-                <div className="flex items-start gap-2">
+                <div className="flex flex-wrap items-start gap-2 shrink-0">
                     <CampaignLabel
                         campaignId={lead.campaignId}
                         campaignName={lead.campaignName}
@@ -147,9 +147,9 @@ export function CampaignWhatsAppChatDetail({
             </div>
 
             {/* Main content grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 overflow-hidden min-h-0">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 flex-1 lg:overflow-hidden min-h-0">
                 {/* Chat Timeline (Col 1 & 2) */}
-                <div className="lg:col-span-2 flex flex-col bg-white border border-border rounded-xl shadow-sm overflow-hidden h-full min-h-0">
+                <div className="lg:col-span-2 flex flex-col bg-white border border-border rounded-xl shadow-sm overflow-hidden min-h-[320px] max-h-[55dvh] lg:max-h-none lg:h-full lg:min-h-0">
                     <div className="bg-slate-50/70 border-b border-border p-3 px-4 flex justify-between items-center shrink-0">
                         <div className="flex items-center gap-2">
                             <MessageSquare className="h-4 w-4 text-emerald-600" />
@@ -218,7 +218,7 @@ export function CampaignWhatsAppChatDetail({
                 </div>
 
                 {/* Sidebar (Col 3) */}
-                <div className="lg:col-span-1 space-y-4 overflow-y-auto pr-1 h-full pb-4">
+                <div className="lg:col-span-1 space-y-4 lg:overflow-y-auto lg:pr-1 lg:h-full pb-2 sm:pb-4">
                     <Card className="border-border shadow-sm bg-white">
                         <CardContent className="p-4 space-y-4">
                             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">

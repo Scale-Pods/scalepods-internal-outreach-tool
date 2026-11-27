@@ -152,22 +152,22 @@ function CampaignWhatsAppOverviewContent() {
     }, [loading]);
 
     return (
-        <div className={`space-y-6 pb-12 pt-4 px-6 relative ${loading ? 'h-[calc(100vh-6rem)] overflow-hidden' : 'min-h-[500px]'}`}>
+        <div className={`space-y-6 pb-8 sm:pb-12 pt-4 px-1 sm:px-4 md:px-6 relative ${loading ? 'h-[calc(100dvh-5rem)] overflow-hidden' : 'min-h-[500px]'}`}>
             {loading && <SPLoader />}
 
             {/* Top Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                        <MessageCircle className="h-6 w-6 text-emerald-600" />
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <MessageCircle className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-600 shrink-0" />
                         Campaign WhatsApp Overview
                     </h1>
-                    <p className="text-sm text-slate-500 mt-1">
+                    <p className="text-xs sm:text-sm text-slate-500 mt-1">
                         Real-time WhatsApp outreach performance across all campaigns
                     </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full md:w-auto">
                     {/* Campaign Dropdown Filter */}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -282,7 +282,7 @@ function CampaignWhatsAppOverviewContent() {
             )}
 
             {/* 5 Core Required Overview Metric Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
                 {/* 1. Unique Leads Contacted */}
                 <MetricCard
                     title="Unique Leads Contacted"
@@ -525,7 +525,7 @@ function CampaignWhatsAppOverviewContent() {
 
             {/* Chat Detail Modal */}
             <Dialog open={!!selectedLeadId} onOpenChange={open => !open && setSelectedLeadId(null)}>
-                <DialogContent className="max-w-4xl p-6 h-[85vh] flex flex-col bg-white">
+                <DialogContent className="max-w-4xl p-4 sm:p-6 h-[90dvh] lg:h-[85dvh] flex flex-col bg-white overflow-hidden">
                     <VisuallyHidden.Root>
                         <DialogTitle>
                             {selectedLead ? `WhatsApp Chat with ${selectedLead.fullName}` : "WhatsApp Chat Details"}

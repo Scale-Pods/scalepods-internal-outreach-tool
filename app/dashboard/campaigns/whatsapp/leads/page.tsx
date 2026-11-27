@@ -151,22 +151,22 @@ export default function CampaignWhatsAppLeadsPage() {
     }, [loading]);
 
     return (
-        <div className={`space-y-6 pb-12 pt-4 px-6 relative ${loading ? 'h-[calc(100vh-6rem)] overflow-hidden' : 'min-h-[500px]'}`}>
+        <div className={`space-y-6 pb-8 sm:pb-12 pt-4 px-1 sm:px-4 md:px-6 relative ${loading ? 'h-[calc(100dvh-5rem)] overflow-hidden' : 'min-h-[500px]'}`}>
             {loading && <SPLoader />}
 
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                        <Users className="h-6 w-6 text-emerald-600" />
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <Users className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-600 shrink-0" />
                         Campaign WhatsApp Leads
                     </h1>
-                    <p className="text-sm text-slate-500 mt-1">
+                    <p className="text-xs sm:text-sm text-slate-500 mt-1">
                         All contacts reached via WhatsApp campaigns with response tracking
                     </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full md:w-auto">
                     {/* Campaign filter */}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -526,7 +526,7 @@ export default function CampaignWhatsAppLeadsPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                    <div className="p-3 border-t border-border flex items-center justify-between text-xs text-slate-500">
+                    <div className="p-3 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
                         <div>
                             Showing {(currentPage - 1) * LEADS_PER_PAGE + 1} to{" "}
                             {Math.min(currentPage * LEADS_PER_PAGE, totalCount)} of {totalCount} leads
@@ -560,7 +560,7 @@ export default function CampaignWhatsAppLeadsPage() {
 
             {/* Chat Modal */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="max-w-4xl p-6 h-[85vh] flex flex-col bg-white">
+                <DialogContent className="max-w-4xl p-4 sm:p-6 h-[90dvh] lg:h-[85dvh] flex flex-col bg-white overflow-hidden">
                     <VisuallyHidden.Root>
                         <DialogTitle>
                             {selectedLead ? `WhatsApp Chat with ${selectedLead.fullName}` : "WhatsApp Chat Details"}

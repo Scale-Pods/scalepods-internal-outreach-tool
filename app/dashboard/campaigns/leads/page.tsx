@@ -194,23 +194,25 @@ function LeadsPageInner() {
     }, [loading]);
 
     return (
-        <div className={`h-full flex flex-col p-4 space-y-3 relative ${loading ? 'h-[calc(100vh-6rem)] overflow-hidden' : 'overflow-hidden min-h-[400px]'}`}>
+        <div className={`flex flex-col p-1 sm:p-4 space-y-3 relative ${loading ? 'h-[calc(100dvh-5rem)] overflow-hidden' : 'min-h-[calc(100dvh-5rem)] lg:h-full lg:overflow-hidden'}`}>
             {loading && <SPLoader />}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 shrink-0">
                 <div>
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight">Campaign Leads</h1>
                     <p className="text-slate-500 text-xs">Email, WhatsApp &amp; Voice activity in one view</p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <DateRangePicker value={dateRange} onUpdate={({ range, label }) => setDateRange(range, label)} />
-                    <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={fetchLeads}>
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    <div className="flex-1 sm:flex-initial min-w-[190px]">
+                        <DateRangePicker value={dateRange} onUpdate={({ range, label }) => setDateRange(range, label)} />
+                    </div>
+                    <Button variant="outline" size="sm" className="h-10 sm:h-8 gap-1.5 text-xs shrink-0" onClick={fetchLeads}>
                         <RefreshCw className="h-3 w-3" /> Refresh
                     </Button>
                 </div>
             </div>
 
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                <div className="relative flex-1 min-w-[200px]">
+                <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-[200px]">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                     <Input className="pl-8 h-8 text-sm bg-white border-border" placeholder="Search by name, email, company, location..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
                 </div>
@@ -269,7 +271,7 @@ function LeadsPageInner() {
                 )}
             </div>
 
-            <Card className="border-border overflow-hidden shadow-sm flex-1 flex flex-col min-h-0">
+            <Card className="border-border overflow-hidden shadow-sm flex-1 flex flex-col min-h-[360px] lg:min-h-0">
                 <CardContent className="p-0 flex-1 flex flex-col min-h-0">
                     <div className="overflow-auto flex-1 min-h-0">
                         <table className="w-full text-left text-sm">
@@ -399,7 +401,7 @@ function LeadsPageInner() {
             </Card>
 
             <Dialog open={!!selectedLeadId} onOpenChange={(open) => !open && setSelectedLeadId(null)}>
-                <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto p-6">
+                <DialogContent className="max-w-3xl max-h-[88dvh] overflow-y-auto p-4 sm:p-6">
                     <DialogHeader className="sr-only"><DialogTitle>Lead Detail</DialogTitle></DialogHeader>
                     {selectedLeadId && <LeadDetail leadId={selectedLeadId} />}
                 </DialogContent>
@@ -446,10 +448,10 @@ function LeadDetail({ leadId }: { leadId: string }) {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-start justify-between pr-8">
-                <div>
-                    <h2 className="text-xl font-bold text-slate-900">{lead.fullName}</h2>
-                    <p className="text-sm text-slate-500">{lead.designation ? `${lead.designation} @ ` : ""}{lead.companyName || "—"}</p>
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 pr-8">
+                <div className="min-w-0">
+                    <h2 className="text-lg sm:text-xl font-bold text-slate-900 break-words">{lead.fullName}</h2>
+                    <p className="text-xs sm:text-sm text-slate-500">{lead.designation ? `${lead.designation} @ ` : ""}{lead.companyName || "—"}</p>
                 </div>
                 <CampaignLabel
                     campaignId={lead.campaignId}
@@ -459,7 +461,7 @@ function LeadDetail({ leadId }: { leadId: string }) {
                 />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                 <DetailField label="Email" value={lead.email} />
                 <DetailField label="Personal Email" value={lead.personalEmail} />
                 <DetailField label="Mobile" value={lead.mobileNumber} />
@@ -470,7 +472,7 @@ function LeadDetail({ leadId }: { leadId: string }) {
                 <DetailField label="Enriched" value={lead.isEnriched ? "Yes" : "No"} />
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <ChannelStatusCard label="Email" icon={Mail} status={latestStatus?.status || (sentCount > 0 ? 'sent' : null)} detail={`${sentCount}/10 steps sent`} />
                 <ChannelStatusCard label="WhatsApp" icon={MessageCircle} status={lead.whatsappStatus} detail={lead.outreachChannels.includes('whatsapp') ? 'Enabled' : 'Not enabled'} />
                 <ChannelStatusCard label="Voice" icon={Mic} status={lead.voiceStatus} detail={lead.outreachChannels.includes('voice') ? 'Enabled' : 'Not enabled'} />

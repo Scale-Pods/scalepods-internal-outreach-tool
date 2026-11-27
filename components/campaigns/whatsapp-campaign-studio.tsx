@@ -547,7 +547,7 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
   };
 
   return (
-    <div className="bg-slate-950 text-slate-100 rounded-2xl p-5 md:p-6 font-sans border border-slate-800 shadow-2xl">
+    <div className="bg-slate-950 text-slate-100 rounded-2xl p-3.5 sm:p-5 md:p-6 font-sans border border-slate-800 shadow-2xl">
       {/* Studio Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 mb-5 border-b border-slate-800">
         <div>
@@ -636,7 +636,7 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
             <label className="block text-[11px] font-medium text-slate-400 mb-1">
               Campaign Alias (assigned_lead):
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
                 value={aliasInput}
@@ -645,13 +645,13 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
                   if (e.key === "Enter") handleSaveAlias();
                 }}
                 placeholder="e.g. Palki HR UK, Adnan $10..."
-                className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                className="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 sm:py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
               />
               <button
                 type="button"
                 onClick={handleSaveAlias}
                 disabled={savingAlias || !aliasInput.trim()}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-emerald-300 border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1"
+                className="px-3 py-2 sm:py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-emerald-300 border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1 shrink-0"
               >
                 {savingAlias ? (
                   <RefreshCw className="h-3 w-3 animate-spin" />
@@ -664,17 +664,17 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
           </div>
 
           {/* Metric Badges */}
-          <div className="grid grid-cols-3 gap-2.5 text-center">
+          <div className="grid grid-cols-3 gap-2 sm:gap-2.5 text-center">
             <div
-              className={`p-3 rounded-lg border transition-all duration-300 ${
+              className={`p-2 sm:p-3 rounded-lg border transition-all duration-300 ${
                 isEnabled
                   ? "bg-emerald-950/50 border-emerald-500/70 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.25)]"
                   : "bg-slate-950 border-slate-800 text-slate-400"
               }`}
             >
-              <div className="text-sm font-bold flex items-center justify-center gap-1.5">
+              <div className="text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5">
                 <span
-                  className={`w-2 h-2 rounded-full ${
+                  className={`w-2 h-2 rounded-full shrink-0 ${
                     isEnabled
                       ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]"
                       : "bg-slate-600"
@@ -684,12 +684,12 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
               </div>
               <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">State</div>
             </div>
-            <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg">
-              <div className="text-sm font-bold text-white">{enrichedLeads.toLocaleString()}</div>
-              <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">Enriched Leads</div>
+            <div className="p-2 sm:p-3 bg-slate-950 border border-slate-800 rounded-lg">
+              <div className="text-xs sm:text-sm font-bold text-white">{enrichedLeads.toLocaleString()}</div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">Enriched</div>
             </div>
-            <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg">
-              <div className="text-sm font-bold text-white">{totalLeads.toLocaleString()}</div>
+            <div className="p-2 sm:p-3 bg-slate-950 border border-slate-800 rounded-lg">
+              <div className="text-xs sm:text-sm font-bold text-white">{totalLeads.toLocaleString()}</div>
               <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">Total Leads</div>
             </div>
           </div>
@@ -917,7 +917,7 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
             </div>
 
             {isLoadingConfig || loadingPreview ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
                 {DEFAULT_STEP_META.map((meta) => (
                   <div
                     key={meta.step}
@@ -949,7 +949,7 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
                 ))}
               </div>
             ) : sequence.length === 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
                 {DEFAULT_STEP_META.map((meta) => (
                   <div
                     key={meta.step}
@@ -986,7 +986,7 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
                 {sequence.map((step) => {
                   const firstName = simulator.first_name || "there";
                   const sanitizedBody = sanitizeBubbleBody(step.rendered_whatsapp_message || "", firstName);
@@ -1056,7 +1056,7 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
         <div
           role="status"
           aria-live="polite"
-          className={`fixed bottom-5 right-5 z-50 max-w-md px-4 py-3 rounded-xl border shadow-2xl flex items-center gap-3 text-xs font-medium transition-all animate-in fade-in slide-in-from-bottom-4 ${
+          className={`fixed bottom-4 left-4 right-4 sm:left-auto sm:bottom-5 sm:right-5 z-50 sm:max-w-md px-4 py-3 rounded-xl border shadow-2xl flex items-center gap-3 text-xs font-medium transition-all animate-in fade-in slide-in-from-bottom-4 ${
             toastMessage.type === "success"
               ? "bg-emerald-950/95 border-emerald-500/70 text-emerald-100 shadow-emerald-950/60"
               : "bg-rose-950/95 border-rose-500/70 text-rose-100 shadow-rose-950/60"

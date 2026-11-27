@@ -158,11 +158,12 @@ export function DateRangePicker({
                         id="date"
                         variant={"outline"}
                         className={cn(
-                            "w-full sm:w-[260px] justify-start text-left font-normal bg-white border-border text-slate-900 hover:bg-zinc-50 rounded-xl h-10 shadow-sm",
+                            "w-full sm:w-[260px] justify-start text-left font-normal bg-white border-border text-slate-900 hover:bg-zinc-50 rounded-xl h-10 shadow-sm text-xs sm:text-sm truncate",
                             !date && "text-muted-foreground"
                         )}
                     >
-                        <CalendarIcon className="mr-2 h-4 w-4 text-blue-500" />
+                        <CalendarIcon className="mr-2 h-4 w-4 text-blue-500 shrink-0" />
+                        <span className="truncate">
                         {date?.from ? (
                             date.to ? (
                                 <>
@@ -175,9 +176,10 @@ export function DateRangePicker({
                         ) : (
                             <span>{placeholder || "Pick a date"}</span>
                         )}
+                        </span>
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-2rem)] sm:w-auto p-0 max-h-[80vh] overflow-y-auto" align="end">
+                <PopoverContent className="w-[calc(100vw-1.5rem)] sm:w-auto p-0 max-h-[82dvh] overflow-y-auto" align="end">
                     <div className="flex flex-col sm:flex-row">
                         <div className="p-2 border-b sm:border-b-0 sm:border-r border-border sm:w-[160px]">
                             <div className="flex sm:block gap-1 sm:gap-0 sm:space-y-1 overflow-x-auto sm:overflow-visible">

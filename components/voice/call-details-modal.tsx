@@ -237,9 +237,9 @@ export function CallDetailsModal({ open, onOpenChange, call, isPublic = false }:
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl p-0 gap-0 bg-white overflow-hidden max-h-[90vh] flex flex-col">
-                <DialogHeader className="p-6 border-b border-border flex flex-row items-center justify-between space-y-0">
-                    <DialogTitle className="text-xl font-semibold">Call Details</DialogTitle>
+            <DialogContent className="max-w-3xl p-0 gap-0 bg-white overflow-hidden max-h-[90dvh] flex flex-col">
+                <DialogHeader className="p-4 sm:p-6 border-b border-border flex flex-row items-center justify-between space-y-0">
+                    <DialogTitle className="text-lg sm:text-xl font-semibold">Call Details</DialogTitle>
                     {!isPublic && displayCall.leadId && (
                         <Button
                             variant="ghost"
@@ -264,7 +264,7 @@ export function CallDetailsModal({ open, onOpenChange, call, isPublic = false }:
                         </div>
                     )}
                     {/* Call Overview */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 p-6 bg-slate-50/50 border-b border-border items-start">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 p-4 sm:p-6 bg-slate-50/50 border-b border-border items-start">
                         {/* Column 1: Status & Type */}
                         <div className="space-y-6">
                             <div>
@@ -338,44 +338,46 @@ export function CallDetailsModal({ open, onOpenChange, call, isPublic = false }:
                         </div>
                     </div>
 
-                    <div className="p-6 space-y-6">
+                    <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
                         {/* Call Information */}
                         <div>
                             <h3 className="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wide">Call Information</h3>
-                            <div className="p-5 border border-border rounded-xl bg-white shadow-sm">
-                                <div className="flex justify-between items-center mb-3 px-2">
+                            <div className="p-3.5 sm:p-5 border border-border rounded-xl bg-white shadow-sm">
+                                <div className="hidden sm:flex justify-between items-center mb-3 px-2">
                                     <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">{fromLabel}</p>
                                     <p className="text-xs uppercase tracking-wider text-slate-500 font-bold">{toLabel}</p>
                                 </div>
-                                <div className="flex items-center justify-between gap-4">
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
 
-                                    <div className="flex items-center gap-4 flex-1">
-                                        <div className={`h-11 w-11 shrink-0 rounded-full flex items-center justify-center ${fromLabel.includes('Assistant') ? 'bg-purple-100 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
+                                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                                        <div className={`h-10 w-10 sm:h-11 sm:w-11 shrink-0 rounded-full flex items-center justify-center ${fromLabel.includes('Assistant') ? 'bg-purple-100 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
                                             {fromLabel.includes('Assistant') ? <Avatar><AvatarFallback>AI</AvatarFallback></Avatar> : <Phone className="h-5 w-5" />}
                                         </div>
-                                        <div className="flex-1 font-semibold text-slate-900 border border-border bg-slate-50/50 rounded-lg px-4 py-3">
-                                            <span className="block text-sm">{fromName}</span>
+                                        <div className="flex-1 min-w-0 font-semibold text-slate-900 border border-border bg-slate-50/50 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3">
+                                            <span className="sm:hidden block text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-0.5">{fromLabel}</span>
+                                            <span className="block text-sm truncate">{fromName}</span>
                                             {fromSubInfo !== "Unknown" && fromSubInfo !== "Website/API" && (
-                                                <span className="block text-xs font-normal text-slate-500 mt-0.5 tracking-wide">{`+${fromSubInfo.replace(/\+/g, '')}`}</span>
+                                                <span className="block text-xs font-normal text-slate-500 mt-0.5 tracking-wide truncate">{`+${fromSubInfo.replace(/\+/g, '')}`}</span>
                                             )}
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col items-center px-4 shrink-0">
-                                        <span className="text-[10px] uppercase font-bold text-blue-600 tracking-widest mb-2">{isInbound ? "INBOUND" : "OUTBOUND"}</span>
-                                        <div className="h-0.5 w-20 bg-blue-200 relative">
+                                    <div className="flex flex-col items-center px-2 sm:px-4 shrink-0">
+                                        <span className="text-[10px] uppercase font-bold text-blue-600 tracking-widest mb-1 sm:mb-2">{isInbound ? "INBOUND" : "OUTBOUND"}</span>
+                                        <div className="h-0.5 w-14 sm:w-20 bg-blue-200 relative">
                                             <ArrowRight className="w-4 h-4 text-blue-600 absolute -right-1.5 -top-[7px]" />
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-4 flex-1">
-                                        <div className="flex-1 font-semibold text-slate-900 border border-border bg-slate-50/50 rounded-lg px-4 py-3 text-right">
-                                            <span className="block text-sm">{toName}</span>
+                                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                                        <div className="flex-1 min-w-0 font-semibold text-slate-900 border border-border bg-slate-50/50 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 sm:text-right">
+                                            <span className="sm:hidden block text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-0.5">{toLabel}</span>
+                                            <span className="block text-sm truncate">{toName}</span>
                                             {toSubInfo !== "Unknown" && toSubInfo !== "Website/API" && (
-                                                <span className="block text-xs font-normal text-slate-500 mt-0.5 tracking-wide">{`+${toSubInfo.replace(/\+/g, '')}`}</span>
+                                                <span className="block text-xs font-normal text-slate-500 mt-0.5 tracking-wide truncate">{`+${toSubInfo.replace(/\+/g, '')}`}</span>
                                             )}
                                         </div>
-                                        <div className={`h-11 w-11 shrink-0 rounded-full flex items-center justify-center ${toLabel.includes('Assistant') ? 'bg-purple-100 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
+                                        <div className={`h-10 w-10 sm:h-11 sm:w-11 shrink-0 rounded-full flex items-center justify-center ${toLabel.includes('Assistant') ? 'bg-purple-100 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
                                             {toLabel.includes('Assistant') ? <Avatar><AvatarFallback>AI</AvatarFallback></Avatar> : <Phone className="h-5 w-5" />}
                                         </div>
                                     </div>
