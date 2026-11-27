@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { campaignColor, type CampaignColor } from '@/lib/services/campaigns';
+import { campaignColor, getCampaignAliasMap, resolveCampaignAliasFromMap, type CampaignColor } from '@/lib/services/campaigns';
 
 export interface CampaignWaMessage {
     id?: string;
@@ -44,6 +44,7 @@ export interface CampaignWaLead {
     campaignId: number | null;
     campaignKey: string | null;
     campaignName: string | null;
+    campaignAlias?: string | null;
     campaignColor: CampaignColor;
     leadStatus: string | null;
     whatsappStatus: string | null;
@@ -76,6 +77,7 @@ export interface CampaignWaOverviewStats {
     campaignBreakdown: {
         campaignId: string;
         campaignName: string;
+        campaignAlias?: string | null;
         campaignColor: CampaignColor;
         leadsContacted: number;
         totalReplies: number;
@@ -554,7 +556,7 @@ export function parseSafeTimestamp(val: any, isEndOfDay: boolean = false): numbe
 
 const WA_LEAD_COLUMNS = `
     id, full_name, first_name, last_name, email, mobile_number, company_name, city, country,
-    campaign_id, campaign_key, lead_status, whatsapp_status, whatsapp_outreach_message,
+    campaign_id, campaign_key, assigned_lead, lead_status, whatsapp_status, whatsapp_outreach_message,
     whatsapp_conversation, last_contacted_at, created_at, updated_at, custom_fields
 `;
 
@@ -578,7 +580,10 @@ async function fetchWaLeadsNormalized(filters: Pick<CampaignWaFilterParams, 'fro
 
     query = query.order('last_contacted_at', { ascending: false, nullsFirst: false }).limit(20000);
 
-    const { data: leads, error } = await query;
+    const [{ data: leads, error }, aliasMap] = await Promise.all([
+        query,
+        getCampaignAliasMap(),
+    ]);
     if (error) {
         console.error('[campaign-whatsapp] fetchWaLeadsNormalized Supabase query error:', {
             message: error.message,
@@ -590,7 +595,11 @@ async function fetchWaLeadsNormalized(filters: Pick<CampaignWaFilterParams, 'fro
     }
 
     const dateRange = (filters.from || filters.to) ? { fromIso: filters.from, toIso: filters.to } : undefined;
-    return (leads || []).map(row => normalizeCampaignWaLead(row, dateRange));
+    return (leads || []).map(row => {
+        const normalized = normalizeCampaignWaLead(row, dateRange);
+        normalized.campaignAlias = resolveCampaignAliasFromMap(normalized.campaignId, normalized.campaignKey, aliasMap, row.assigned_lead);
+        return normalized;
+    });
 }
 
 /** Applies campaign (and, for the leads list, search/reply/PF/positive) filters
@@ -623,6 +632,7 @@ function computeWaOverviewStats(filtered: CampaignWaLead[]): CampaignWaOverviewS
     const campaignMap: Record<string, {
         campaignId: string;
         campaignName: string;
+        campaignAlias?: string | null;
         campaignColor: CampaignColor;
         leadsContacted: number;
         totalReplies: number;
@@ -656,6 +666,7 @@ function computeWaOverviewStats(filtered: CampaignWaLead[]): CampaignWaOverviewS
             campaignMap[cKey] = {
                 campaignId: cKey,
                 campaignName: lead.campaignName || 'General Campaign',
+                campaignAlias: lead.campaignAlias ?? null,
                 campaignColor: lead.campaignColor,
                 leadsContacted: 0,
                 totalReplies: 0,
@@ -663,6 +674,8 @@ function computeWaOverviewStats(filtered: CampaignWaLead[]): CampaignWaOverviewS
                 pfLeads: 0,
                 positiveLeads: 0,
             };
+        } else if (!campaignMap[cKey].campaignAlias && lead.campaignAlias) {
+            campaignMap[cKey].campaignAlias = lead.campaignAlias;
         }
         if (isContacted) campaignMap[cKey].leadsContacted++;
         campaignMap[cKey].totalReplies += lead.repliesCount;
@@ -755,17 +768,22 @@ export async function getCampaignWaLeads(filters: CampaignWaFilterParams = {}) {
 
 /** Fetches a single lead detail with conversation */
 export async function getCampaignWaLeadDetail(leadId: string): Promise<CampaignWaLead | null> {
-    const { data, error } = await supabaseAdmin
-        .from('outreach_leads')
-        .select('*')
-        .eq('id', leadId)
-        .single();
+    const [{ data, error }, aliasMap] = await Promise.all([
+        supabaseAdmin
+            .from('outreach_leads')
+            .select('*')
+            .eq('id', leadId)
+            .single(),
+        getCampaignAliasMap(),
+    ]);
 
     if (error || !data) {
         return null;
     }
 
-    return normalizeCampaignWaLead(data);
+    const normalized = normalizeCampaignWaLead(data);
+    normalized.campaignAlias = resolveCampaignAliasFromMap(normalized.campaignId, normalized.campaignKey, aliasMap, data.assigned_lead);
+    return normalized;
 }
 
 /** Fetches Analytics metrics & trend data — reuses a single fetch+filter pass

@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import { CampaignBadge } from "@/components/dashboard/campaign-badge";
+import { CampaignLabel } from "@/components/dashboard/campaign-badge";
 import { CampaignWhatsAppChatDetail } from "@/components/dashboard/campaign-whatsapp-chat-detail";
 import type { CampaignWaOverviewStats, CampaignWaLead } from "@/lib/services/campaign-whatsapp";
 import { startOfDay, endOfDay, subDays } from "date-fns";
@@ -43,7 +43,7 @@ function CampaignWhatsAppOverviewContent() {
 
     const [stats, setStats] = useState<CampaignWaOverviewStats | null>(null);
     const [recentLeads, setRecentLeads] = useState<CampaignWaLead[]>([]);
-    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string }[]>([]);
+    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string; alias?: string | null }[]>([]);
     const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
@@ -100,6 +100,7 @@ function CampaignWhatsAppOverviewContent() {
                 const opts = (json.campaignOptions || []).map((c: any) => ({
                     id: String(c.id || c.campaign_id),
                     name: c.name || c.campaign_name || `Campaign ${c.id || c.campaign_id}`,
+                    alias: c.alias || null,
                 }));
                 setCampaignOptions(opts);
             })
@@ -190,12 +191,15 @@ function CampaignWhatsAppOverviewContent() {
                                 campaignOptions.map(c => (
                                     <DropdownMenuItem
                                         key={c.id}
-                                        className="text-xs cursor-pointer flex items-center justify-between text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+                                        className="text-xs cursor-pointer flex items-center justify-between gap-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100"
                                         onClick={() => toggleCampaign(c.id)}
                                     >
-                                        <span className="truncate">{c.name}</span>
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="truncate font-medium">{c.name}</span>
+                                            {c.alias && <span className="text-[10px] text-slate-400 truncate">Alias: {c.alias}</span>}
+                                        </div>
                                         {selectedCampaigns.includes(c.id) && (
-                                            <Badge className="h-4 px-1 text-[9px] bg-cyan-600 text-white">Active</Badge>
+                                            <Badge className="h-4 px-1 text-[9px] bg-cyan-600 text-white shrink-0">Active</Badge>
                                         )}
                                     </DropdownMenuItem>
                                 ))
@@ -372,9 +376,11 @@ function CampaignWhatsAppOverviewContent() {
                                         stats.campaignBreakdown.map(c => (
                                             <tr key={c.campaignId} className="hover:bg-slate-50/60 transition-colors">
                                                 <td className="px-4 py-3">
-                                                    <CampaignBadge
+                                                    <CampaignLabel
                                                         campaignId={c.campaignId === 'unknown' ? null : Number(c.campaignId)}
                                                         campaignName={c.campaignName}
+                                                        alias={c.campaignAlias}
+                                                        showUnassigned
                                                     />
                                                 </td>
                                                 <td className="px-4 py-3 text-right font-medium text-slate-700">
@@ -469,9 +475,11 @@ function CampaignWhatsAppOverviewContent() {
                                         <div>
                                             <div className="flex items-center gap-2">
                                                 <span className="font-bold text-sm text-slate-900">{lead.fullName}</span>
-                                                <CampaignBadge
+                                                <CampaignLabel
                                                     campaignId={lead.campaignId}
                                                     campaignName={lead.campaignName}
+                                                    alias={lead.campaignAlias}
+                                                    compact
                                                 />
                                                 {lead.isPositive && (
                                                     <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] font-bold uppercase">

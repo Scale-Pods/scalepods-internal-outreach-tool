@@ -39,3 +39,42 @@ export function CampaignBadge({ campaignId, campaignName, className = "" }: {
         </Badge>
     );
 }
+
+export function CampaignLabel({
+    campaignId,
+    campaignName,
+    alias,
+    showUnassigned = false,
+    compact = false,
+    badgeClassName = "",
+    className = "",
+}: {
+    campaignId: number | string | null | undefined;
+    campaignName?: string | null;
+    alias?: string | null;
+    showUnassigned?: boolean;
+    compact?: boolean;
+    badgeClassName?: string;
+    className?: string;
+}) {
+    const trimmedAlias = typeof alias === "string" ? alias.trim() : "";
+
+    return (
+        <div className={`inline-flex flex-col items-start min-w-0 ${className}`}>
+            <CampaignBadge
+                campaignId={campaignId}
+                campaignName={campaignName}
+                className={badgeClassName}
+            />
+            {trimmedAlias ? (
+                <span className="mt-1 text-[10px] font-medium text-slate-600 leading-tight truncate max-w-full">
+                    <span className="text-slate-400 font-normal">Alias:</span> {trimmedAlias}
+                </span>
+            ) : showUnassigned && !compact ? (
+                <span className="mt-1 text-[10px] text-slate-400 italic leading-tight">
+                    Unassigned
+                </span>
+            ) : null}
+        </div>
+    );
+}

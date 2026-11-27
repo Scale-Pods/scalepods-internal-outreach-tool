@@ -15,7 +15,7 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { SPLoader } from "@/components/sp-loader";
-import { CampaignBadge, campaignColorClasses } from "@/components/dashboard/campaign-badge";
+import { CampaignLabel, campaignColorClasses } from "@/components/dashboard/campaign-badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useCampaignDateRange } from "@/context/CampaignDateContext";
 import {
@@ -47,7 +47,7 @@ export default function CampaignEmailPage() {
     const [leads, setLeads] = useState<OutreachLeadListItem[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [stats, setStats] = useState<ChannelStats | null>(null);
-    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string }[]>([]);
+    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string; alias?: string | null }[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchInput, setSearchInput] = useState("");
     const searchQuery = useDebouncedValue(searchInput, 350);
@@ -152,8 +152,12 @@ export default function CampaignEmailPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-64">
                         {campaignOptions.map(opt => (
-                            <DropdownMenuItem key={opt.id} onClick={() => toggleCampaignFilter(opt.id)}>
-                                {opt.name} {campaignFilter.includes(opt.id) && "✓"}
+                            <DropdownMenuItem key={opt.id} onClick={() => toggleCampaignFilter(opt.id)} className="flex items-center justify-between gap-2">
+                                <div className="flex flex-col min-w-0">
+                                    <span className="truncate font-medium">{opt.name}</span>
+                                    {opt.alias && <span className="text-[10px] text-slate-400 truncate">Alias: {opt.alias}</span>}
+                                </div>
+                                {campaignFilter.includes(opt.id) && <span className="shrink-0">✓</span>}
                             </DropdownMenuItem>
                         ))}
                     </DropdownMenuContent>
@@ -209,7 +213,14 @@ export default function CampaignEmailPage() {
                                                 className={`transition-colors cursor-pointer hover:brightness-95 ${campaignColorClasses(color).split(' ')[0]}`}
                                                 onClick={() => setSelectedLeadId(lead.id)}
                                             >
-                                                <td className="px-3 py-2"><CampaignBadge campaignId={lead.campaignId} campaignName={lead.campaignName} /></td>
+                                                <td className="px-3 py-2">
+                                                    <CampaignLabel
+                                                        campaignId={lead.campaignId}
+                                                        campaignName={lead.campaignName}
+                                                        alias={lead.campaignAlias ?? lead.assignedLead}
+                                                        compact
+                                                    />
+                                                </td>
                                                 <td className="px-3 py-2 font-semibold text-slate-900 text-xs whitespace-nowrap">{lead.fullName}</td>
                                                 <td className="px-3 py-2 text-slate-500 text-[11px] whitespace-nowrap">{lead.email || "—"}</td>
                                                 <td className="px-3 py-2">
@@ -302,7 +313,12 @@ function EmailDetail({ leadId }: { leadId: string }) {
                     <h2 className="text-xl font-bold text-slate-900">{lead.fullName}</h2>
                     <p className="text-sm text-slate-500">{lead.email}</p>
                 </div>
-                <CampaignBadge campaignId={lead.campaignId} campaignName={lead.campaignName} />
+                <CampaignLabel
+                    campaignId={lead.campaignId}
+                    campaignName={lead.campaignName}
+                    alias={lead.campaignAlias ?? lead.assignedLead}
+                    showUnassigned
+                />
             </div>
 
             {lead.emailReplies.length > 0 && (

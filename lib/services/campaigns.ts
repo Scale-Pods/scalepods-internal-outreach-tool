@@ -79,6 +79,7 @@ export interface OutreachLead {
     campaignId: number | null;
     campaignKey: string | null;
     campaignName: string | null;
+    campaignAlias?: string | null;
     assignedLead: string | null;
     isEnriched: boolean;
     outreachChannels: OutreachChannel[];
@@ -117,6 +118,7 @@ export interface OutreachLeadListItem {
     campaignId: number | null;
     campaignKey: string | null;
     campaignName: string | null;
+    campaignAlias?: string | null;
     assignedLead: string | null;
     isEnriched: boolean;
     outreachChannels: OutreachChannel[];
@@ -197,6 +199,7 @@ function normalizeLead(row: any): OutreachLead {
             ?? repliesRaw?.[0]?.campaign_name
             ?? (row.campaign_key ? row.campaign_key.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : null)
             ?? (row.campaign_id ? `Campaign ${row.campaign_id}` : null),
+        campaignAlias: (row.assigned_lead && String(row.assigned_lead).trim()) || null,
         assignedLead: row.assigned_lead || null,
         isEnriched: Boolean(row.is_enriched),
         outreachChannels: Array.isArray(row.outreach_channels) ? row.outreach_channels : [],
@@ -260,6 +263,7 @@ function normalizeLeadListItem(row: any): OutreachLeadListItem {
         campaignId: row.campaign_id,
         campaignKey: row.campaign_key,
         campaignName,
+        campaignAlias: (row.assigned_lead && String(row.assigned_lead).trim()) || null,
         assignedLead: row.assigned_lead || null,
         isEnriched: Boolean(row.is_enriched),
         outreachChannels: Array.isArray(row.outreach_channels) ? row.outreach_channels : [],
@@ -404,11 +408,14 @@ export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {
             };
         }
 
-        const rawRows = await fetchEmailActiveRows({
-            campaignIds: filters.campaignIds,
-            search: filters.search,
-            selectColumns: EMAIL_LIST_COLUMNS,
-        });
+        const [rawRows, aliasMap] = await Promise.all([
+            fetchEmailActiveRows({
+                campaignIds: filters.campaignIds,
+                search: filters.search,
+                selectColumns: EMAIL_LIST_COLUMNS,
+            }),
+            getCampaignAliasMap(),
+        ]);
 
         const hasDateRange = !!(filters.from || filters.to);
         const fromMs = filters.from ? parseEmailIsoMs(filters.from) : -Infinity;
@@ -416,6 +423,7 @@ export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {
 
         let enriched = rawRows.map(row => {
             const item = normalizeLeadListItem(row);
+            item.campaignAlias = resolveCampaignAliasFromMap(item.campaignId, item.campaignKey, aliasMap, item.assignedLead);
             const ts = extractEmailActivityTimestamps(row);
             return { item, ...ts };
         });
@@ -499,11 +507,15 @@ export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {
         q = q.order('last_contacted_at', { ascending: false, nullsFirst: false })
              .range(startIndex, startIndex + pageSize - 1);
 
-        const { data, count, error } = await q;
+        const [{ data, count, error }, aliasMap] = await Promise.all([q, getCampaignAliasMap()]);
         if (error) throw new Error(error.message);
 
         return {
-            data: (data || []).map(normalizeLeadListItem),
+            data: (data || []).map(row => {
+                const item = normalizeLeadListItem(row);
+                item.campaignAlias = resolveCampaignAliasFromMap(item.campaignId, item.campaignKey, aliasMap, item.assignedLead);
+                return item;
+            }),
             totalCount: count ?? 0,
             page,
             pageSize,
@@ -511,20 +523,27 @@ export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {
     }
 
     try {
-        const { data, error } = await supabaseAdmin.rpc('get_campaigns_leads_page', {
-            p_page: page,
-            p_page_size: pageSize,
-            p_search: filters.search?.trim() || null,
-            p_campaign_ids: filters.campaignIds?.length ? filters.campaignIds : null,
-            p_channel: filters.channel || null,
-            p_status_filter: filters.statusFilter?.length ? filters.statusFilter : null,
-            p_active_only: filters.activeOnly ?? false,
-        });
+        const [{ data, error }, aliasMap] = await Promise.all([
+            supabaseAdmin.rpc('get_campaigns_leads_page', {
+                p_page: page,
+                p_page_size: pageSize,
+                p_search: filters.search?.trim() || null,
+                p_campaign_ids: filters.campaignIds?.length ? filters.campaignIds : null,
+                p_channel: filters.channel || null,
+                p_status_filter: filters.statusFilter?.length ? filters.statusFilter : null,
+                p_active_only: filters.activeOnly ?? false,
+            }),
+            getCampaignAliasMap(),
+        ]);
 
         if (!error && data) {
             const rows = data || [];
             return {
-                data: rows.map(normalizeLeadListItem),
+                data: rows.map((row: any) => {
+                    const item = normalizeLeadListItem(row);
+                    item.campaignAlias = resolveCampaignAliasFromMap(item.campaignId, item.campaignKey, aliasMap, item.assignedLead);
+                    return item;
+                }),
                 totalCount: rows[0]?.total_count ?? 0,
                 page,
                 pageSize,
@@ -561,11 +580,15 @@ export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {
     q = q.order('last_contacted_at', { ascending: false, nullsFirst: false })
          .range(startIndex, startIndex + pageSize - 1);
 
-    const { data, count, error } = await q;
+    const [{ data, count, error }, aliasMap] = await Promise.all([q, getCampaignAliasMap()]);
     if (error) throw new Error(error.message);
 
     return {
-        data: (data || []).map(normalizeLeadListItem),
+        data: (data || []).map(row => {
+            const item = normalizeLeadListItem(row);
+            item.campaignAlias = resolveCampaignAliasFromMap(item.campaignId, item.campaignKey, aliasMap, item.assignedLead);
+            return item;
+        }),
         totalCount: count ?? 0,
         page,
         pageSize,
@@ -575,10 +598,15 @@ export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {
 /** Full detail (email bodies, step statuses, replies) for exactly one lead —
  *  used only by the row-click detail modal. */
 export async function getOutreachLeadDetail(id: string): Promise<OutreachLead | null> {
-    const { data, error } = await supabaseAdmin.rpc('get_campaign_lead_detail', { p_id: id });
+    const [{ data, error }, aliasMap] = await Promise.all([
+        supabaseAdmin.rpc('get_campaign_lead_detail', { p_id: id }),
+        getCampaignAliasMap(),
+    ]);
     if (error) throw new Error(error.message);
     if (!data) return null;
-    return normalizeLead(data);
+    const normalized = normalizeLead(data);
+    normalized.campaignAlias = resolveCampaignAliasFromMap(normalized.campaignId, normalized.campaignKey, aliasMap, normalized.assignedLead);
+    return normalized;
 }
 
 export interface CampaignsDashboardFilters {
@@ -617,6 +645,7 @@ export interface CampaignsDashboardStats {
 export interface CampaignSummary {
     campaignId: number | string;
     campaignName: string;
+    campaignAlias?: string | null;
     color: CampaignColor;
     totalLeads: number;
     emailSent: number;
@@ -778,14 +807,115 @@ export async function getCampaignsDashboardStats(filters: CampaignsDashboardFilt
     };
 }
 
+/** Resolves the most frequent non-null assigned_lead alias per campaign_id (1..10) */
+export async function getCampaignAliasMap(): Promise<Record<string, string>> {
+    const campaignIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const results = await Promise.all(
+        campaignIds.map(async (cid) => {
+            const { data, error } = await supabaseAdmin
+                .from('outreach_leads')
+                .select('assigned_lead')
+                .eq('campaign_id', cid)
+                .not('assigned_lead', 'is', null)
+                .neq('assigned_lead', '')
+                .order('updated_at', { ascending: false })
+                .limit(1000);
+
+            if (error || !data?.length) return [String(cid), null] as const;
+
+            const freq = new Map<string, number>();
+            for (const row of data) {
+                const val = typeof row.assigned_lead === 'string' ? row.assigned_lead.trim() : '';
+                if (!val) continue;
+                freq.set(val, (freq.get(val) || 0) + 1);
+            }
+
+            let bestAlias: string | null = null;
+            let bestCount = 0;
+            for (const [alias, count] of freq.entries()) {
+                if (count > bestCount) {
+                    bestAlias = alias;
+                    bestCount = count;
+                }
+            }
+            return [String(cid), bestAlias] as const;
+        })
+    );
+
+    const map: Record<string, string> = {};
+    for (const [cid, alias] of results) {
+        if (alias) map[cid] = alias;
+    }
+    return map;
+}
+
+export function resolveCampaignAliasFromMap(
+    campaignId: number | string | null | undefined,
+    campaignKey: string | null | undefined,
+    aliasMap: Record<string, string>,
+    fallbackAssignedLead?: string | null
+): string | null {
+    let key = campaignId !== null && campaignId !== undefined ? String(campaignId) : null;
+    if (!key && campaignKey) {
+        const match = campaignKey.match(/campaign_?(\d+)/i);
+        if (match) key = match[1];
+    }
+    if (key && aliasMap[key]) return aliasMap[key];
+    const trimmed = typeof fallbackAssignedLead === 'string' ? fallbackAssignedLead.trim() : '';
+    return trimmed || null;
+}
+
+/** Combined endpoint payload for /api/campaigns/aliases (Assign Person & Studio) */
+export async function getCampaignAliasesWithSummary(): Promise<{
+    aliases: Record<string, string>;
+    campaigns: {
+        id: number;
+        campaignId: number;
+        campaignName: string;
+        alias: string | null;
+        totalLeads: number;
+        enrichedLeads: number;
+    }[];
+}> {
+    const [aliases, summary] = await Promise.all([
+        getCampaignAliasMap(),
+        getCampaignsSummary(),
+    ]);
+
+    const summaryById = new Map<string, CampaignSummary>();
+    for (const s of summary) {
+        summaryById.set(String(s.campaignId), s);
+    }
+
+    const campaigns = Array.from({ length: 10 }, (_, idx) => {
+        const id = idx + 1;
+        const s = summaryById.get(String(id));
+        const alias = aliases[String(id)] || null;
+        return {
+            id,
+            campaignId: id,
+            campaignName: s?.campaignName || `ScalePods Internal Outreach ${id}`,
+            alias,
+            totalLeads: s?.totalLeads ?? 0,
+            enrichedLeads: 0,
+        };
+    });
+
+    return { aliases, campaigns };
+}
+
 /** Per-campaign breakdown — backed by the get_campaigns_summary RPC (a
  *  single GROUP BY query, no row data leaves Postgres). */
 export async function getCampaignsSummary(): Promise<CampaignSummary[]> {
-    const { data, error } = await supabaseAdmin.rpc('get_campaigns_summary');
+    const [{ data, error }, aliasMap] = await Promise.all([
+        supabaseAdmin.rpc('get_campaigns_summary'),
+        getCampaignAliasMap(),
+    ]);
     if (error) throw new Error(error.message);
     return (data || []).map((row: any) => ({
         campaignId: row.campaign_id,
         campaignName: row.campaign_name,
+        campaignAlias: resolveCampaignAliasFromMap(row.campaign_id, null, aliasMap),
         color: campaignColor(row.campaign_id),
         totalLeads: row.total_leads ?? 0,
         emailSent: row.email_sent ?? 0,
@@ -901,10 +1031,17 @@ export async function getChannelStats(channel: OutreachChannel, filters: { from?
 
 /** Distinct campaigns represented within one channel's enrolled leads —
  *  backs the "Campaign" filter dropdown on the channel sub-pages. */
-export async function getChannelCampaignOptions(channel: OutreachChannel): Promise<{ id: string; name: string }[]> {
-    const { data, error } = await supabaseAdmin.rpc('get_campaigns_channel_campaign_options', { p_channel: channel });
+export async function getChannelCampaignOptions(channel: OutreachChannel): Promise<{ id: string; name: string; alias?: string | null }[]> {
+    const [{ data, error }, aliasMap] = await Promise.all([
+        supabaseAdmin.rpc('get_campaigns_channel_campaign_options', { p_channel: channel }),
+        getCampaignAliasMap(),
+    ]);
     if (error) throw new Error(error.message);
-    return (data || []).map((row: any) => ({ id: row.campaign_id, name: row.campaign_name }));
+    return (data || []).map((row: any) => ({
+        id: row.campaign_id,
+        name: row.campaign_name,
+        alias: resolveCampaignAliasFromMap(row.campaign_id, null, aliasMap),
+    }));
 }
 
 // ── derived helpers (still used by the full-detail modal) ──────────────────

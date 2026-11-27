@@ -17,7 +17,7 @@ import {
     Flame,
     Sparkles,
 } from "lucide-react";
-import { CampaignBadge } from "@/components/dashboard/campaign-badge";
+import { CampaignLabel } from "@/components/dashboard/campaign-badge";
 import type { CampaignWaLead } from "@/lib/services/campaign-whatsapp";
 
 interface CampaignWhatsAppChatDetailProps {
@@ -123,8 +123,13 @@ export function CampaignWhatsAppChatDetail({
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <CampaignBadge campaignId={lead.campaignId} campaignName={lead.campaignName} />
+                <div className="flex items-start gap-2">
+                    <CampaignLabel
+                        campaignId={lead.campaignId}
+                        campaignName={lead.campaignName}
+                        alias={lead.campaignAlias}
+                        showUnassigned
+                    />
                     <Button
                         variant="ghost"
                         size="sm"
@@ -241,7 +246,12 @@ export function CampaignWhatsAppChatDetail({
                                 <div>
                                     <span className="text-[10px] font-bold text-slate-400 uppercase">Campaign</span>
                                     <div className="mt-1">
-                                        <CampaignBadge campaignId={lead.campaignId} campaignName={lead.campaignName} />
+                                        <CampaignLabel
+                                            campaignId={lead.campaignId}
+                                            campaignName={lead.campaignName}
+                                            alias={lead.campaignAlias}
+                                            showUnassigned
+                                        />
                                     </div>
                                 </div>
                                 <div>

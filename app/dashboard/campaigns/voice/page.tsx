@@ -27,7 +27,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CampaignBadge } from "@/components/dashboard/campaign-badge";
+import { CampaignLabel } from "@/components/dashboard/campaign-badge";
 import { CallDetailsModal } from "@/components/voice/call-details-modal";
 import { formatDuration } from "@/lib/utils";
 import type { CampaignVoiceOverviewStats, CampaignVoiceCall } from "@/lib/services/campaign-voice";
@@ -44,7 +44,7 @@ export default function CampaignVoiceOverviewPage() {
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);
 
-    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string }[]>([]);
+    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string; alias?: string | null }[]>([]);
     const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
 
     const [selectedCall, setSelectedCall] = useState<any>(null);
@@ -97,6 +97,7 @@ export default function CampaignVoiceOverviewPage() {
                 const opts = (json.campaignOptions || []).map((c: any) => ({
                     id: String(c.id || c.campaign_id),
                     name: c.name || c.campaign_name || `Campaign ${c.id || c.campaign_id}`,
+                    alias: c.alias || null,
                 }));
                 setCampaignOptions(opts);
             })
@@ -190,12 +191,15 @@ export default function CampaignVoiceOverviewPage() {
                             {campaignOptions.map(c => (
                                 <DropdownMenuItem
                                     key={c.id}
-                                    className="text-xs cursor-pointer flex items-center justify-between"
+                                    className="text-xs cursor-pointer flex items-center justify-between gap-2"
                                     onClick={() => toggleCampaign(c.id)}
                                 >
-                                    <span className="truncate">{c.name}</span>
+                                    <div className="flex flex-col min-w-0">
+                                        <span className="truncate font-medium">{c.name}</span>
+                                        {c.alias && <span className="text-[10px] text-slate-400 truncate">Alias: {c.alias}</span>}
+                                    </div>
                                     {selectedCampaigns.includes(c.id) && (
-                                        <Badge className="h-4 px-1 text-[9px] bg-cyan-600">Active</Badge>
+                                        <Badge className="h-4 px-1 text-[9px] bg-cyan-600 shrink-0">Active</Badge>
                                     )}
                                 </DropdownMenuItem>
                             ))}
@@ -366,9 +370,11 @@ export default function CampaignVoiceOverviewPage() {
                                     stats.campaignBreakdown.map(c => (
                                         <tr key={c.campaignId} className="hover:bg-slate-50/50">
                                             <td className="px-4 py-3 font-semibold text-slate-900">
-                                                <CampaignBadge
+                                                <CampaignLabel
                                                     campaignId={c.campaignId === 'unknown' ? null : Number(c.campaignId)}
                                                     campaignName={c.campaignName}
+                                                    alias={c.campaignAlias}
+                                                    showUnassigned
                                                 />
                                             </td>
                                             <td className="px-4 py-3 text-center font-bold text-slate-800">
@@ -443,9 +449,11 @@ export default function CampaignVoiceOverviewPage() {
                                             className="hover:bg-slate-50/70 transition-colors cursor-pointer"
                                         >
                                             <td className="px-4 py-3">
-                                                <CampaignBadge
+                                                <CampaignLabel
                                                     campaignId={c.campaignId}
                                                     campaignName={c.campaignName}
+                                                    alias={c.campaignAlias}
+                                                    compact
                                                 />
                                             </td>
                                             <td className="px-4 py-3 font-bold text-slate-900">

@@ -8,12 +8,13 @@ import { Input } from "@/components/ui/input";
 import {
     ChevronLeft, UserPlus, Loader2, CheckCircle2, AlertTriangle, RefreshCw, Search,
 } from "lucide-react";
-import { CampaignBadge } from "@/components/dashboard/campaign-badge";
+import { CampaignLabel } from "@/components/dashboard/campaign-badge";
 import { SPLoader } from "@/components/sp-loader";
 
 interface CampaignSummary {
     campaignId: number | string;
     campaignName: string;
+    campaignAlias?: string | null;
     totalLeads: number;
 }
 
@@ -28,13 +29,58 @@ export default function AssignPersonPage() {
     const [names, setNames] = useState<Record<string, string>>({});
     const [rowStates, setRowStates] = useState<Record<string, RowState>>({});
     const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+    const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+    const showToast = (message: string, type: "success" | "error" = "success") => {
+        setToast({ message, type });
+        setTimeout(() => setToast(prev => (prev?.message === message ? null : prev)), 4000);
+    };
 
     const fetchCampaigns = async () => {
         setLoading(true);
         try {
-            const res = await fetch("/api/campaigns/dashboard");
-            const json = await res.json();
-            setCampaigns(json.campaigns || []);
+            const [dashRes, aliasRes] = await Promise.all([
+                fetch("/api/campaigns/dashboard"),
+                fetch("/api/campaigns/aliases"),
+            ]);
+            const dashJson = await dashRes.json().catch(() => ({}));
+            const aliasJson = await aliasRes.json().catch(() => ({}));
+
+            const aliasMap: Record<string, string> = aliasJson?.aliases || {};
+            const summaryList: CampaignSummary[] = dashJson.campaigns || [];
+            const summaryById = new Map(summaryList.map(c => [String(c.campaignId), c]));
+
+            // Merge Campaigns 1–10 (from /api/campaigns/aliases) with any additional campaigns from dashboard summary
+            const mergedMap = new Map<string, CampaignSummary>();
+            for (const c of aliasJson?.campaigns || []) {
+                const key = String(c.campaignId);
+                const dashMatch = summaryById.get(key);
+                mergedMap.set(key, {
+                    campaignId: c.campaignId,
+                    campaignName: dashMatch?.campaignName || c.campaignName || `ScalePods Internal Outreach ${c.campaignId}`,
+                    campaignAlias: c.alias || dashMatch?.campaignAlias || aliasMap[key] || null,
+                    totalLeads: dashMatch?.totalLeads ?? c.totalLeads ?? 0,
+                });
+            }
+            for (const s of summaryList) {
+                const key = String(s.campaignId);
+                if (!mergedMap.has(key)) {
+                    mergedMap.set(key, {
+                        ...s,
+                        campaignAlias: s.campaignAlias || aliasMap[key] || null,
+                    });
+                }
+            }
+
+            const finalList = Array.from(mergedMap.values()).sort((a, b) => Number(a.campaignId) - Number(b.campaignId));
+            setCampaigns(finalList);
+
+            // Pre-fill each row's input with its current saved alias
+            const prefilled: Record<string, string> = {};
+            for (const c of finalList) {
+                prefilled[String(c.campaignId)] = c.campaignAlias || "";
+            }
+            setNames(prefilled);
         } catch (err) {
             console.error("Failed to fetch campaigns:", err);
         } finally {
@@ -47,9 +93,13 @@ export default function AssignPersonPage() {
     }, []);
 
     const filteredCampaigns = useMemo(() => {
-        const q = searchQuery.toLowerCase();
+        const q = searchQuery.trim().toLowerCase();
         if (!q) return campaigns;
-        return campaigns.filter(c => c.campaignName.toLowerCase().includes(q) || String(c.campaignId).includes(q));
+        return campaigns.filter(c =>
+            c.campaignName.toLowerCase().includes(q) ||
+            String(c.campaignId).toLowerCase().includes(q) ||
+            (c.campaignAlias || "").toLowerCase().includes(q)
+        );
     }, [campaigns, searchQuery]);
 
     const handleAssign = async (campaign: CampaignSummary) => {
@@ -77,17 +127,23 @@ export default function AssignPersonPage() {
             const json = await res.json().catch(() => ({}));
 
             if (!res.ok || json?.success === false) {
+                const errMsg = json?.error || (Array.isArray(json?.errors) ? json.errors.join(", ") : "Failed to assign.");
                 setRowStates(prev => ({ ...prev, [key]: "error" }));
-                setRowErrors(prev => ({ ...prev, [key]: json?.error || (Array.isArray(json?.errors) ? json.errors.join(", ") : "Failed to assign.") }));
+                setRowErrors(prev => ({ ...prev, [key]: errMsg }));
+                showToast(errMsg, "error");
                 return;
             }
 
             setRowStates(prev => ({ ...prev, [key]: "success" }));
-            setNames(prev => ({ ...prev, [key]: "" }));
+            setCampaigns(prev => prev.map(c => (String(c.campaignId) === key ? { ...c, campaignAlias: person } : c)));
+            setNames(prev => ({ ...prev, [key]: person }));
+            showToast(`Campaign ${campaign.campaignId} alias updated to "${person}"`, "success");
         } catch (err: any) {
             console.error("Assign person failed:", err);
             setRowStates(prev => ({ ...prev, [key]: "error" }));
-            setRowErrors(prev => ({ ...prev, [key]: err.message || "Network error." }));
+            const errMsg = err.message || "Network error.";
+            setRowErrors(prev => ({ ...prev, [key]: errMsg }));
+            showToast(errMsg, "error");
         }
     };
 
@@ -149,15 +205,19 @@ export default function AssignPersonPage() {
                                             return (
                                                 <tr key={key} className="hover:bg-slate-50/80 transition-colors">
                                                     <td className="px-4 py-3">
-                                                        <CampaignBadge campaignId={campaign.campaignId} campaignName={campaign.campaignName} />
-                                                        <p className="text-xs font-semibold text-slate-900 mt-1">{campaign.campaignName}</p>
+                                                        <CampaignLabel
+                                                            campaignId={campaign.campaignId}
+                                                            campaignName={campaign.campaignName}
+                                                            alias={campaign.campaignAlias}
+                                                            showUnassigned
+                                                        />
                                                     </td>
                                                     <td className="px-4 py-3 text-center font-bold text-slate-700">{campaign.totalLeads.toLocaleString()}</td>
                                                     <td className="px-4 py-3">
                                                         <Input
                                                             className="h-9 max-w-xs bg-white"
-                                                            placeholder="Enter name..."
-                                                            value={names[key] || ""}
+                                                            placeholder="Enter alias / person name..."
+                                                            value={names[key] ?? ""}
                                                             onChange={(e) => setNames(prev => ({ ...prev, [key]: e.target.value }))}
                                                             onKeyDown={(e) => { if (e.key === "Enter") handleAssign(campaign); }}
                                                         />
@@ -188,6 +248,19 @@ export default function AssignPersonPage() {
                         </div>
                     </CardContent>
                 </Card>
+            {toast && (
+                <div
+                    role="status"
+                    className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl border shadow-lg flex items-center gap-2.5 text-xs font-semibold ${
+                        toast.type === "success"
+                            ? "bg-emerald-950 text-emerald-100 border-emerald-700"
+                            : "bg-rose-950 text-rose-100 border-rose-700"
+                    }`}
+                >
+                    {toast.type === "success" ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <AlertTriangle className="h-4 w-4 text-rose-400" />}
+                    <span>{toast.message}</span>
+                </div>
+            )}
         </div>
     );
 }

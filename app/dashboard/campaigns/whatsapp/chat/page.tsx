@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import { CampaignBadge } from "@/components/dashboard/campaign-badge";
+import { CampaignLabel } from "@/components/dashboard/campaign-badge";
 import { CampaignWhatsAppChatDetail } from "@/components/dashboard/campaign-whatsapp-chat-detail";
 import type { CampaignWaLead } from "@/lib/services/campaign-whatsapp";
 import { subDays, startOfDay, endOfDay } from "date-fns";
@@ -47,7 +47,7 @@ export default function CampaignWhatsAppChatPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const leadsPerPage = 10;
 
-    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string }[]>([]);
+    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string; alias?: string | null }[]>([]);
     const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
     const [replyStatusFilter, setReplyStatusFilter] = useState<string[]>([]);
 
@@ -62,6 +62,7 @@ export default function CampaignWhatsAppChatPage() {
                 setCampaignOptions((json.campaignOptions || []).map((c: any) => ({
                     id: String(c.id || c.campaign_id),
                     name: c.name || c.campaign_name || `Campaign ${c.id || c.campaign_id}`,
+                    alias: c.alias || null,
                 })));
             }
         } catch (e) {
@@ -229,12 +230,15 @@ export default function CampaignWhatsAppChatPage() {
                             {campaignOptions.map(c => (
                                 <DropdownMenuItem
                                     key={c.id}
-                                    className="text-xs cursor-pointer flex items-center justify-between"
+                                    className="text-xs cursor-pointer flex items-center justify-between gap-2"
                                     onClick={() => toggleCampaign(c.id)}
                                 >
-                                    <span className="truncate">{c.name}</span>
+                                    <div className="flex flex-col min-w-0">
+                                        <span className="truncate font-medium">{c.name}</span>
+                                        {c.alias && <span className="text-[10px] text-slate-400 truncate">Alias: {c.alias}</span>}
+                                    </div>
                                     {selectedCampaigns.includes(c.id) && (
-                                        <Badge className="h-4 px-1 text-[9px] bg-cyan-600">Active</Badge>
+                                        <Badge className="h-4 px-1 text-[9px] bg-cyan-600 shrink-0">Active</Badge>
                                     )}
                                 </DropdownMenuItem>
                             ))}
@@ -434,9 +438,11 @@ export default function CampaignWhatsAppChatPage() {
                                             </td>
 
                                             <td className="px-4 py-3">
-                                                <CampaignBadge
+                                                <CampaignLabel
                                                     campaignId={lead.campaignId}
                                                     campaignName={lead.campaignName}
+                                                    alias={lead.campaignAlias}
+                                                    compact
                                                 />
                                             </td>
 

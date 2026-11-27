@@ -21,18 +21,11 @@ import {
 
 const API_WEBHOOK_URL = "https://n8n.srv1010832.hstgr.cloud/webhook/whatsapp-campaign-api";
 
-export const CAMPAIGNS_METADATA = [
-  { id: 1, name: "Campaign 1 — Dubai HR SaaS & Recruitment Automation", key: "scalepods_hr_dubai" },
-  { id: 2, name: "Campaign 2 — US B2B Sales Pipeline & CRM Automation", key: "scalepods_b2b_us" },
-  { id: 3, name: "Campaign 3 — UK Operational & Call Automation", key: "scalepods_ops_uk" },
-  { id: 4, name: "Campaign 4 — Enterprise n8n Orchestration", key: "scalepods_enterprise_4" },
-  { id: 5, name: "Campaign 5 — US Commercial HVAC Dispatch AI", key: "scalepods_hvac_us" },
-  { id: 6, name: "Campaign 6 — Executive AI Consulting", key: "scalepods_advisory_6" },
-  { id: 7, name: "Campaign 7 — Australian Property Care & Strata", key: "scalepods_property_au" },
-  { id: 8, name: "Campaign 8 — Australian Retail & Logistics Inventory", key: "scalepods_retail_au" },
-  { id: 9, name: "Campaign 9 — Australian Legal & Advisory Practice Automation", key: "scalepods_advisory_au" },
-  { id: 10, name: "Campaign 10 — Australian Tech & Startup Scaleup", key: "scalepods_tech_au" },
-];
+interface DynamicCampaignOption {
+  id: number;
+  campaignName: string;
+  alias: string | null;
+}
 
 const PRESETS: Record<number, { label: string; text: string }> = {
   9: {
@@ -226,7 +219,16 @@ export interface WhatsAppCampaignStudioProps {
 
 export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampaignStudioProps) {
   const [campaignId, setCampaignId] = useState<number>(initialCampaignId);
-  const [campaignName, setCampaignName] = useState<string>("ScalePods Internal Outreach 9");
+  const [campaignName, setCampaignName] = useState<string>(`ScalePods Internal Outreach ${initialCampaignId}`);
+  const [campaignOptions, setCampaignOptions] = useState<DynamicCampaignOption[]>(() =>
+    Array.from({ length: 10 }, (_, idx) => ({
+      id: idx + 1,
+      campaignName: `ScalePods Internal Outreach ${idx + 1}`,
+      alias: null,
+    }))
+  );
+  const [aliasInput, setAliasInput] = useState<string>("");
+  const [savingAlias, setSavingAlias] = useState<boolean>(false);
   const [isEnabled, setIsEnabled] = useState<boolean>(false);
   const [totalLeads, setTotalLeads] = useState<number>(0);
   const [enrichedLeads, setEnrichedLeads] = useState<number>(0);
@@ -275,11 +277,39 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
     }
   }, [initialCampaignId]);
 
+  // Fetch dynamic campaign names & assigned_lead aliases for Campaigns 1–10
+  const fetchCampaignOptions = async () => {
+    try {
+      const res = await fetch("/api/campaigns/aliases");
+      const data = await res.json().catch(() => ({}));
+      if (Array.isArray(data.campaigns) && data.campaigns.length > 0) {
+        const opts: DynamicCampaignOption[] = data.campaigns.map((c: any) => ({
+          id: Number(c.id || c.campaignId),
+          campaignName: c.campaignName || `ScalePods Internal Outreach ${c.id || c.campaignId}`,
+          alias: c.alias || null,
+        }));
+        setCampaignOptions(opts);
+        const active = opts.find((o) => o.id === campaignId);
+        if (active) {
+          setAliasInput(active.alias || "");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load dynamic campaign aliases", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchCampaignOptions();
+  }, []);
+
   // Load Campaign Config on campaignId change
   const fetchCampaignConfig = async (id: number) => {
     setIsLoadingConfig(true);
     setSequence([]);
     setPreviewSource("placeholder");
+    const knownOption = campaignOptions.find((o) => o.id === id);
+    setAliasInput(knownOption?.alias || "");
     try {
       const resp = await fetch(API_WEBHOOK_URL, {
         method: "POST",
@@ -292,7 +322,11 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
       const data = await resp.json();
       if (data.success && data.campaign) {
         const loadedKb = data.campaign.knowledge_base || "";
-        setCampaignName(data.campaign.campaign_name || `Campaign ${id}`);
+        const resolvedName = data.campaign.campaign_name || `ScalePods Internal Outreach ${id}`;
+        setCampaignName(resolvedName);
+        setCampaignOptions((prev) =>
+          prev.map((opt) => (opt.id === id ? { ...opt, campaignName: resolvedName } : opt))
+        );
         setIsEnabled(Boolean(data.campaign.enabled));
         setKbText(loadedKb);
         setSystemPrompt(data.campaign.system_prompt || "");
@@ -315,6 +349,39 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
       setBannerMessage({ text: "Error connecting to campaign API.", type: "error" });
     } finally {
       setIsLoadingConfig(false);
+    }
+  };
+
+  const handleSaveAlias = async () => {
+    const trimmed = aliasInput.trim();
+    if (!trimmed) {
+      triggerToast("Enter a campaign alias before saving.", "error");
+      return;
+    }
+    setSavingAlias(true);
+    try {
+      const res = await fetch("/api/webhook/assign-person", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          campaign_id: campaignId,
+          person: trimmed,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.success === false) {
+        triggerToast(json?.error || "Failed to update campaign alias.", "error");
+        return;
+      }
+      setCampaignOptions((prev) =>
+        prev.map((opt) => (opt.id === campaignId ? { ...opt, alias: trimmed } : opt))
+      );
+      triggerToast(`Campaign ${campaignId} alias updated to "${trimmed}"`, "success");
+    } catch (err) {
+      console.error("Failed to save campaign alias", err);
+      triggerToast("Network error saving campaign alias.", "error");
+    } finally {
+      setSavingAlias(false);
     }
   };
 
@@ -556,12 +623,44 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
               onChange={(e) => setCampaignId(Number(e.target.value))}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 transition"
             >
-              {CAMPAIGNS_METADATA.map((c) => (
+              {campaignOptions.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
+                  {`Campaign ${c.id} — ${c.alias || c.campaignName}`}
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Inline Campaign Alias / Rename */}
+          <div>
+            <label className="block text-[11px] font-medium text-slate-400 mb-1">
+              Campaign Alias (assigned_lead):
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={aliasInput}
+                onChange={(e) => setAliasInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveAlias();
+                }}
+                placeholder="e.g. Palki HR UK, Adnan $10..."
+                className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+              />
+              <button
+                type="button"
+                onClick={handleSaveAlias}
+                disabled={savingAlias || !aliasInput.trim()}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-emerald-300 border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1"
+              >
+                {savingAlias ? (
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Check className="h-3 w-3" />
+                )}
+                Save Alias
+              </button>
+            </div>
           </div>
 
           {/* Metric Badges */}

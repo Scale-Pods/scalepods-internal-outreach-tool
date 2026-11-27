@@ -18,7 +18,7 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { SPLoader } from "@/components/sp-loader";
-import { CampaignBadge, campaignColorClasses } from "@/components/dashboard/campaign-badge";
+import { CampaignLabel, campaignColorClasses } from "@/components/dashboard/campaign-badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useCampaignDateRange } from "@/context/CampaignDateContext";
 import {
@@ -66,7 +66,7 @@ function LeadsPageInner() {
 
     // All known campaigns for the filter dropdown — lightweight (comes from
     // the dashboard aggregate endpoint), so it doesn't need the leads list.
-    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string }[]>([]);
+    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string; alias?: string | null }[]>([]);
 
     const fetchLeads = useCallback(async () => {
         setLoading(true);
@@ -99,7 +99,11 @@ function LeadsPageInner() {
         if (fromIso) params.set('from', fromIso);
         if (toIso) params.set('to', toIso);
         fetch(`/api/campaigns/dashboard?${params.toString()}`).then(r => r.json()).then(json => {
-            setCampaignOptions((json.campaigns || []).map((c: any) => ({ id: String(c.campaignId), name: c.campaignName })));
+            setCampaignOptions((json.campaigns || []).map((c: any) => ({
+                id: String(c.campaignId),
+                name: c.campaignName,
+                alias: c.campaignAlias || null,
+            })));
         }).catch(err => console.error("Failed to fetch campaign options:", err));
     }, [fromIso, toIso]);
 
@@ -219,8 +223,12 @@ function LeadsPageInner() {
                         {campaignOptions.length === 0 ? (
                             <DropdownMenuItem disabled>No campaigns found</DropdownMenuItem>
                         ) : campaignOptions.map(opt => (
-                            <DropdownMenuItem key={opt.id} onClick={() => toggleCampaignFilter(opt.id)}>
-                                {opt.name} {campaignFilter.includes(opt.id) && "✓"}
+                            <DropdownMenuItem key={opt.id} onClick={() => toggleCampaignFilter(opt.id)} className="flex items-center justify-between gap-2">
+                                <div className="flex flex-col min-w-0">
+                                    <span className="truncate font-medium">{opt.name}</span>
+                                    {opt.alias && <span className="text-[10px] text-slate-400 truncate">Alias: {opt.alias}</span>}
+                                </div>
+                                {campaignFilter.includes(opt.id) && <span className="shrink-0">✓</span>}
                             </DropdownMenuItem>
                         ))}
                     </DropdownMenuContent>
@@ -303,7 +311,12 @@ function LeadsPageInner() {
                                                     />
                                                 </td>
                                                 <td className="px-3 py-2">
-                                                    <CampaignBadge campaignId={lead.campaignId} campaignName={lead.campaignName} />
+                                                    <CampaignLabel
+                                                        campaignId={lead.campaignId}
+                                                        campaignName={lead.campaignName}
+                                                        alias={lead.campaignAlias ?? lead.assignedLead}
+                                                        compact
+                                                    />
                                                 </td>
                                                 <td className="px-3 py-2">
                                                     {lead.assignedLead ? (
@@ -436,7 +449,12 @@ function LeadDetail({ leadId }: { leadId: string }) {
                     <h2 className="text-xl font-bold text-slate-900">{lead.fullName}</h2>
                     <p className="text-sm text-slate-500">{lead.designation ? `${lead.designation} @ ` : ""}{lead.companyName || "—"}</p>
                 </div>
-                <CampaignBadge campaignId={lead.campaignId} campaignName={lead.campaignName} />
+                <CampaignLabel
+                    campaignId={lead.campaignId}
+                    campaignName={lead.campaignName}
+                    alias={lead.campaignAlias ?? lead.assignedLead}
+                    showUnassigned
+                />
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-sm">

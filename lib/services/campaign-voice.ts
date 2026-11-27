@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { campaignColor, CampaignColor } from '@/lib/services/campaigns';
+import { campaignColor, getCampaignAliasMap, resolveCampaignAliasFromMap, CampaignColor } from '@/lib/services/campaigns';
 import { formatCampaignName, resolveCampaignInfo, parseSafeTimestamp } from '@/lib/services/campaign-whatsapp';
 
 // All campaign-module voice data is sourced exclusively from vapi_call_logs
@@ -32,6 +32,7 @@ export interface CampaignVoiceCall {
     campaignId: number | null;
     campaignKey: string | null;
     campaignName: string;
+    campaignAlias?: string | null;
     campaignColor: CampaignColor | 'slate';
     callDate: string | null;
     durationSeconds: number;
@@ -71,6 +72,7 @@ export interface CampaignVoiceOverviewStats {
     campaignBreakdown: {
         campaignId: string;
         campaignName: string;
+        campaignAlias?: string | null;
         campaignColor: CampaignColor | 'slate';
         totalCalls: number;
         uniqueLeads: number;
@@ -228,29 +230,32 @@ async function fetchSarvamCallsWithAttribution(filters: Pick<CampaignVoiceFilter
     });
 
     const leadByPhone = new Map<string, any>();
-    if (phoneDigitsSet.size > 0) {
-        const orClauses = Array.from(phoneDigitsSet)
-            .map(d => [`mobile_number.ilike.%${d}`, `mobile_number_2.ilike.%${d}`, `company_phone.ilike.%${d}`].join(','))
-            .join(',');
+    const [leadLookupResult, aliasMap] = await Promise.all([
+        phoneDigitsSet.size > 0
+            ? supabaseAdmin
+                .from('outreach_leads')
+                .select('id, full_name, first_name, last_name, mobile_number, mobile_number_2, company_phone, company_name, campaign_id, campaign_key, assigned_lead')
+                .or(
+                    Array.from(phoneDigitsSet)
+                        .map(d => [`mobile_number.ilike.%${d}`, `mobile_number_2.ilike.%${d}`, `company_phone.ilike.%${d}`].join(','))
+                        .join(',')
+                )
+                .limit(5000)
+            : Promise.resolve({ data: [], error: null }),
+        getCampaignAliasMap(),
+    ]);
 
-        const { data: leadRows, error: leadErr } = await supabaseAdmin
-            .from('outreach_leads')
-            .select('id, full_name, first_name, last_name, mobile_number, mobile_number_2, company_phone, company_name, campaign_id, campaign_key')
-            .or(orClauses)
-            .limit(5000);
-
-        if (leadErr) {
-            console.error('[campaign-voice] outreach_leads attribution lookup error:', leadErr);
-        } else {
-            (leadRows || []).forEach(l => {
-                [l.mobile_number, l.mobile_number_2, l.company_phone].forEach(p => {
-                    const digits = last10Digits(p);
-                    if (digits.length >= 7 && phoneDigitsSet.has(digits) && !leadByPhone.has(digits)) {
-                        leadByPhone.set(digits, l);
-                    }
-                });
+    if (leadLookupResult.error) {
+        console.error('[campaign-voice] outreach_leads attribution lookup error:', leadLookupResult.error);
+    } else {
+        (leadLookupResult.data || []).forEach((l: any) => {
+            [l.mobile_number, l.mobile_number_2, l.company_phone].forEach(p => {
+                const digits = last10Digits(p);
+                if (digits.length >= 7 && phoneDigitsSet.has(digits) && !leadByPhone.has(digits)) {
+                    leadByPhone.set(digits, l);
+                }
             });
-        }
+        });
     }
 
     // Rank calls to the same phone number chronologically to derive a "touch" number (1/2/3+).
@@ -264,16 +269,17 @@ async function fetchSarvamCallsWithAttribution(filters: Pick<CampaignVoiceFilter
         touchCounters.set(digits, touchIndex);
         const callNumber = (Math.min(touchIndex, 3) as 1 | 2 | 3);
 
-        return mapVapiRowToCall(r, lead, callNumber);
+        return mapVapiRowToCall(r, lead, callNumber, aliasMap);
     }).sort((a, b) => parseSafeTimestamp(b.callDate) - parseSafeTimestamp(a.callDate));
 }
 
 /** Maps a single vapi_call_logs row (+ its resolved outreach_leads attribution, if any)
  *  into the shared CampaignVoiceCall shape. Used by both the bulk fetch above and the
  *  targeted single-lead lookup (getCampaignVoiceCallByLeadId) below. */
-function mapVapiRowToCall(r: any, lead: any | undefined, callNumber: 1 | 2 | 3): CampaignVoiceCall {
+function mapVapiRowToCall(r: any, lead: any | undefined, callNumber: 1 | 2 | 3, aliasMap: Record<string, string> = {}): CampaignVoiceCall {
     const rawCampaignId = lead?.campaign_id !== undefined && lead?.campaign_id !== null ? Number(lead.campaign_id) : null;
     const { campaignId, campaignKey, campaignName, color } = resolveCampaignInfo(rawCampaignId, lead?.campaign_key || null);
+    const campaignAlias = resolveCampaignAliasFromMap(campaignId, campaignKey, aliasMap, lead?.assigned_lead);
 
     const durationSeconds = r.duration_seconds ? Math.round(Number(r.duration_seconds)) : 0;
     const { category, score, raw } = normalizeVoiceSentiment(null, r.summary);
@@ -291,6 +297,7 @@ function mapVapiRowToCall(r: any, lead: any | undefined, callNumber: 1 | 2 | 3):
         campaignId,
         campaignKey,
         campaignName,
+        campaignAlias,
         campaignColor: color,
         callDate: r.started_at || r.created_at,
         durationSeconds,
@@ -341,11 +348,14 @@ export async function getCampaignVoiceCallByLeadId(leadId: string): Promise<{
     call: CampaignVoiceCall | null;
     calls: CampaignVoiceCall[];
 }> {
-    const { data: lead, error: leadErr } = await supabaseAdmin
-        .from('outreach_leads')
-        .select('id, full_name, first_name, last_name, mobile_number, mobile_number_2, company_phone, company_name, campaign_id, campaign_key')
-        .eq('id', leadId)
-        .maybeSingle();
+    const [{ data: lead, error: leadErr }, aliasMap] = await Promise.all([
+        supabaseAdmin
+            .from('outreach_leads')
+            .select('id, full_name, first_name, last_name, mobile_number, mobile_number_2, company_phone, company_name, campaign_id, campaign_key, assigned_lead')
+            .eq('id', leadId)
+            .maybeSingle(),
+        getCampaignAliasMap(),
+    ]);
 
     if (leadErr) {
         console.error('[campaign-voice] getCampaignVoiceCallByLeadId lead lookup error:', leadErr);
@@ -387,7 +397,7 @@ export async function getCampaignVoiceCallByLeadId(leadId: string): Promise<{
     }
 
     const calls = (rows || [])
-        .map((r, idx) => mapVapiRowToCall(r, lead, (Math.min(idx + 1, 3) as 1 | 2 | 3)))
+        .map((r, idx) => mapVapiRowToCall(r, lead, (Math.min(idx + 1, 3) as 1 | 2 | 3), aliasMap))
         .sort((a, b) => parseSafeTimestamp(b.callDate) - parseSafeTimestamp(a.callDate));
 
     return { lead: leadSummary, call: calls[0] || null, calls };
@@ -466,6 +476,7 @@ function computeOverviewStats(filtered: CampaignVoiceCall[]): CampaignVoiceOverv
     const campaignMap: Record<string, {
         campaignId: string;
         campaignName: string;
+        campaignAlias?: string | null;
         campaignColor: CampaignColor | 'slate';
         totalCalls: number;
         leadsSet: Set<string>;
@@ -510,6 +521,7 @@ function computeOverviewStats(filtered: CampaignVoiceCall[]): CampaignVoiceOverv
             campaignMap[cKey] = {
                 campaignId: cKey,
                 campaignName: c.campaignName,
+                campaignAlias: c.campaignAlias ?? null,
                 campaignColor: c.campaignColor,
                 totalCalls: 0,
                 leadsSet: new Set(),
@@ -517,6 +529,8 @@ function computeOverviewStats(filtered: CampaignVoiceCall[]): CampaignVoiceOverv
                 positiveCalls: 0,
                 totalDurationSeconds: 0,
             };
+        } else if (!campaignMap[cKey].campaignAlias && c.campaignAlias) {
+            campaignMap[cKey].campaignAlias = c.campaignAlias;
         }
         campaignMap[cKey].totalCalls++;
         campaignMap[cKey].leadsSet.add(c.leadId || c.phone);
@@ -558,6 +572,7 @@ function computeOverviewStats(filtered: CampaignVoiceCall[]): CampaignVoiceOverv
     const campaignBreakdown = Object.values(campaignMap).map(c => ({
         campaignId: c.campaignId,
         campaignName: c.campaignName,
+        campaignAlias: c.campaignAlias ?? null,
         campaignColor: c.campaignColor,
         totalCalls: c.totalCalls,
         uniqueLeads: c.leadsSet.size,

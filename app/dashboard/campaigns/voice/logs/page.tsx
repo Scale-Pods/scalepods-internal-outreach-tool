@@ -31,7 +31,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CampaignBadge } from "@/components/dashboard/campaign-badge";
+import { CampaignLabel } from "@/components/dashboard/campaign-badge";
 import { CallDetailsModal } from "@/components/voice/call-details-modal";
 import { formatDuration } from "@/lib/utils";
 import type { CampaignVoiceCall } from "@/lib/services/campaign-voice";
@@ -51,7 +51,7 @@ export default function CampaignVoiceCallLogsPage() {
     const [searchInput, setSearchInput] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
 
-    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string }[]>([]);
+    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string; alias?: string | null }[]>([]);
     const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
     const [callSlotFilter, setCallSlotFilter] = useState<string>("all"); // 'all' | '1' | '2' | '3'
     const [sentimentFilter, setSentimentFilter] = useState<string>("all"); // 'all' | 'positive' | 'negative' | 'neutral'
@@ -69,6 +69,7 @@ export default function CampaignVoiceCallLogsPage() {
                 setCampaignOptions((json.campaignOptions || []).map((c: any) => ({
                     id: String(c.id || c.campaign_id),
                     name: c.name || c.campaign_name || `Campaign ${c.id || c.campaign_id}`,
+                    alias: c.alias || null,
                 })));
             }
         } catch (e) {
@@ -217,12 +218,15 @@ export default function CampaignVoiceCallLogsPage() {
                             {campaignOptions.map(c => (
                                 <DropdownMenuItem
                                     key={c.id}
-                                    className="text-xs cursor-pointer flex items-center justify-between"
+                                    className="text-xs cursor-pointer flex items-center justify-between gap-2"
                                     onClick={() => toggleCampaign(c.id)}
                                 >
-                                    <span className="truncate">{c.name}</span>
+                                    <div className="flex flex-col min-w-0">
+                                        <span className="truncate font-medium">{c.name}</span>
+                                        {c.alias && <span className="text-[10px] text-slate-400 truncate">Alias: {c.alias}</span>}
+                                    </div>
                                     {selectedCampaigns.includes(c.id) && (
-                                        <Badge className="h-4 px-1 text-[9px] bg-cyan-600">Active</Badge>
+                                        <Badge className="h-4 px-1 text-[9px] bg-cyan-600 shrink-0">Active</Badge>
                                     )}
                                 </DropdownMenuItem>
                             ))}
@@ -421,9 +425,11 @@ export default function CampaignVoiceCallLogsPage() {
                                         className="hover:bg-slate-50/70 transition-colors cursor-pointer"
                                     >
                                         <td className="px-4 py-3">
-                                            <CampaignBadge
+                                            <CampaignLabel
                                                 campaignId={call.campaignId}
                                                 campaignName={call.campaignName}
+                                                alias={call.campaignAlias}
+                                                compact
                                             />
                                         </td>
 

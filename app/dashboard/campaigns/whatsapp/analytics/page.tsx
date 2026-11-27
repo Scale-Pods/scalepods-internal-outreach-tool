@@ -49,7 +49,7 @@ export default function CampaignWhatsAppAnalyticsPage() {
     const [trendData, setTrendData] = useState<{ date: string; sent: number; replies: number }[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string }[]>([]);
+    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string; alias?: string | null }[]>([]);
     const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
 
     const fetchCampaignOptions = useCallback(async () => {
@@ -58,8 +58,9 @@ export default function CampaignWhatsAppAnalyticsPage() {
             if (res.ok) {
                 const json = await res.json();
                 setCampaignOptions((json.campaignOptions || []).map((c: any) => ({
-                    id: String(c.campaign_id),
-                    name: c.campaign_name,
+                    id: String(c.id || c.campaign_id),
+                    name: c.name || c.campaign_name || `Campaign ${c.id || c.campaign_id}`,
+                    alias: c.alias || null,
                 })));
             }
         } catch (e) {
@@ -123,7 +124,7 @@ export default function CampaignWhatsAppAnalyticsPage() {
 
     const campaignChartData = useMemo(() => {
         return (stats?.campaignBreakdown || []).map(c => ({
-            name: c.campaignName,
+            name: c.campaignAlias ? `${c.campaignName} (${c.campaignAlias})` : c.campaignName,
             sent: c.messagesSent,
             replies: c.totalReplies,
             positive: c.positiveLeads,
@@ -174,12 +175,15 @@ export default function CampaignWhatsAppAnalyticsPage() {
                             {campaignOptions.map(c => (
                                 <DropdownMenuItem
                                     key={c.id}
-                                    className="text-xs cursor-pointer flex items-center justify-between"
+                                    className="text-xs cursor-pointer flex items-center justify-between gap-2"
                                     onClick={() => toggleCampaign(c.id)}
                                 >
-                                    <span className="truncate">{c.name}</span>
+                                    <div className="flex flex-col min-w-0">
+                                        <span className="truncate font-medium">{c.name}</span>
+                                        {c.alias && <span className="text-[10px] text-slate-400 truncate">Alias: {c.alias}</span>}
+                                    </div>
                                     {selectedCampaigns.includes(c.id) && (
-                                        <Badge className="h-4 px-1 text-[9px] bg-cyan-600">Active</Badge>
+                                        <Badge className="h-4 px-1 text-[9px] bg-cyan-600 shrink-0">Active</Badge>
                                     )}
                                 </DropdownMenuItem>
                             ))}
