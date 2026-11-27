@@ -167,6 +167,20 @@ function parseJsonField<T>(val: any): T | null {
     return val as T;
 }
 
+function resolveCanonicalCampaignName(
+    campaignId: number | string | null | undefined,
+    campaignKey?: string | null,
+    fallbackName?: string | null
+): string {
+    if (campaignId !== null && campaignId !== undefined && String(campaignId).trim() !== '') {
+        return `ScalePods Internal Outreach ${campaignId}`;
+    }
+    if (campaignKey) {
+        return campaignKey.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+    }
+    return fallbackName || 'General Campaign';
+}
+
 function normalizeLead(row: any): OutreachLead {
     const emailSteps: (string | null)[] = [];
     const emailStepStatuses: (EmailStatusEntry | null)[] = [];
@@ -195,10 +209,11 @@ function normalizeLead(row: any): OutreachLead {
 
         campaignId: row.campaign_id,
         campaignKey: row.campaign_key,
-        campaignName: emailStepStatuses.find(s => s?.campaign_name)?.campaign_name
-            ?? repliesRaw?.[0]?.campaign_name
-            ?? (row.campaign_key ? row.campaign_key.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : null)
-            ?? (row.campaign_id ? `Campaign ${row.campaign_id}` : null),
+        campaignName: resolveCanonicalCampaignName(
+            row.campaign_id,
+            row.campaign_key,
+            emailStepStatuses.find(s => s?.campaign_name)?.campaign_name ?? repliesRaw?.[0]?.campaign_name ?? null
+        ),
         campaignAlias: (row.assigned_lead && String(row.assigned_lead).trim()) || null,
         assignedLead: row.assigned_lead || null,
         isEnriched: Boolean(row.is_enriched),
@@ -247,9 +262,7 @@ function normalizeLeadListItem(row: any): OutreachLeadListItem {
         }
     }
 
-    const campaignName = row.campaign_name
-        || (row.campaign_key ? row.campaign_key.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : null)
-        || (row.campaign_id ? `Campaign ${row.campaign_id}` : 'General Campaign');
+    const campaignName = resolveCanonicalCampaignName(row.campaign_id, row.campaign_key, row.campaign_name);
 
     return {
         id: row.id,
@@ -914,7 +927,10 @@ export async function getCampaignsSummary(): Promise<CampaignSummary[]> {
     if (error) throw new Error(error.message);
     return (data || []).map((row: any) => ({
         campaignId: row.campaign_id,
-        campaignName: row.campaign_name,
+        campaignName:
+            row.campaign_id !== null && row.campaign_id !== undefined && String(row.campaign_id).trim() !== ''
+                ? `ScalePods Internal Outreach ${row.campaign_id}`
+                : row.campaign_name,
         campaignAlias: resolveCampaignAliasFromMap(row.campaign_id, null, aliasMap),
         color: campaignColor(row.campaign_id),
         totalLeads: row.total_leads ?? 0,
@@ -1039,7 +1055,7 @@ export async function getChannelCampaignOptions(channel: OutreachChannel): Promi
     if (error) throw new Error(error.message);
     return (data || []).map((row: any) => ({
         id: row.campaign_id,
-        name: row.campaign_name,
+        name: resolveCanonicalCampaignName(row.campaign_id, null, row.campaign_name),
         alias: resolveCampaignAliasFromMap(row.campaign_id, null, aliasMap),
     }));
 }

@@ -57,7 +57,9 @@ export default function AssignPersonPage() {
                 const dashMatch = summaryById.get(key);
                 mergedMap.set(key, {
                     campaignId: c.campaignId,
-                    campaignName: dashMatch?.campaignName || c.campaignName || `ScalePods Internal Outreach ${c.campaignId}`,
+                    campaignName: c.campaignId !== null && c.campaignId !== undefined
+                        ? `ScalePods Internal Outreach ${c.campaignId}`
+                        : (dashMatch?.campaignName || c.campaignName),
                     campaignAlias: c.alias || dashMatch?.campaignAlias || aliasMap[key] || null,
                     totalLeads: dashMatch?.totalLeads ?? c.totalLeads ?? 0,
                 });
@@ -67,6 +69,9 @@ export default function AssignPersonPage() {
                 if (!mergedMap.has(key)) {
                     mergedMap.set(key, {
                         ...s,
+                        campaignName: s.campaignId !== null && s.campaignId !== undefined
+                            ? `ScalePods Internal Outreach ${s.campaignId}`
+                            : s.campaignName,
                         campaignAlias: s.campaignAlias || aliasMap[key] || null,
                     });
                 }

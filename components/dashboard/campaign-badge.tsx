@@ -33,9 +33,15 @@ export function CampaignBadge({ campaignId, campaignName, className = "" }: {
     className?: string;
 }) {
     const color = campaignColor(campaignId);
+    const hasValidId = campaignId !== null && campaignId !== undefined && String(campaignId).trim() !== "" && String(campaignId) !== "unknown";
+    const resolvedName =
+        hasValidId && (!campaignName || /^ScalePods Internal Outreach\s+\d+$/i.test(campaignName.trim()))
+            ? `ScalePods Internal Outreach ${campaignId}`
+            : (campaignName || `Campaign ${campaignId ?? '—'}`);
+
     return (
         <Badge variant="outline" className={`text-[9px] font-bold px-1.5 py-0.5 whitespace-nowrap ${campaignColorClasses(color)} ${className}`}>
-            {campaignName || `Campaign ${campaignId ?? '—'}`}
+            {resolvedName}
         </Badge>
     );
 }

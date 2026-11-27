@@ -101,7 +101,9 @@ function LeadsPageInner() {
         fetch(`/api/campaigns/dashboard?${params.toString()}`).then(r => r.json()).then(json => {
             setCampaignOptions((json.campaigns || []).map((c: any) => ({
                 id: String(c.campaignId),
-                name: c.campaignName,
+                name: c.campaignId !== null && c.campaignId !== undefined
+                    ? `ScalePods Internal Outreach ${c.campaignId}`
+                    : c.campaignName,
                 alias: c.campaignAlias || null,
             })));
         }).catch(err => console.error("Failed to fetch campaign options:", err));

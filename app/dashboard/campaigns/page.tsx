@@ -213,6 +213,10 @@ function MetricCard({ title, value, subtitle, icon, iconBg, onClick }: {
 
 function CampaignCard({ campaign, onClick }: { campaign: CampaignSummary; onClick: () => void }) {
     const replyRate = campaign.emailSent > 0 ? ((campaign.emailReplied / campaign.emailSent) * 100).toFixed(1) : "0.0";
+    const displayName =
+        campaign.campaignId !== null && campaign.campaignId !== undefined && String(campaign.campaignId).trim() !== ""
+            ? `ScalePods Internal Outreach ${campaign.campaignId}`
+            : campaign.campaignName;
 
     return (
         <Card
@@ -224,13 +228,13 @@ function CampaignCard({ campaign, onClick }: { campaign: CampaignSummary; onClic
                     <div className="min-w-0 w-full">
                         <CampaignLabel
                             campaignId={campaign.campaignId}
-                            campaignName={campaign.campaignName}
+                            campaignName={displayName}
                             alias={campaign.campaignAlias}
                             showUnassigned
                             badgeClassName="mb-0.5"
                             className="mb-1.5"
                         />
-                        <p className="text-xl font-bold text-slate-900 truncate">{campaign.campaignName}</p>
+                        <p className="text-xl font-bold text-slate-900 truncate">{displayName}</p>
                     </div>
                 </div>
 
