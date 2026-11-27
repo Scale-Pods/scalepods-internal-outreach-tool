@@ -15,7 +15,7 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { SPLoader } from "@/components/sp-loader";
-import { CampaignLabel, campaignColorClasses } from "@/components/dashboard/campaign-badge";
+import { CampaignLabel, InstantlyStatusBadge, campaignColorClasses } from "@/components/dashboard/campaign-badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useCampaignDateRange } from "@/context/CampaignDateContext";
 import {
@@ -47,7 +47,13 @@ export default function CampaignEmailPage() {
     const [leads, setLeads] = useState<OutreachLeadListItem[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [stats, setStats] = useState<ChannelStats | null>(null);
-    const [campaignOptions, setCampaignOptions] = useState<{ id: string; name: string; alias?: string | null }[]>([]);
+    const [campaignOptions, setCampaignOptions] = useState<{
+        id: string;
+        name: string;
+        alias?: string | null;
+        instantlyStatus?: string | null;
+        instantlyCampaignId?: string | null;
+    }[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchInput, setSearchInput] = useState("");
     const searchQuery = useDebouncedValue(searchInput, 350);
@@ -140,6 +146,35 @@ export default function CampaignEmailPage() {
                 <StatBox label="Bounced" value={stats?.bounced ?? 0} icon={AlertCircle} color="amber" />
             </div>
 
+            {campaignOptions.some(opt => opt.instantlyStatus !== null && opt.instantlyStatus !== undefined) && (
+                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
+                        Instantly Status:
+                    </span>
+                    {campaignOptions.map(opt => {
+                        const isSelected = campaignFilter.includes(opt.id);
+                        return (
+                            <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => toggleCampaignFilter(opt.id)}
+                                className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] transition-colors shrink-0 ${
+                                    isSelected
+                                        ? "bg-blue-50 border-blue-300 text-blue-800"
+                                        : "bg-white border-border text-slate-700 hover:bg-slate-50"
+                                }`}
+                                title={`${opt.name}${opt.alias ? ` (${opt.alias})` : ""}`}
+                            >
+                                <span className="font-semibold">
+                                    #{opt.id}{opt.alias ? ` · ${opt.alias}` : ""}
+                                </span>
+                                <InstantlyStatusBadge status={opt.instantlyStatus} compact />
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
                 <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-[200px]">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
@@ -152,14 +187,17 @@ export default function CampaignEmailPage() {
                             {campaignFilter.length > 0 ? `Campaign (${campaignFilter.length})` : 'Campaign'}
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuContent align="end" className="w-[calc(100vw-2rem)] sm:w-[370px] max-h-80 overflow-y-auto">
                         {campaignOptions.map(opt => (
-                            <DropdownMenuItem key={opt.id} onClick={() => toggleCampaignFilter(opt.id)} className="flex items-center justify-between gap-2">
-                                <div className="flex flex-col min-w-0">
+                            <DropdownMenuItem key={opt.id} onClick={() => toggleCampaignFilter(opt.id)} className="flex items-center justify-between gap-2.5">
+                                <div className="flex flex-col min-w-0 flex-1">
                                     <span className="truncate font-medium">{opt.name}</span>
                                     {opt.alias && <span className="text-[10px] text-slate-400 truncate">Alias: {opt.alias}</span>}
                                 </div>
-                                {campaignFilter.includes(opt.id) && <span className="shrink-0">✓</span>}
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                    <InstantlyStatusBadge status={opt.instantlyStatus} compact />
+                                    {campaignFilter.includes(opt.id) && <span>✓</span>}
+                                </div>
                             </DropdownMenuItem>
                         ))}
                     </DropdownMenuContent>
@@ -266,7 +304,7 @@ export default function CampaignEmailPage() {
             <Dialog open={!!selectedLeadId} onOpenChange={(open) => !open && setSelectedLeadId(null)}>
                 <DialogContent className="max-w-3xl max-h-[88dvh] overflow-y-auto p-4 sm:p-6">
                     <DialogHeader className="sr-only"><DialogTitle>Email Detail</DialogTitle></DialogHeader>
-                    {selectedLeadId && <EmailDetail leadId={selectedLeadId} />}
+                    {selectedLeadId && <EmailDetail leadId={selectedLeadId} campaignOptions={campaignOptions} />}
                 </DialogContent>
             </Dialog>
         </div>
@@ -283,7 +321,13 @@ function sanitizeEmailHtml(html: string): string {
         .replace(/<a\b([^>]*?)>/gi, '<a $1 target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">');
 }
 
-function EmailDetail({ leadId }: { leadId: string }) {
+function EmailDetail({
+    leadId,
+    campaignOptions,
+}: {
+    leadId: string;
+    campaignOptions: { id: string; instantlyStatus?: string | null }[];
+}) {
     const [lead, setLead] = useState<OutreachLead | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -302,6 +346,8 @@ function EmailDetail({ leadId }: { leadId: string }) {
         return <div className="py-16 text-center text-sm text-slate-400">Loading lead…</div>;
     }
 
+    const instantlyStatus = campaignOptions.find(opt => String(opt.id) === String(lead.campaignId))?.instantlyStatus;
+
     const visibleSteps = Array.from({ length: Math.max(lead.emailStepStatuses.length, lead.emailSteps.length) }, (_, idx) => ({
         idx,
         step: lead.emailStepStatuses[idx] || null,
@@ -315,12 +361,15 @@ function EmailDetail({ leadId }: { leadId: string }) {
                     <h2 className="text-lg sm:text-xl font-bold text-slate-900 break-words">{lead.fullName}</h2>
                     <p className="text-xs sm:text-sm text-slate-500 break-all">{lead.email}</p>
                 </div>
-                <CampaignLabel
-                    campaignId={lead.campaignId}
-                    campaignName={lead.campaignName}
-                    alias={lead.campaignAlias ?? lead.assignedLead}
-                    showUnassigned
-                />
+                <div className="flex flex-wrap items-start sm:items-end sm:flex-col gap-1.5">
+                    <CampaignLabel
+                        campaignId={lead.campaignId}
+                        campaignName={lead.campaignName}
+                        alias={lead.campaignAlias ?? lead.assignedLead}
+                        showUnassigned
+                    />
+                    <InstantlyStatusBadge status={instantlyStatus} />
+                </div>
             </div>
 
             {lead.emailReplies.length > 0 && (

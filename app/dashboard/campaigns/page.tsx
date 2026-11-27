@@ -9,7 +9,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SPLoader } from "@/components/sp-loader";
-import { CampaignLabel, campaignColorClasses } from "@/components/dashboard/campaign-badge";
+import { CampaignLabel, InstantlyStatusBadge, campaignColorClasses } from "@/components/dashboard/campaign-badge";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { useCampaignDateRange } from "@/context/CampaignDateContext";
 import type { CampaignColor } from "@/lib/services/campaigns";
@@ -18,6 +18,8 @@ interface CampaignSummary {
     campaignId: number | string;
     campaignName: string;
     campaignAlias?: string | null;
+    instantlyStatus?: string | null;
+    instantlyCampaignId?: string | null;
     color: CampaignColor;
     totalLeads: number;
     emailSent: number;
@@ -226,16 +228,18 @@ function CampaignCard({ campaign, onClick }: { campaign: CampaignSummary; onClic
             onClick={onClick}
         >
             <CardContent className="p-5 bg-white">
-                <div className="flex items-start justify-between mb-4">
-                    <div className="min-w-0 w-full">
-                        <CampaignLabel
-                            campaignId={campaign.campaignId}
-                            campaignName={displayName}
-                            alias={campaign.campaignAlias}
-                            showUnassigned
-                            badgeClassName="mb-0.5"
-                            className="mb-1.5"
-                        />
+                <div className="flex items-start justify-between gap-2 mb-4">
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                            <CampaignLabel
+                                campaignId={campaign.campaignId}
+                                campaignName={displayName}
+                                alias={campaign.campaignAlias}
+                                showUnassigned
+                                badgeClassName="mb-0.5"
+                            />
+                            <InstantlyStatusBadge status={campaign.instantlyStatus} className="shrink-0" />
+                        </div>
                         <p className="text-xl font-bold text-slate-900 truncate">{displayName}</p>
                     </div>
                 </div>

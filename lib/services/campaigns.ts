@@ -18,6 +18,31 @@ export function campaignColor(campaignId: number | string | null | undefined): C
     return CAMPAIGN_COLORS[hash % CAMPAIGN_COLORS.length];
 }
 
+export function getInstantlyStatusBadge(status: string | number | null | undefined) {
+    switch (String(status ?? '').trim()) {
+        case '1':
+            return { label: 'Active', color: 'emerald' as const };
+        case '2':
+            return { label: 'Paused', color: 'amber' as const };
+        case '0':
+            return { label: 'Inactive (Draft)', color: 'slate' as const };
+        case '3':
+            return { label: 'Completed', color: 'blue' as const };
+        case '-1':
+        case '-2':
+        case '-99':
+            return { label: 'Bounce Protect / Error', color: 'red' as const };
+        default:
+            return { label: 'Unknown', color: 'slate' as const };
+    }
+}
+
+export interface InstantlyCampaignStatusEntry {
+    campaignId: string;
+    campaignName: string;
+    campaignStatus: string | null;
+}
+
 // ── row shapes ────────────────────────────────────────────────────────────────
 
 export interface EmailStatusEntry {
@@ -82,6 +107,8 @@ export interface OutreachLead {
     campaignAlias?: string | null;
     assignedLead: string | null;
     isEnriched: boolean;
+    manualOutreachActivated: boolean;
+    customFields?: Record<string, any> | null;
     outreachChannels: OutreachChannel[];
 
     leadStatus: string | null;
@@ -121,6 +148,8 @@ export interface OutreachLeadListItem {
     campaignAlias?: string | null;
     assignedLead: string | null;
     isEnriched: boolean;
+    manualOutreachActivated: boolean;
+    customFields?: Record<string, any> | null;
     outreachChannels: OutreachChannel[];
     leadStatus: string | null;
     whatsappStatus: string | null;
@@ -190,6 +219,7 @@ function normalizeLead(row: any): OutreachLead {
     }
 
     const repliesRaw = parseJsonField<EmailReplyEntry[]>(row.email_reply);
+    const customFields = parseJsonField<Record<string, any>>(row.custom_fields);
 
     return {
         id: row.id,
@@ -217,6 +247,8 @@ function normalizeLead(row: any): OutreachLead {
         campaignAlias: (row.assigned_lead && String(row.assigned_lead).trim()) || null,
         assignedLead: row.assigned_lead || null,
         isEnriched: Boolean(row.is_enriched),
+        manualOutreachActivated: Boolean(customFields?.manual_outreach_activated),
+        customFields,
         outreachChannels: Array.isArray(row.outreach_channels) ? row.outreach_channels : [],
 
         leadStatus: row.lead_status,
@@ -263,6 +295,7 @@ function normalizeLeadListItem(row: any): OutreachLeadListItem {
     }
 
     const campaignName = resolveCanonicalCampaignName(row.campaign_id, row.campaign_key, row.campaign_name);
+    const customFields = parseJsonField<Record<string, any>>(row.custom_fields);
 
     return {
         id: row.id,
@@ -279,6 +312,8 @@ function normalizeLeadListItem(row: any): OutreachLeadListItem {
         campaignAlias: (row.assigned_lead && String(row.assigned_lead).trim()) || null,
         assignedLead: row.assigned_lead || null,
         isEnriched: Boolean(row.is_enriched),
+        manualOutreachActivated: Boolean(customFields?.manual_outreach_activated),
+        customFields,
         outreachChannels: Array.isArray(row.outreach_channels) ? row.outreach_channels : [],
         leadStatus: row.lead_status,
         whatsappStatus: row.whatsapp_status,
@@ -300,7 +335,7 @@ const EMAIL_LIST_COLUMNS = `
     id, full_name, email, mobile_number, linkedin_url, company_name, city, country,
     campaign_id, campaign_key, outreach_channels, lead_status, whatsapp_status,
     voice_status, unsubscribed, bounced, last_contacted_at, created_at,
-    assigned_lead, is_enriched,
+    assigned_lead, is_enriched, custom_fields,
     email_status_1, email_status_2, email_status_3, email_status_4, email_status_5,
     email_status_6, email_status_7, email_status_8, email_status_9, email_status_10,
     email_reply
@@ -490,7 +525,7 @@ export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {
                 id, full_name, email, mobile_number, linkedin_url, company_name, city, country,
                 campaign_id, campaign_key, outreach_channels, lead_status, whatsapp_status,
                 voice_status, unsubscribed, bounced, last_contacted_at, created_at,
-                assigned_lead, is_enriched,
+                assigned_lead, is_enriched, custom_fields,
                 email_status_1, email_status_2, email_status_3, email_status_4, email_status_5,
                 email_status_6, email_status_7, email_status_8, email_status_9, email_status_10,
                 email_reply
@@ -572,7 +607,7 @@ export async function getOutreachLeadsPage(filters: OutreachLeadsPageFilters = {
             id, full_name, email, mobile_number, linkedin_url, company_name, city, country,
             campaign_id, campaign_key, outreach_channels, lead_status, whatsapp_status,
             voice_status, unsubscribed, bounced, last_contacted_at, created_at,
-            assigned_lead, is_enriched,
+            assigned_lead, is_enriched, custom_fields,
             email_status_1, email_status_2, email_status_3, email_status_4, email_status_5,
             email_status_6, email_status_7, email_status_8, email_status_9, email_status_10,
             email_reply
@@ -659,6 +694,8 @@ export interface CampaignSummary {
     campaignId: number | string;
     campaignName: string;
     campaignAlias?: string | null;
+    instantlyStatus?: string | null;
+    instantlyCampaignId?: string | null;
     color: CampaignColor;
     totalLeads: number;
     emailSent: number;
@@ -917,32 +954,87 @@ export async function getCampaignAliasesWithSummary(): Promise<{
     return { aliases, campaigns };
 }
 
+/** Fetches Instantly campaign statuses from public.instantly_campaign_analytics keyed by normalized campaign_name. */
+export async function getInstantlyCampaignStatusMap(): Promise<Record<string, InstantlyCampaignStatusEntry>> {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('instantly_campaign_analytics')
+            .select('campaign_id, campaign_name, campaign_status');
+
+        if (error || !data) return {};
+
+        const map: Record<string, InstantlyCampaignStatusEntry> = {};
+        for (const row of data) {
+            const cid = row.campaign_id ? String(row.campaign_id).trim() : '';
+            const cname = row.campaign_name ? String(row.campaign_name).trim() : '';
+            if (!cname || cid === '000_HEADER' || cname.toLowerCase() === 'campaign_name') continue;
+
+            const normalizedKey = cname.replace(/\s+/g, ' ').toLowerCase();
+            map[normalizedKey] = {
+                campaignId: cid,
+                campaignName: cname,
+                campaignStatus:
+                    row.campaign_status !== null && row.campaign_status !== undefined && String(row.campaign_status).trim() !== ''
+                        ? String(row.campaign_status).trim()
+                        : null,
+            };
+        }
+        return map;
+    } catch (err) {
+        console.error('Failed to fetch Instantly campaign statuses:', err);
+        return {};
+    }
+}
+
+function resolveInstantlyStatusFromMap(
+    campaignId: number | string | null | undefined,
+    campaignName: string | null | undefined,
+    statusMap: Record<string, InstantlyCampaignStatusEntry>
+): InstantlyCampaignStatusEntry | null {
+    if (campaignId !== null && campaignId !== undefined && String(campaignId).trim() !== '') {
+        const canonicalKey = `ScalePods Internal Outreach ${campaignId}`.replace(/\s+/g, ' ').toLowerCase();
+        if (statusMap[canonicalKey]) return statusMap[canonicalKey];
+    }
+    if (campaignName && campaignName.trim()) {
+        const nameKey = campaignName.replace(/\s+/g, ' ').trim().toLowerCase();
+        if (statusMap[nameKey]) return statusMap[nameKey];
+    }
+    return null;
+}
+
 /** Per-campaign breakdown — backed by the get_campaigns_summary RPC (a
  *  single GROUP BY query, no row data leaves Postgres). */
 export async function getCampaignsSummary(): Promise<CampaignSummary[]> {
-    const [{ data, error }, aliasMap] = await Promise.all([
+    const [{ data, error }, aliasMap, instantlyStatusMap] = await Promise.all([
         supabaseAdmin.rpc('get_campaigns_summary'),
         getCampaignAliasMap(),
+        getInstantlyCampaignStatusMap(),
     ]);
     if (error) throw new Error(error.message);
-    return (data || []).map((row: any) => ({
-        campaignId: row.campaign_id,
-        campaignName:
+    return (data || []).map((row: any) => {
+        const campaignName =
             row.campaign_id !== null && row.campaign_id !== undefined && String(row.campaign_id).trim() !== ''
                 ? `ScalePods Internal Outreach ${row.campaign_id}`
-                : row.campaign_name,
-        campaignAlias: resolveCampaignAliasFromMap(row.campaign_id, null, aliasMap),
-        color: campaignColor(row.campaign_id),
-        totalLeads: row.total_leads ?? 0,
-        emailSent: row.email_sent ?? 0,
-        emailReplied: row.email_replied ?? 0,
-        unsubscribed: row.unsubscribed ?? 0,
-        bounced: row.bounced ?? 0,
-        whatsappActive: row.whatsapp_active ?? 0,
-        voiceActive: row.voice_active ?? 0,
-        contacted: row.contacted ?? 0,
-        newLeads: row.new_leads ?? 0,
-    }));
+                : row.campaign_name;
+        const instantly = resolveInstantlyStatusFromMap(row.campaign_id, campaignName, instantlyStatusMap);
+        return {
+            campaignId: row.campaign_id,
+            campaignName,
+            campaignAlias: resolveCampaignAliasFromMap(row.campaign_id, null, aliasMap),
+            instantlyStatus: instantly?.campaignStatus ?? null,
+            instantlyCampaignId: instantly?.campaignId ?? null,
+            color: campaignColor(row.campaign_id),
+            totalLeads: row.total_leads ?? 0,
+            emailSent: row.email_sent ?? 0,
+            emailReplied: row.email_replied ?? 0,
+            unsubscribed: row.unsubscribed ?? 0,
+            bounced: row.bounced ?? 0,
+            whatsappActive: row.whatsapp_active ?? 0,
+            voiceActive: row.voice_active ?? 0,
+            contacted: row.contacted ?? 0,
+            newLeads: row.new_leads ?? 0,
+        };
+    });
 }
 
 export interface ChannelStats {
@@ -1047,17 +1139,37 @@ export async function getChannelStats(channel: OutreachChannel, filters: { from?
 
 /** Distinct campaigns represented within one channel's enrolled leads —
  *  backs the "Campaign" filter dropdown on the channel sub-pages. */
-export async function getChannelCampaignOptions(channel: OutreachChannel): Promise<{ id: string; name: string; alias?: string | null }[]> {
-    const [{ data, error }, aliasMap] = await Promise.all([
+export async function getChannelCampaignOptions(channel: OutreachChannel): Promise<{
+    id: string;
+    name: string;
+    alias?: string | null;
+    instantlyStatus?: string | null;
+    instantlyCampaignId?: string | null;
+}[]> {
+    const [{ data, error }, aliasMap, instantlyStatusMap] = await Promise.all([
         supabaseAdmin.rpc('get_campaigns_channel_campaign_options', { p_channel: channel }),
         getCampaignAliasMap(),
+        channel === 'email' ? getInstantlyCampaignStatusMap() : Promise.resolve({} as Record<string, InstantlyCampaignStatusEntry>),
     ]);
     if (error) throw new Error(error.message);
-    return (data || []).map((row: any) => ({
-        id: row.campaign_id,
-        name: resolveCanonicalCampaignName(row.campaign_id, null, row.campaign_name),
-        alias: resolveCampaignAliasFromMap(row.campaign_id, null, aliasMap),
-    }));
+    return (data || [])
+        .map((row: any) => {
+            const name = resolveCanonicalCampaignName(row.campaign_id, null, row.campaign_name);
+            const instantly = channel === 'email' ? resolveInstantlyStatusFromMap(row.campaign_id, name, instantlyStatusMap) : null;
+            return {
+                id: row.campaign_id,
+                name,
+                alias: resolveCampaignAliasFromMap(row.campaign_id, null, aliasMap),
+                instantlyStatus: instantly?.campaignStatus ?? null,
+                instantlyCampaignId: instantly?.campaignId ?? null,
+            };
+        })
+        .sort((a: { id: string }, b: { id: string }) => {
+            const na = Number(a.id);
+            const nb = Number(b.id);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return String(a.id).localeCompare(String(b.id));
+        });
 }
 
 // ── derived helpers (still used by the full-detail modal) ──────────────────

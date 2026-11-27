@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { InstantlyStatusBadge } from "@/components/dashboard/campaign-badge";
 import {
     RefreshCw,
     Send,
@@ -185,9 +186,9 @@ export default function EmailAnalyticsPage() {
                             
                             return (
                                 <Card key={idx} className="bg-white border-border shadow-sm flex flex-col hover:shadow-md transition-shadow w-full">
-                                    <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 rounded-t-xl">
+                                    <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-2 bg-slate-50/80 rounded-t-xl">
                                         <h3 className="font-bold text-slate-900 truncate text-sm" title={name}>{name}</h3>
-                                        <Badge variant="outline" className="text-[10px] bg-white">Campaign</Badge>
+                                        <InstantlyStatusBadge status={campaign.campaign_status} />
                                     </div>
                                     <CardContent className="p-4 flex-1 bg-white">
                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3">

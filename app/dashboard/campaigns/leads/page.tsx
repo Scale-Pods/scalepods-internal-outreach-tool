@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
     Search, ChevronLeft, ChevronRight, RefreshCw, Mail, MessageCircle, Mic, X,
-    Send, Loader2, CheckCircle2, AlertCircle, Sparkles,
+    Send, Loader2, CheckCircle2, AlertCircle, Sparkles, Rocket,
 } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
@@ -62,6 +62,7 @@ function LeadsPageInner() {
     const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [sendingToEnrichment, setSendingToEnrichment] = useState(false);
+    const [activatingOutreach, setActivatingOutreach] = useState(false);
     const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({ show: false, message: '', type: 'success' });
 
     // All known campaigns for the filter dropdown — lightweight (comes from
@@ -184,6 +185,48 @@ function LeadsPageInner() {
         }
     };
 
+    const handleActivateOutreach = async () => {
+        if (selectedIds.size === 0) return;
+        setActivatingOutreach(true);
+        try {
+            const res = await fetch('/api/campaigns/leads/activate-outreach', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lead_ids: Array.from(selectedIds) }),
+            });
+            const data = await res.json().catch(() => null);
+            if (res.ok) {
+                const activatedCount =
+                    typeof data?.activated_count === 'number'
+                        ? data.activated_count
+                        : Array.isArray(data?.activated_leads)
+                            ? data.activated_leads.length
+                            : 0;
+                const skippedCount =
+                    typeof data?.skipped_count === 'number'
+                        ? data.skipped_count
+                        : Array.isArray(data?.skipped_leads)
+                            ? data.skipped_leads.length
+                            : 0;
+                setSelectedIds(new Set());
+                await fetchLeads();
+                setToast({
+                    show: true,
+                    message: `Activated ${activatedCount} lead(s) for WhatsApp & Voice outreach. ${skippedCount} skipped (no valid phone number).`,
+                    type: 'success',
+                });
+            } else {
+                const errText = data?.error || data?.message || res.statusText;
+                setToast({ show: true, message: `Failed to start outreach: ${res.status} ${errText}`, type: 'error' });
+            }
+        } catch (err) {
+            console.error("Failed to activate outreach for leads:", err);
+            setToast({ show: true, message: 'Failed to activate outreach for selected leads.', type: 'error' });
+        } finally {
+            setActivatingOutreach(false);
+        }
+    };
+
     const totalPages = Math.ceil(totalCount / LEADS_PER_PAGE) || 1;
 
     useEffect(() => {
@@ -259,15 +302,26 @@ function LeadsPageInner() {
                 )}
 
                 {selectedIds.size > 0 && (
-                    <Button
-                        size="sm"
-                        disabled={sendingToEnrichment}
-                        onClick={handleSendToEnrichment}
-                        className="h-8 gap-1.5 text-xs font-bold bg-cyan-600 hover:bg-cyan-700 text-white"
-                    >
-                        {sendingToEnrichment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                        Send to Enrichment ({selectedIds.size})
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            size="sm"
+                            disabled={sendingToEnrichment || activatingOutreach}
+                            onClick={handleSendToEnrichment}
+                            className="h-8 gap-1.5 text-xs font-bold bg-cyan-600 hover:bg-cyan-700 text-white"
+                        >
+                            {sendingToEnrichment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                            Send to Enrichment ({selectedIds.size})
+                        </Button>
+                        <Button
+                            size="sm"
+                            disabled={sendingToEnrichment || activatingOutreach}
+                            onClick={handleActivateOutreach}
+                            className="h-8 gap-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                            {activatingOutreach ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
+                            Start Outreach (No Enrichment) ({selectedIds.size})
+                        </Button>
+                    </div>
                 )}
             </div>
 
@@ -334,11 +388,15 @@ function LeadsPageInner() {
                                                 <td className="px-3 py-2 font-semibold text-slate-900 text-xs whitespace-nowrap">
                                                     <div className="flex items-center gap-1.5">
                                                         <span>{lead.fullName}</span>
-                                                        {lead.isEnriched && (
+                                                        {lead.isEnriched ? (
                                                             <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100 text-[9px] font-bold px-1.5 py-0 leading-tight">
                                                                 ENRICHED
                                                             </Badge>
-                                                        )}
+                                                        ) : (lead.manualOutreachActivated || lead.customFields?.manual_outreach_activated) ? (
+                                                            <Badge className="bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-100 text-[9px] font-bold px-1.5 py-0 leading-tight">
+                                                                OUTREACH READY
+                                                            </Badge>
+                                                        ) : null}
                                                     </div>
                                                 </td>
                                                 <td className="px-3 py-2 text-slate-500 text-[11px] whitespace-nowrap">{lead.email || "—"}</td>
@@ -408,7 +466,7 @@ function LeadsPageInner() {
             </Dialog>
 
             {toast.show && (
-                <div className={`fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300 px-5 py-3 rounded-xl shadow-2xl border text-sm font-bold flex items-center gap-3 ${
+                <div className={`fixed bottom-4 left-4 right-4 sm:left-auto sm:bottom-6 sm:right-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300 px-4 sm:px-5 py-3 rounded-xl shadow-2xl border text-xs sm:text-sm font-bold flex items-center gap-3 ${
                     toast.type === 'success'
                         ? 'bg-emerald-900 border-emerald-700 text-emerald-100'
                         : 'bg-red-900 border-red-700 text-red-100'
@@ -469,7 +527,10 @@ function LeadDetail({ leadId }: { leadId: string }) {
                 <DetailField label="Assigned Lead" value={lead.assignedLead} />
                 <DetailField label="Lead Status" value={lead.leadStatus} />
                 <DetailField label="LinkedIn" value={lead.linkedinUrl} isLink />
-                <DetailField label="Enriched" value={lead.isEnriched ? "Yes" : "No"} />
+                <DetailField
+                    label="Enriched"
+                    value={lead.isEnriched ? "Yes" : (lead.manualOutreachActivated || lead.customFields?.manual_outreach_activated ? "No (Outreach Ready)" : "No")}
+                />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { getInstantlyStatusBadge } from '@/lib/services/campaigns';
 
 export interface CampaignMetrics {
     campaignId: string;
@@ -81,9 +82,7 @@ export async function getEmailStats(fromD: Date, toD: Date) {
             return {
                 campaignId: row.campaign_id || '',
                 campaignName: row.campaign_name || 'Unnamed Campaign',
-                status: row.campaign_status === '1' || row.campaign_status === 1 ? 'Active'
-                    : row.campaign_status === '2' || row.campaign_status === 2 ? 'Paused'
-                    : row.campaign_status === '3' || row.campaign_status === 3 ? 'Completed' : 'Unknown',
+                status: getInstantlyStatusBadge(row.campaign_status).label,
                 leadsCount, contactedCount: contacted, emailsSentCount: sent,
                 newLeadsContacted: Number(row.new_leads_contacted_count) || 0,
                 uniqueOpens, uniqueReplies, uniqueClicks, bouncedCount: bounced,
