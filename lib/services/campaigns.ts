@@ -925,6 +925,7 @@ export async function getCampaignAliasesWithSummary(): Promise<{
         alias: string | null;
         totalLeads: number;
         enrichedLeads: number;
+        instantlyStatus: string | null;
     }[];
 }> {
     const [aliases, summary] = await Promise.all([
@@ -948,6 +949,7 @@ export async function getCampaignAliasesWithSummary(): Promise<{
             alias,
             totalLeads: s?.totalLeads ?? 0,
             enrichedLeads: 0,
+            instantlyStatus: s?.instantlyStatus ?? null,
         };
     });
 

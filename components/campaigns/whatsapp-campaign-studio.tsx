@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Check,
 } from "lucide-react";
+import { getInstantlyStatusBadge } from "@/components/dashboard/campaign-badge";
 
 const API_WEBHOOK_URL = "https://n8n.srv1010832.hstgr.cloud/webhook/whatsapp-campaign-api";
 
@@ -25,6 +26,7 @@ interface DynamicCampaignOption {
   id: number;
   campaignName: string;
   alias: string | null;
+  instantlyStatus: string | null;
 }
 
 const PRESETS: Record<number, { label: string; text: string }> = {
@@ -225,6 +227,7 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
       id: idx + 1,
       campaignName: `ScalePods Internal Outreach ${idx + 1}`,
       alias: null,
+      instantlyStatus: null,
     }))
   );
   const [aliasInput, setAliasInput] = useState<string>("");
@@ -287,6 +290,7 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
           id: Number(c.id || c.campaignId),
           campaignName: c.campaignName || `ScalePods Internal Outreach ${c.id || c.campaignId}`,
           alias: c.alias || null,
+          instantlyStatus: c.instantlyStatus ?? null,
         }));
         setCampaignOptions(opts);
         const active = opts.find((o) => o.id === campaignId);
@@ -623,11 +627,14 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
               onChange={(e) => setCampaignId(Number(e.target.value))}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 transition"
             >
-              {campaignOptions.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {`Campaign ${c.id} — ${c.alias || c.campaignName}`}
-                </option>
-              ))}
+              {campaignOptions.map((c) => {
+                const statusLabel = c.instantlyStatus ? getInstantlyStatusBadge(c.instantlyStatus).label : null;
+                return (
+                  <option key={c.id} value={c.id}>
+                    {`Campaign ${c.id} — ${c.alias || c.campaignName}${statusLabel ? ` (${statusLabel})` : ""}`}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
