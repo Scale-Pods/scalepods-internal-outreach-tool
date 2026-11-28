@@ -538,6 +538,32 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
     }, 0);
   };
 
+  const activeInstantlyStatus = campaignOptions.find((o) => o.id === campaignId)?.instantlyStatus ?? null;
+  const emailStatusInfo = getInstantlyStatusBadge(activeInstantlyStatus);
+  const EMAIL_STATUS_CARD_CLASSES: Record<string, { card: string; dot: string }> = {
+    emerald: {
+      card: "bg-emerald-950/50 border-emerald-500/70 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.25)]",
+      dot: "bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]",
+    },
+    amber: {
+      card: "bg-amber-950/50 border-amber-500/70 text-amber-300",
+      dot: "bg-amber-400",
+    },
+    blue: {
+      card: "bg-blue-950/50 border-blue-500/70 text-blue-300",
+      dot: "bg-blue-400",
+    },
+    red: {
+      card: "bg-red-950/50 border-red-500/70 text-red-300",
+      dot: "bg-red-400",
+    },
+    slate: {
+      card: "bg-slate-950 border-slate-800 text-slate-400",
+      dot: "bg-slate-600",
+    },
+  };
+  const emailStatusClasses = EMAIL_STATUS_CARD_CLASSES[emailStatusInfo.color];
+
   const applyPreset = (presetKey: number) => {
     const preset = PRESETS[presetKey];
     if (preset) {
@@ -673,23 +699,13 @@ export function WhatsAppCampaignStudio({ initialCampaignId = 9 }: WhatsAppCampai
           {/* Metric Badges */}
           <div className="grid grid-cols-3 gap-2 sm:gap-2.5 text-center">
             <div
-              className={`p-2 sm:p-3 rounded-lg border transition-all duration-300 ${
-                isEnabled
-                  ? "bg-emerald-950/50 border-emerald-500/70 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.25)]"
-                  : "bg-slate-950 border-slate-800 text-slate-400"
-              }`}
+              className={`p-2 sm:p-3 rounded-lg border transition-all duration-300 ${emailStatusClasses.card}`}
             >
               <div className="text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5">
-                <span
-                  className={`w-2 h-2 rounded-full shrink-0 ${
-                    isEnabled
-                      ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]"
-                      : "bg-slate-600"
-                  }`}
-                ></span>
-                {isEnabled ? "ACTIVE" : "INACTIVE"}
+                <span className={`w-2 h-2 rounded-full shrink-0 ${emailStatusClasses.dot}`}></span>
+                {emailStatusInfo.label.toUpperCase()}
               </div>
-              <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">State</div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">Email Status</div>
             </div>
             <div className="p-2 sm:p-3 bg-slate-950 border border-slate-800 rounded-lg">
               <div className="text-xs sm:text-sm font-bold text-white">{enrichedLeads.toLocaleString()}</div>
